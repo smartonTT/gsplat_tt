@@ -1,2 +1,3 @@
 sc_native.so
 out/*.png
+__pycache__/

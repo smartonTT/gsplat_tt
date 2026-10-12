@@ -1,0 +1,68 @@
+[
+ {
+  "view": "hero",
+  "blend_s": 174.88295221328735,
+  "exact_vs_ref": 42.52444450335339,
+  "rot0.25": {
+   "vs_exact": 61.3558553076039,
+   "identical": false,
+   "diff_px": 40165,
+   "vs_ref": 42.47820703330472
+  },
+  "rot1.0": {
+   "vs_exact": 55.22557481079481,
+   "identical": false,
+   "diff_px": 125140,
+   "vs_ref": 42.33723480114071
+  },
+  "rot4.0": {
+   "vs_exact": 49.012552181249625,
+   "identical": false,
+   "diff_px": 314662,
+   "vs_ref": 41.709628526151256
+  },
+  "rot16.0": {
+   "vs_exact": 41.04827245832199,
+   "identical": false,
+   "diff_px": 634349,
+   "vs_ref": 38.6930989176121
+  },
+  "fib26": {
+   "vs_exact": 39.81421896360207,
+   "identical": false,
+   "diff_px": 670635,
+   "vs_ref": 38.025414524274076
+  },
+  "fib128": {
+   "vs_exact": 43.97619451668518,
+   "identical": false,
+   "diff_px": 511454,
+   "vs_ref": 40.23295936489173
+  },
+  "prev_view_fwd": {
+   "vs_exact": 40.54854437178457,
+   "identical": false,
+   "diff_px": 654176,
+   "vs_ref": 38.373903735287854
+  }
+ },
+ {
+  "view": "orb_14",
+  "blend_s": 102.42717790603638,
+  "rot1.0": {
+   "vs_exact": 54.02932465182474,
+   "identical": false,
+   "diff_px": 125941
+  },
+  "rot4.0": {
+   "vs_exact": 46.566953849931025,
+   "identical": false,
+   "diff_px": 312152
+  },
+  "prev_view_fwd": {
+   "vs_exact": 51.00132878204877,
+   "identical": false,
+   "diff_px": 203395
+  }
+ }
+]

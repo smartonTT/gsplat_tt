@@ -1,0 +1,3243 @@
+{
+ "view_names": [
+  "hero",
+  "orb_00",
+  "orb_01",
+  "orb_02",
+  "orb_03",
+  "orb_04",
+  "orb_05",
+  "orb_06",
+  "orb_07",
+  "orb_08",
+  "orb_09",
+  "orb_10",
+  "orb_11",
+  "orb_12",
+  "orb_13",
+  "orb_14",
+  "orb_15",
+  "orb_16",
+  "orb_17",
+  "orb_18",
+  "orb_19",
+  "orb_20",
+  "orb_21",
+  "orb_22",
+  "orb_23",
+  "orb_24",
+  "orb_25",
+  "orb_26",
+  "orb_27",
+  "orb_28"
+ ],
+ "fwd_step_deg": [
+  17.952113558919844,
+  1.9799166286115544,
+  2.2182649763789284,
+  2.5891280415942997,
+  2.984714787271889,
+  3.3341405250056657,
+  3.596104902338302,
+  3.7479069805005025,
+  3.778798510507374,
+  3.6867761172571485,
+  3.4779765393164017,
+  3.168529590666735,
+  2.7893331170252624,
+  2.394895596212259,
+  2.0749928993211486,
+  1.9467316862109665,
+  2.076897104255466,
+  2.4069613255712867,
+  2.8200774826184736,
+  3.2221971606203943,
+  3.553678564546384,
+  3.7790201450911,
+  3.878766530613915,
+  3.8452539888531683,
+  3.6810028566335857,
+  3.3992384512537934,
+  3.0267054204573616,
+  2.609683950426957,
+  2.2240260046385236,
+  17.65850182273526
+ ],
+ "pos_step": [
+  0.3118025513401052,
+  0.03454755676391818,
+  0.038706255102883745,
+  0.04517650684161616,
+  0.0520774204740224,
+  0.05817235039632638,
+  0.06274109806845189,
+  0.06538807182717139,
+  0.06592613093342892,
+  0.06432048885644404,
+  0.06067811915836552,
+  0.05528013304483681,
+  0.048665216016109666,
+  0.04178407065471638,
+  0.0362029128261666,
+  0.03396495857908156,
+  0.036235388693233256,
+  0.04199287098197886,
+  0.049198668336065496,
+  0.056212137395688345,
+  0.06199323912577445,
+  0.06592322781049245,
+  0.06766318661473497,
+  0.0670796000327914,
+  0.06421622421600678,
+  0.05930323600089588,
+  0.05280652643774149,
+  0.04553293647960937,
+  0.038805618056267886,
+  0.30677325459556065
+ ],
+ "coherence": [
+  {
+   "pair": "hero->orb_00",
+   "pairs_a": 2842796,
+   "pairs_b": 2030349,
+   "common": 1976,
+   "kept_frac_of_new": 0.0009732316956345929,
+   "kept_frac_of_old": 0.0006950903265658176,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.16497975708502025,
+   "common_kendall": 0.055726495726495726,
+   "common_tiles_sorted": 1.575,
+   "common_maxdisp_p99": 3
+  },
+  {
+   "pair": "orb_00->orb_01",
+   "pairs_a": 2030349,
+   "pairs_b": 2102833,
+   "common": 377421,
+   "kept_frac_of_new": 0.17948215573942392,
+   "kept_frac_of_old": 0.18588971649701602,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.315838281388688,
+   "common_kendall": 0.0020622658832510476,
+   "common_tiles_sorted": 0.0322265625,
+   "common_maxdisp_p99": 99
+  },
+  {
+   "pair": "orb_01->orb_02",
+   "pairs_a": 2102833,
+   "pairs_b": 2193229,
+   "common": 265557,
+   "kept_frac_of_new": 0.12108037965939718,
+   "kept_frac_of_old": 0.12628534933587213,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.3495144168671886,
+   "common_kendall": 0.003207737545624867,
+   "common_tiles_sorted": 0.0537109375,
+   "common_maxdisp_p99": 101
+  },
+  {
+   "pair": "orb_02->orb_03",
+   "pairs_a": 2193229,
+   "pairs_b": 2313810,
+   "common": 173631,
+   "kept_frac_of_new": 0.07504116586928054,
+   "kept_frac_of_old": 0.0791668357476579,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.0354141829512011,
+   "common_kendall": 0.004149642315512414,
+   "common_tiles_sorted": 0.115234375,
+   "common_maxdisp_p99": 86
+  },
+  {
+   "pair": "orb_03->orb_04",
+   "pairs_a": 2313810,
+   "pairs_b": 2462330,
+   "common": 91670,
+   "kept_frac_of_new": 0.03722896606060114,
+   "kept_frac_of_old": 0.03961863765823469,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.45253627140831243,
+   "common_kendall": 0.004584724062805547,
+   "common_tiles_sorted": 0.208984375,
+   "common_maxdisp_p99": 31
+  },
+  {
+   "pair": "orb_04->orb_05",
+   "pairs_a": 2462330,
+   "pairs_b": 2662770,
+   "common": 78307,
+   "kept_frac_of_new": 0.029408097582592562,
+   "kept_frac_of_old": 0.031801992421811864,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.7089149118214209,
+   "common_kendall": 0.006003745892723153,
+   "common_tiles_sorted": 0.2808219178082192,
+   "common_maxdisp_p99": 37
+  },
+  {
+   "pair": "orb_05->orb_06",
+   "pairs_a": 2662770,
+   "pairs_b": 2835063,
+   "common": 74026,
+   "kept_frac_of_new": 0.026110883602939335,
+   "kept_frac_of_old": 0.027800373295478017,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.7203279928673709,
+   "common_kendall": 0.0050197063222807165,
+   "common_tiles_sorted": 0.302734375,
+   "common_maxdisp_p99": 32
+  },
+  {
+   "pair": "orb_06->orb_07",
+   "pairs_a": 2835063,
+   "pairs_b": 3023282,
+   "common": 65665,
+   "kept_frac_of_new": 0.021719773411808755,
+   "kept_frac_of_old": 0.02316174279019549,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.7418868499200487,
+   "common_kendall": 0.009010967017929635,
+   "common_tiles_sorted": 0.30528375733855184,
+   "common_maxdisp_p99": 35
+  },
+  {
+   "pair": "orb_07->orb_08",
+   "pairs_a": 3023282,
+   "pairs_b": 3097051,
+   "common": 72623,
+   "kept_frac_of_new": 0.023449081077450775,
+   "kept_frac_of_old": 0.024021245785209585,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.984316263442711,
+   "common_kendall": 0.00807214203103513,
+   "common_tiles_sorted": 0.31378299120234604,
+   "common_maxdisp_p99": 42
+  },
+  {
+   "pair": "orb_08->orb_09",
+   "pairs_a": 3097051,
+   "pairs_b": 3127245,
+   "common": 84402,
+   "kept_frac_of_new": 0.026989250922137536,
+   "kept_frac_of_old": 0.027252376534968266,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.6495106751024857,
+   "common_kendall": 0.010583362815605379,
+   "common_tiles_sorted": 0.310546875,
+   "common_maxdisp_p99": 63
+  },
+  {
+   "pair": "orb_09->orb_10",
+   "pairs_a": 3127245,
+   "pairs_b": 3133498,
+   "common": 96678,
+   "kept_frac_of_new": 0.03085305942432387,
+   "kept_frac_of_old": 0.030914750842994394,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.191863712530255,
+   "common_kendall": 0.01166763132960947,
+   "common_tiles_sorted": 0.2734375,
+   "common_maxdisp_p99": 84
+  },
+  {
+   "pair": "orb_10->orb_11",
+   "pairs_a": 3133498,
+   "pairs_b": 3047232,
+   "common": 112238,
+   "kept_frac_of_new": 0.03683277151198202,
+   "kept_frac_of_old": 0.0358187559079342,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.831483098415866,
+   "common_kendall": 0.014964313549550242,
+   "common_tiles_sorted": 0.24609375,
+   "common_maxdisp_p99": 106
+  },
+  {
+   "pair": "orb_11->orb_12",
+   "pairs_a": 3047232,
+   "pairs_b": 2928918,
+   "common": 155897,
+   "kept_frac_of_new": 0.05322682301109147,
+   "kept_frac_of_old": 0.05116020047045975,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 3.486840670442664,
+   "common_kendall": 0.01227735565217348,
+   "common_tiles_sorted": 0.15625,
+   "common_maxdisp_p99": 134
+  },
+  {
+   "pair": "orb_12->orb_13",
+   "pairs_a": 2928918,
+   "pairs_b": 2830649,
+   "common": 266318,
+   "kept_frac_of_new": 0.09408372426252778,
+   "kept_frac_of_old": 0.09092709321326169,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.9192506702513534,
+   "common_kendall": 0.00935628698826493,
+   "common_tiles_sorted": 0.0458984375,
+   "common_maxdisp_p99": 172
+  },
+  {
+   "pair": "orb_13->orb_14",
+   "pairs_a": 2830649,
+   "pairs_b": 2763495,
+   "common": 436456,
+   "kept_frac_of_new": 0.15793623654104674,
+   "kept_frac_of_old": 0.15418937494546303,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.640247814212658,
+   "common_kendall": 0.004379664433342566,
+   "common_tiles_sorted": 0.01171875,
+   "common_maxdisp_p99": 159
+  },
+  {
+   "pair": "orb_14->orb_15",
+   "pairs_a": 2763495,
+   "pairs_b": 2707107,
+   "common": 474695,
+   "kept_frac_of_new": 0.1753513991135186,
+   "kept_frac_of_old": 0.17177342459458042,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.119440904159513,
+   "common_kendall": 0.0029395859468573323,
+   "common_tiles_sorted": 0.009765625,
+   "common_maxdisp_p99": 145
+  },
+  {
+   "pair": "orb_15->orb_16",
+   "pairs_a": 2707107,
+   "pairs_b": 2667121,
+   "common": 361205,
+   "kept_frac_of_new": 0.13542880131797544,
+   "kept_frac_of_old": 0.13342841638694,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.20694065696765,
+   "common_kendall": 0.003953450204080344,
+   "common_tiles_sorted": 0.0283203125,
+   "common_maxdisp_p99": 148
+  },
+  {
+   "pair": "orb_16->orb_17",
+   "pairs_a": 2667121,
+   "pairs_b": 2663931,
+   "common": 235063,
+   "kept_frac_of_new": 0.08823914733527258,
+   "kept_frac_of_old": 0.08813360923632636,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.50133793919077,
+   "common_kendall": 0.007004439024455329,
+   "common_tiles_sorted": 0.0947265625,
+   "common_maxdisp_p99": 134
+  },
+  {
+   "pair": "orb_17->orb_18",
+   "pairs_a": 2663931,
+   "pairs_b": 2681095,
+   "common": 141298,
+   "kept_frac_of_new": 0.05270160139793629,
+   "kept_frac_of_old": 0.05304116360371196,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.6581975682599897,
+   "common_kendall": 0.012840627579100448,
+   "common_tiles_sorted": 0.166015625,
+   "common_maxdisp_p99": 104
+  },
+  {
+   "pair": "orb_18->orb_19",
+   "pairs_a": 2681095,
+   "pairs_b": 2675579,
+   "common": 86294,
+   "kept_frac_of_new": 0.03225245825296132,
+   "kept_frac_of_old": 0.032186103066097996,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 2.1850534220223885,
+   "common_kendall": 0.01861376388120131,
+   "common_tiles_sorted": 0.19140625,
+   "common_maxdisp_p99": 86
+  },
+  {
+   "pair": "orb_19->orb_20",
+   "pairs_a": 2675579,
+   "pairs_b": 2659664,
+   "common": 68955,
+   "kept_frac_of_new": 0.02592620722016014,
+   "kept_frac_of_old": 0.025771991781965698,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.1546080777318541,
+   "common_kendall": 0.011949856112721532,
+   "common_tiles_sorted": 0.2216796875,
+   "common_maxdisp_p99": 57
+  },
+  {
+   "pair": "orb_20->orb_21",
+   "pairs_a": 2659664,
+   "pairs_b": 2628868,
+   "common": 68533,
+   "kept_frac_of_new": 0.026069395648621384,
+   "kept_frac_of_old": 0.025767540561514538,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.132213678082092,
+   "common_kendall": 0.009881703299292308,
+   "common_tiles_sorted": 0.236328125,
+   "common_maxdisp_p99": 51
+  },
+  {
+   "pair": "orb_21->orb_22",
+   "pairs_a": 2628868,
+   "pairs_b": 2548904,
+   "common": 69697,
+   "kept_frac_of_new": 0.027343909382228596,
+   "kept_frac_of_old": 0.02651217177887973,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.9859965278275966,
+   "common_kendall": 0.01016609308171337,
+   "common_tiles_sorted": 0.2197265625,
+   "common_maxdisp_p99": 43
+  },
+  {
+   "pair": "orb_22->orb_23",
+   "pairs_a": 2548904,
+   "pairs_b": 2446035,
+   "common": 78669,
+   "kept_frac_of_new": 0.03216184559910222,
+   "kept_frac_of_old": 0.03086385364062358,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.0908744232162606,
+   "common_kendall": 0.008760625389704811,
+   "common_tiles_sorted": 0.17578125,
+   "common_maxdisp_p99": 44
+  },
+  {
+   "pair": "orb_23->orb_24",
+   "pairs_a": 2446035,
+   "pairs_b": 2266173,
+   "common": 90921,
+   "kept_frac_of_new": 0.040120943987947966,
+   "kept_frac_of_old": 0.03717076820241738,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.2122831909019918,
+   "common_kendall": 0.00800551762046226,
+   "common_tiles_sorted": 0.17578125,
+   "common_maxdisp_p99": 53
+  },
+  {
+   "pair": "orb_24->orb_25",
+   "pairs_a": 2266173,
+   "pairs_b": 2127079,
+   "common": 100878,
+   "kept_frac_of_new": 0.04742560102375135,
+   "kept_frac_of_old": 0.044514695038728284,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.158181169333254,
+   "common_kendall": 0.006863413345492661,
+   "common_tiles_sorted": 0.158203125,
+   "common_maxdisp_p99": 47
+  },
+  {
+   "pair": "orb_25->orb_26",
+   "pairs_a": 2127079,
+   "pairs_b": 2039314,
+   "common": 115795,
+   "kept_frac_of_new": 0.05678134902226925,
+   "kept_frac_of_old": 0.05443850463475969,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.9796536983462153,
+   "common_kendall": 0.004796519887805096,
+   "common_tiles_sorted": 0.1552734375,
+   "common_maxdisp_p99": 46
+  },
+  {
+   "pair": "orb_26->orb_27",
+   "pairs_a": 2039314,
+   "pairs_b": 1989907,
+   "common": 181222,
+   "kept_frac_of_new": 0.0910705877209337,
+   "kept_frac_of_old": 0.08886419648960386,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.1493582456876097,
+   "common_kendall": 0.003779666367942933,
+   "common_tiles_sorted": 0.1123046875,
+   "common_maxdisp_p99": 64
+  },
+  {
+   "pair": "orb_27->orb_28",
+   "pairs_a": 1989907,
+   "pairs_b": 1988474,
+   "common": 296246,
+   "kept_frac_of_new": 0.14898158085044108,
+   "kept_frac_of_old": 0.14887429412530334,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 1.4399046738183807,
+   "common_kendall": 0.002843080796758987,
+   "common_tiles_sorted": 0.05859375,
+   "common_maxdisp_p99": 100
+  },
+  {
+   "pair": "orb_28->hero",
+   "pairs_a": 1988474,
+   "pairs_b": 2842796,
+   "common": 1890,
+   "kept_frac_of_new": 0.0006648384196403822,
+   "kept_frac_of_old": 0.0009504776024227624,
+   "tiles_identical": 0.0,
+   "common_inv_per_pair": 0.1783068783068783,
+   "common_kendall": 0.061106074342701724,
+   "common_tiles_sorted": 1.6070110701107012,
+   "common_maxdisp_p99": 3
+  }
+ ],
+ "presort": [
+  {
+   "view": "hero",
+   "visible": 1881562,
+   "pairs": 2842796,
+   "nonempty_tiles": 1024,
+   "max_tile": 22966,
+   "exact_fwd_inv": 3041,
+   "equal_depth_neighbours": 7477,
+   "presort": {
+    "fib26": {
+     "angle_deg": 21.108370814623374,
+     "inv_per_pair": 68.72861753006548,
+     "kendall_dist": 0.020683341628899923,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 356,
+     "maxdisp_p99": 2735,
+     "maxdisp_max": 5249
+    },
+    "fib128": {
+     "angle_deg": 9.700338114664367,
+     "inv_per_pair": 36.00348917052085,
+     "kendall_dist": 0.010834969378229134,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 184,
+     "maxdisp_p99": 1880,
+     "maxdisp_max": 2500
+    },
+    "fib512": {
+     "angle_deg": 3.521935038197027,
+     "inv_per_pair": 12.393181571945366,
+     "kendall_dist": 0.0037296313753059245,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 72,
+     "maxdisp_p99": 701,
+     "maxdisp_max": 1644
+    },
+    "fib2048": {
+     "angle_deg": 1.6132040736931692,
+     "inv_per_pair": 5.689864133761269,
+     "kendall_dist": 0.0017123202521733734,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 38,
+     "maxdisp_p99": 350,
+     "maxdisp_max": 675
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8729191260997975,
+     "kendall_dist": 0.000262698205614637,
+     "tiles_sorted": 0.0029296875,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 74,
+     "maxdisp_max": 97
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.5193971006009575,
+     "kendall_dist": 0.001059135119772285,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 27,
+     "maxdisp_p99": 277,
+     "maxdisp_max": 356
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 14.303224712571707,
+     "kendall_dist": 0.004304443967545679,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 85,
+     "maxdisp_p99": 893,
+     "maxdisp_max": 1969
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 58.83778575740222,
+     "kendall_dist": 0.017706772917060493,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 270,
+     "maxdisp_p99": 2532,
+     "maxdisp_max": 3367
+    }
+   }
+  },
+  {
+   "view": "orb_00",
+   "visible": 1309098,
+   "pairs": 2030349,
+   "nonempty_tiles": 1024,
+   "max_tile": 19318,
+   "exact_fwd_inv": 1906,
+   "equal_depth_neighbours": 4901,
+   "presort": {
+    "fib26": {
+     "angle_deg": 14.42697999185515,
+     "inv_per_pair": 39.65170569197709,
+     "kendall_dist": 0.01263968601040112,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 127,
+     "maxdisp_p99": 1563,
+     "maxdisp_max": 3117
+    },
+    "fib128": {
+     "angle_deg": 2.705381980802075,
+     "inv_per_pair": 7.297371535632544,
+     "kendall_dist": 0.0023261668899730746,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 33,
+     "maxdisp_p99": 379,
+     "maxdisp_max": 799
+    },
+    "fib512": {
+     "angle_deg": 4.47686284177676,
+     "inv_per_pair": 15.649344521557623,
+     "kendall_dist": 0.004988506738087225,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 59,
+     "maxdisp_p99": 999,
+     "maxdisp_max": 1365
+    },
+    "fib2048": {
+     "angle_deg": 2.3105104309264743,
+     "inv_per_pair": 6.203027656821561,
+     "kendall_dist": 0.001977325326308034,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 28,
+     "maxdisp_p99": 315,
+     "maxdisp_max": 589
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8059461698456768,
+     "kendall_dist": 0.00025690966757568586,
+     "tiles_sorted": 0.013671875,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 49,
+     "maxdisp_max": 76
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.223140455163127,
+     "kendall_dist": 0.0010274333123814715,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 16,
+     "maxdisp_p99": 176,
+     "maxdisp_max": 345
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 12.97541013884805,
+     "kendall_dist": 0.004136142623604675,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 50,
+     "maxdisp_p99": 672,
+     "maxdisp_max": 1020
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.461454656317706,
+     "kendall_dist": 0.01736055674055999,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 167,
+     "maxdisp_p99": 2409,
+     "maxdisp_max": 3064
+    },
+    "prev_view_fwd": {
+     "angle_deg": 17.952113558919844,
+     "inv_per_pair": 66.27379824847846,
+     "kendall_dist": 0.021125951228547806,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 202,
+     "maxdisp_p99": 3320,
+     "maxdisp_max": 4986
+    }
+   }
+  },
+  {
+   "view": "orb_01",
+   "visible": 1357617,
+   "pairs": 2102833,
+   "nonempty_tiles": 1024,
+   "max_tile": 19115,
+   "exact_fwd_inv": 1959,
+   "equal_depth_neighbours": 4983,
+   "presort": {
+    "fib26": {
+     "angle_deg": 16.284232418512566,
+     "inv_per_pair": 43.92982086547053,
+     "kendall_dist": 0.014094319747500136,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 149,
+     "maxdisp_p99": 1762,
+     "maxdisp_max": 3155
+    },
+    "fib128": {
+     "angle_deg": 4.58437370016648,
+     "inv_per_pair": 11.579707470826262,
+     "kendall_dist": 0.003715200664627006,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 52,
+     "maxdisp_p99": 629,
+     "maxdisp_max": 1184
+    },
+    "fib512": {
+     "angle_deg": 4.969537587175648,
+     "inv_per_pair": 17.09200635523601,
+     "kendall_dist": 0.005483751081861381,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 70,
+     "maxdisp_p99": 937,
+     "maxdisp_max": 1490
+    },
+    "fib2048": {
+     "angle_deg": 0.45535210539674537,
+     "inv_per_pair": 1.3986236662635596,
+     "kendall_dist": 0.00044873046988074455,
+     "tiles_sorted": 0.0048828125,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 85,
+     "maxdisp_max": 181
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8054491250612864,
+     "kendall_dist": 0.0002584180241417973,
+     "tiles_sorted": 0.0068359375,
+     "maxdisp_p50": 6,
+     "maxdisp_p99": 54,
+     "maxdisp_max": 109
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2244072639149186,
+     "kendall_dist": 0.001034509726614888,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 18,
+     "maxdisp_p99": 174,
+     "maxdisp_max": 395
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.043010548150994,
+     "kendall_dist": 0.004184682694214034,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 57,
+     "maxdisp_p99": 696,
+     "maxdisp_max": 1185
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.5378915016076,
+     "kendall_dist": 0.017497783192244175,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 175,
+     "maxdisp_p99": 2246,
+     "maxdisp_max": 3407
+    },
+    "prev_view_fwd": {
+     "angle_deg": 1.9799166286115544,
+     "inv_per_pair": 4.97271537968065,
+     "kendall_dist": 0.0015954319683925693,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 26,
+     "maxdisp_p99": 304,
+     "maxdisp_max": 532
+    }
+   }
+  },
+  {
+   "view": "orb_02",
+   "visible": 1429346,
+   "pairs": 2193229,
+   "nonempty_tiles": 1024,
+   "max_tile": 18975,
+   "exact_fwd_inv": 1935,
+   "equal_depth_neighbours": 5172,
+   "presort": {
+    "fib26": {
+     "angle_deg": 18.027366683014893,
+     "inv_per_pair": 46.950473935918225,
+     "kendall_dist": 0.015246925763456947,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 198,
+     "maxdisp_p99": 1827,
+     "maxdisp_max": 2677
+    },
+    "fib128": {
+     "angle_deg": 6.520303440137797,
+     "inv_per_pair": 16.18284547578023,
+     "kendall_dist": 0.005255296122196444,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 81,
+     "maxdisp_p99": 800,
+     "maxdisp_max": 1188
+    },
+    "fib512": {
+     "angle_deg": 3.2860401270513715,
+     "inv_per_pair": 9.221108694076177,
+     "kendall_dist": 0.0029945077851022393,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 46,
+     "maxdisp_p99": 552,
+     "maxdisp_max": 726
+    },
+    "fib2048": {
+     "angle_deg": 1.7691966754620507,
+     "inv_per_pair": 5.068578794097652,
+     "kendall_dist": 0.0016459949841042567,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 30,
+     "maxdisp_p99": 290,
+     "maxdisp_max": 407
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8074464636387719,
+     "kendall_dist": 0.0002622141004554999,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 7,
+     "maxdisp_p99": 58,
+     "maxdisp_max": 111
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2320058689721867,
+     "kendall_dist": 0.001049577340125147,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 19,
+     "maxdisp_p99": 203,
+     "maxdisp_max": 276
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.036945526436137,
+     "kendall_dist": 0.004233681238129901,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 60,
+     "maxdisp_p99": 667,
+     "maxdisp_max": 1192
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.009386616719,
+     "kendall_dist": 0.017539271475702403,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 192,
+     "maxdisp_p99": 2398,
+     "maxdisp_max": 3718
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.2182649763789284,
+     "inv_per_pair": 6.435541842643882,
+     "kendall_dist": 0.002089909227675471,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 36,
+     "maxdisp_p99": 353,
+     "maxdisp_max": 541
+    }
+   }
+  },
+  {
+   "view": "orb_03",
+   "visible": 1513460,
+   "pairs": 2313810,
+   "nonempty_tiles": 1024,
+   "max_tile": 17941,
+   "exact_fwd_inv": 2331,
+   "equal_depth_neighbours": 5676,
+   "presort": {
+    "fib26": {
+     "angle_deg": 19.725390788266928,
+     "inv_per_pair": 50.64389556618737,
+     "kendall_dist": 0.016471268273399144,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 236,
+     "maxdisp_p99": 2127,
+     "maxdisp_max": 2957
+    },
+    "fib128": {
+     "angle_deg": 8.48666217347124,
+     "inv_per_pair": 27.115197012719282,
+     "kendall_dist": 0.008818865122626139,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 125,
+     "maxdisp_p99": 1376,
+     "maxdisp_max": 2227
+    },
+    "fib512": {
+     "angle_deg": 1.3962263948578808,
+     "inv_per_pair": 4.090300413603537,
+     "kendall_dist": 0.0013303170042124654,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 27,
+     "maxdisp_p99": 247,
+     "maxdisp_max": 685
+    },
+    "fib2048": {
+     "angle_deg": 1.8507872042071036,
+     "inv_per_pair": 6.314074189324102,
+     "kendall_dist": 0.0020535704986316084,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 37,
+     "maxdisp_p99": 487,
+     "maxdisp_max": 931
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8154139708964867,
+     "kendall_dist": 0.00026520278739143675,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 7,
+     "maxdisp_p99": 63,
+     "maxdisp_max": 156
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2674480618546897,
+     "kendall_dist": 0.0010626949802048638,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 22,
+     "maxdisp_p99": 201,
+     "maxdisp_max": 492
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.211381228363608,
+     "kendall_dist": 0.004296829895127847,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 68,
+     "maxdisp_p99": 745,
+     "maxdisp_max": 1696
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.100137867845675,
+     "kendall_dist": 0.01759536612432539,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 220,
+     "maxdisp_p99": 2279,
+     "maxdisp_max": 3367
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.5891280415942997,
+     "inv_per_pair": 8.320394933032532,
+     "kendall_dist": 0.0027061002229478983,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 47,
+     "maxdisp_p99": 495,
+     "maxdisp_max": 808
+    }
+   }
+  },
+  {
+   "view": "orb_04",
+   "visible": 1615819,
+   "pairs": 2462330,
+   "nonempty_tiles": 1024,
+   "max_tile": 20140,
+   "exact_fwd_inv": 2193,
+   "equal_depth_neighbours": 5666,
+   "presort": {
+    "fib26": {
+     "angle_deg": 19.549609545069845,
+     "inv_per_pair": 56.208917569943914,
+     "kendall_dist": 0.018156145038267887,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 254,
+     "maxdisp_p99": 2330,
+     "maxdisp_max": 2935
+    },
+    "fib128": {
+     "angle_deg": 5.787426565382259,
+     "inv_per_pair": 17.63773174188675,
+     "kendall_dist": 0.0056971959165246855,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 94,
+     "maxdisp_p99": 1079,
+     "maxdisp_max": 1935
+    },
+    "fib512": {
+     "angle_deg": 3.163580047128233,
+     "inv_per_pair": 11.10464884885454,
+     "kendall_dist": 0.003586932889215549,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 64,
+     "maxdisp_p99": 767,
+     "maxdisp_max": 2220
+    },
+    "fib2048": {
+     "angle_deg": 2.0410547112539135,
+     "inv_per_pair": 5.753414855035677,
+     "kendall_dist": 0.001858421031562608,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 39,
+     "maxdisp_p99": 380,
+     "maxdisp_max": 661
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.829072870005239,
+     "kendall_dist": 0.00026780034069108575,
+     "tiles_sorted": 0.0029296875,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 67,
+     "maxdisp_max": 125
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.327470322824317,
+     "kendall_dist": 0.001074812261178198,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 23,
+     "maxdisp_p99": 235,
+     "maxdisp_max": 502
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.515640470611169,
+     "kendall_dist": 0.00436571169270685,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 74,
+     "maxdisp_p99": 900,
+     "maxdisp_max": 1543
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.092027063797296,
+     "kendall_dist": 0.01747236437282625,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 233,
+     "maxdisp_p99": 2439,
+     "maxdisp_max": 3249
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.984714787271889,
+     "inv_per_pair": 10.060767646903543,
+     "kendall_dist": 0.0032497469172252575,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 59,
+     "maxdisp_p99": 607,
+     "maxdisp_max": 1790
+    }
+   }
+  },
+  {
+   "view": "orb_05",
+   "visible": 1738362,
+   "pairs": 2662770,
+   "nonempty_tiles": 1024,
+   "max_tile": 22493,
+   "exact_fwd_inv": 2516,
+   "equal_depth_neighbours": 6342,
+   "presort": {
+    "fib26": {
+     "angle_deg": 17.31133067479855,
+     "inv_per_pair": 47.08334741641223,
+     "kendall_dist": 0.014994658629418053,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 244,
+     "maxdisp_p99": 2177,
+     "maxdisp_max": 3169
+    },
+    "fib128": {
+     "angle_deg": 3.848780591307334,
+     "inv_per_pair": 10.419382823150329,
+     "kendall_dist": 0.0033182663751707073,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 67,
+     "maxdisp_p99": 792,
+     "maxdisp_max": 1147
+    },
+    "fib512": {
+     "angle_deg": 5.6224496935892585,
+     "inv_per_pair": 19.73944088299027,
+     "kendall_dist": 0.006286430209778229,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 112,
+     "maxdisp_p99": 1243,
+     "maxdisp_max": 2054
+    },
+    "fib2048": {
+     "angle_deg": 0.09844319122010615,
+     "inv_per_pair": 0.3442843354852278,
+     "kendall_dist": 0.00010964441496480179,
+     "tiles_sorted": 0.015625,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 37,
+     "maxdisp_max": 53
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.843874987325229,
+     "kendall_dist": 0.00026874931488910067,
+     "tiles_sorted": 0.0029296875,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 73,
+     "maxdisp_max": 178
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.3814595327422197,
+     "kendall_dist": 0.0010768952112565134,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 26,
+     "maxdisp_p99": 249,
+     "maxdisp_max": 616
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.510242341621694,
+     "kendall_dist": 0.004302614045719091,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 79,
+     "maxdisp_p99": 894,
+     "maxdisp_max": 1482
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 54.08146854591271,
+     "kendall_dist": 0.01722335397803295,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 250,
+     "maxdisp_p99": 2428,
+     "maxdisp_max": 3607
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.3341405250056657,
+     "inv_per_pair": 11.62161470949425,
+     "kendall_dist": 0.003701141801798606,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 71,
+     "maxdisp_p99": 781,
+     "maxdisp_max": 1896
+    }
+   }
+  },
+  {
+   "view": "orb_06",
+   "visible": 1868741,
+   "pairs": 2835063,
+   "nonempty_tiles": 1024,
+   "max_tile": 21229,
+   "exact_fwd_inv": 2778,
+   "equal_depth_neighbours": 7090,
+   "presort": {
+    "fib26": {
+     "angle_deg": 15.723960976769362,
+     "inv_per_pair": 39.17021244325082,
+     "kendall_dist": 0.012417478748515447,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 235,
+     "maxdisp_p99": 1977,
+     "maxdisp_max": 3073
+    },
+    "fib128": {
+     "angle_deg": 4.76949008556114,
+     "inv_per_pair": 15.370260555056449,
+     "kendall_dist": 0.004872577193143219,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 99,
+     "maxdisp_p99": 1042,
+     "maxdisp_max": 1335
+    },
+    "fib512": {
+     "angle_deg": 3.1791645198371348,
+     "inv_per_pair": 10.037056319383378,
+     "kendall_dist": 0.00318188045888607,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 68,
+     "maxdisp_p99": 605,
+     "maxdisp_max": 1013
+    },
+    "fib2048": {
+     "angle_deg": 2.3483873970368805,
+     "inv_per_pair": 6.087662249480876,
+     "kendall_dist": 0.0019298699674041096,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 47,
+     "maxdisp_p99": 435,
+     "maxdisp_max": 882
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8333892403801961,
+     "kendall_dist": 0.00026419548264271974,
+     "tiles_sorted": 0.0029296875,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 61,
+     "maxdisp_max": 114
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.330290367445097,
+     "kendall_dist": 0.001055746376766476,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 27,
+     "maxdisp_p99": 217,
+     "maxdisp_max": 458
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.264593414678968,
+     "kendall_dist": 0.004205052680607932,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 84,
+     "maxdisp_p99": 788,
+     "maxdisp_max": 1295
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 53.809763663100256,
+     "kendall_dist": 0.017058411355752458,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 273,
+     "maxdisp_p99": 2150,
+     "maxdisp_max": 3580
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.596104902338302,
+     "inv_per_pair": 12.574873292057354,
+     "kendall_dist": 0.0039864022207084454,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 81,
+     "maxdisp_p99": 879,
+     "maxdisp_max": 1529
+    }
+   }
+  },
+  {
+   "view": "orb_07",
+   "visible": 1987658,
+   "pairs": 3023282,
+   "nonempty_tiles": 1024,
+   "max_tile": 21058,
+   "exact_fwd_inv": 2778,
+   "equal_depth_neighbours": 7140,
+   "presort": {
+    "fib26": {
+     "angle_deg": 15.198573195633113,
+     "inv_per_pair": 39.94214763955198,
+     "kendall_dist": 0.012312656334165197,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 250,
+     "maxdisp_p99": 1820,
+     "maxdisp_max": 3544
+    },
+    "fib128": {
+     "angle_deg": 7.829295784673593,
+     "inv_per_pair": 27.31911776671842,
+     "kendall_dist": 0.008421452733330377,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 163,
+     "maxdisp_p99": 1682,
+     "maxdisp_max": 2459
+    },
+    "fib512": {
+     "angle_deg": 3.6030516722253174,
+     "inv_per_pair": 11.008234097910814,
+     "kendall_dist": 0.0033934230206339295,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 82,
+     "maxdisp_p99": 724,
+     "maxdisp_max": 1318
+    },
+    "fib2048": {
+     "angle_deg": 0.9716143660878599,
+     "inv_per_pair": 2.6399899182411697,
+     "kendall_dist": 0.000813809234353153,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 25,
+     "maxdisp_p99": 203,
+     "maxdisp_max": 414
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8371580950768073,
+     "kendall_dist": 0.0002580642386850067,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 63,
+     "maxdisp_max": 94
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.352015789463239,
+     "kendall_dist": 0.0010332999320619215,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 29,
+     "maxdisp_p99": 240,
+     "maxdisp_max": 330
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.428677840836547,
+     "kendall_dist": 0.004139554456824258,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 93,
+     "maxdisp_p99": 789,
+     "maxdisp_max": 1037
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 55.309626095084745,
+     "kendall_dist": 0.017049869832377208,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 296,
+     "maxdisp_p99": 2542,
+     "maxdisp_max": 3118
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.7479069805005025,
+     "inv_per_pair": 13.541918683073561,
+     "kendall_dist": 0.004174462333737593,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 89,
+     "maxdisp_p99": 865,
+     "maxdisp_max": 2246
+    }
+   }
+  },
+  {
+   "view": "orb_08",
+   "visible": 2062836,
+   "pairs": 3097051,
+   "nonempty_tiles": 1024,
+   "max_tile": 19192,
+   "exact_fwd_inv": 3000,
+   "equal_depth_neighbours": 7589,
+   "presort": {
+    "fib26": {
+     "angle_deg": 15.91907527784124,
+     "inv_per_pair": 46.08285656258163,
+     "kendall_dist": 0.014262335290811003,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 275,
+     "maxdisp_p99": 2052,
+     "maxdisp_max": 2940
+    },
+    "fib128": {
+     "angle_deg": 6.468124574460848,
+     "inv_per_pair": 24.126138381318228,
+     "kendall_dist": 0.007466878152390041,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 142,
+     "maxdisp_p99": 1333,
+     "maxdisp_max": 2289
+    },
+    "fib512": {
+     "angle_deg": 4.338961708698102,
+     "inv_per_pair": 12.816435376750334,
+     "kendall_dist": 0.0039666008622531584,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 93,
+     "maxdisp_p99": 684,
+     "maxdisp_max": 1013
+    },
+    "fib2048": {
+     "angle_deg": 2.308406963514081,
+     "inv_per_pair": 6.987968231714621,
+     "kendall_dist": 0.0021627293392045364,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 55,
+     "maxdisp_p99": 397,
+     "maxdisp_max": 644
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8248240019295775,
+     "kendall_dist": 0.00025527750119944267,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 10,
+     "maxdisp_p99": 67,
+     "maxdisp_max": 161
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.3070127033749204,
+     "kendall_dist": 0.0010234982703915551,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 30,
+     "maxdisp_p99": 212,
+     "maxdisp_max": 726
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.234348417252413,
+     "kendall_dist": 0.004095942147725523,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 91,
+     "maxdisp_p99": 733,
+     "maxdisp_max": 1743
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 56.599552606657106,
+     "kendall_dist": 0.017517182240857524,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 302,
+     "maxdisp_p99": 2477,
+     "maxdisp_max": 4018
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.778798510507374,
+     "inv_per_pair": 13.867223045406744,
+     "kendall_dist": 0.004291812604052954,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 94,
+     "maxdisp_p99": 804,
+     "maxdisp_max": 1548
+    }
+   }
+  },
+  {
+   "view": "orb_09",
+   "visible": 2093872,
+   "pairs": 3127245,
+   "nonempty_tiles": 1024,
+   "max_tile": 19535,
+   "exact_fwd_inv": 3287,
+   "equal_depth_neighbours": 7945,
+   "presort": {
+    "fib26": {
+     "angle_deg": 17.6914965286173,
+     "inv_per_pair": 54.17402825809938,
+     "kendall_dist": 0.016880839452247068,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 321,
+     "maxdisp_p99": 2398,
+     "maxdisp_max": 3059
+    },
+    "fib128": {
+     "angle_deg": 3.602699856633091,
+     "inv_per_pair": 12.093325275122352,
+     "kendall_dist": 0.003768327535854248,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 84,
+     "maxdisp_p99": 678,
+     "maxdisp_max": 1266
+    },
+    "fib512": {
+     "angle_deg": 4.916697654064073,
+     "inv_per_pair": 14.300577345235183,
+     "kendall_dist": 0.004456115928637168,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 99,
+     "maxdisp_p99": 846,
+     "maxdisp_max": 1279
+    },
+    "fib2048": {
+     "angle_deg": 1.5655778279951271,
+     "inv_per_pair": 5.347851223680908,
+     "kendall_dist": 0.0016664113935068788,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 46,
+     "maxdisp_p99": 333,
+     "maxdisp_max": 571
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8212573687063214,
+     "kendall_dist": 0.0002559070136718806,
+     "tiles_sorted": 0.0029296875,
+     "maxdisp_p50": 10,
+     "maxdisp_p99": 63,
+     "maxdisp_max": 120
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2776872294943313,
+     "kendall_dist": 0.0010213401822764042,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 29,
+     "maxdisp_p99": 213,
+     "maxdisp_max": 508
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.204677279842162,
+     "kendall_dist": 0.004114629174662198,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 98,
+     "maxdisp_p99": 702,
+     "maxdisp_max": 2068
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 59.84001956994096,
+     "kendall_dist": 0.018646384543657628,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 311,
+     "maxdisp_p99": 2451,
+     "maxdisp_max": 3635
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.6867761172571485,
+     "inv_per_pair": 13.791495069941753,
+     "kendall_dist": 0.004297483897135464,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 92,
+     "maxdisp_p99": 828,
+     "maxdisp_max": 1789
+    }
+   }
+  },
+  {
+   "view": "orb_10",
+   "visible": 2072846,
+   "pairs": 3133498,
+   "nonempty_tiles": 1024,
+   "max_tile": 19741,
+   "exact_fwd_inv": 3476,
+   "equal_depth_neighbours": 8475,
+   "presort": {
+    "fib26": {
+     "angle_deg": 19.805487556434596,
+     "inv_per_pair": 110.56905988132112,
+     "kendall_dist": 0.03462185137060876,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 399,
+     "maxdisp_p99": 3969,
+     "maxdisp_max": 5869
+    },
+    "fib128": {
+     "angle_deg": 2.9160931557855934,
+     "inv_per_pair": 8.953878381285069,
+     "kendall_dist": 0.0028036762439700193,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 68,
+     "maxdisp_p99": 636,
+     "maxdisp_max": 905
+    },
+    "fib512": {
+     "angle_deg": 3.606232312812872,
+     "inv_per_pair": 10.193768753003832,
+     "kendall_dist": 0.0031919159577884393,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 78,
+     "maxdisp_p99": 603,
+     "maxdisp_max": 1109
+    },
+    "fib2048": {
+     "angle_deg": 1.3322786699766047,
+     "inv_per_pair": 5.469409586347271,
+     "kendall_dist": 0.0017126046471476553,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 37,
+     "maxdisp_p99": 388,
+     "maxdisp_max": 827
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8546343415569437,
+     "kendall_dist": 0.0002676067172983278,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 10,
+     "maxdisp_p99": 65,
+     "maxdisp_max": 156
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.4314670058828822,
+     "kendall_dist": 0.0010744754526116305,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 29,
+     "maxdisp_p99": 236,
+     "maxdisp_max": 474
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.876133637232256,
+     "kendall_dist": 0.004344953614533886,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 94,
+     "maxdisp_p99": 851,
+     "maxdisp_max": 1953
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 70.72701179321001,
+     "kendall_dist": 0.022146340873478648,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 306,
+     "maxdisp_p99": 2614,
+     "maxdisp_max": 3967
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.4779765393164017,
+     "inv_per_pair": 13.841690340954422,
+     "kendall_dist": 0.004334168584022412,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 86,
+     "maxdisp_p99": 834,
+     "maxdisp_max": 1878
+    }
+   }
+  },
+  {
+   "view": "orb_11",
+   "visible": 2014510,
+   "pairs": 3047232,
+   "nonempty_tiles": 1024,
+   "max_tile": 19962,
+   "exact_fwd_inv": 3393,
+   "equal_depth_neighbours": 8359,
+   "presort": {
+    "fib26": {
+     "angle_deg": 16.637160082434235,
+     "inv_per_pair": 94.90171933085502,
+     "kendall_dist": 0.029940618827603502,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 327,
+     "maxdisp_p99": 3386,
+     "maxdisp_max": 4127
+    },
+    "fib128": {
+     "angle_deg": 4.8119281504041,
+     "inv_per_pair": 18.654282968937054,
+     "kendall_dist": 0.005885254554009018,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 108,
+     "maxdisp_p99": 1048,
+     "maxdisp_max": 2704
+    },
+    "fib512": {
+     "angle_deg": 4.7266870421359775,
+     "inv_per_pair": 15.516379783357486,
+     "kendall_dist": 0.004895274985042296,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 96,
+     "maxdisp_p99": 887,
+     "maxdisp_max": 1330
+    },
+    "fib2048": {
+     "angle_deg": 1.84796540956263,
+     "inv_per_pair": 7.778698832251696,
+     "kendall_dist": 0.002454107874476105,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 51,
+     "maxdisp_p99": 479,
+     "maxdisp_max": 979
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8703459401844034,
+     "kendall_dist": 0.00027458613212649204,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 68,
+     "maxdisp_max": 116
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.494530774158318,
+     "kendall_dist": 0.001102492290214883,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 27,
+     "maxdisp_p99": 242,
+     "maxdisp_max": 461
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 14.398507891752253,
+     "kendall_dist": 0.004542596693851817,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 88,
+     "maxdisp_p99": 846,
+     "maxdisp_max": 1822
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 82.9083699567345,
+     "kendall_dist": 0.02615682750528896,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 284,
+     "maxdisp_p99": 2654,
+     "maxdisp_max": 3622
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.168529590666735,
+     "inv_per_pair": 13.027079986033225,
+     "kendall_dist": 0.004109923814327686,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 77,
+     "maxdisp_p99": 740,
+     "maxdisp_max": 1662
+    }
+   }
+  },
+  {
+   "view": "orb_12",
+   "visible": 1944956,
+   "pairs": 2928918,
+   "nonempty_tiles": 1024,
+   "max_tile": 20634,
+   "exact_fwd_inv": 3448,
+   "equal_depth_neighbours": 8302,
+   "presort": {
+    "fib26": {
+     "angle_deg": 13.889794445744563,
+     "inv_per_pair": 82.615407805886,
+     "kendall_dist": 0.026607761389063872,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 262,
+     "maxdisp_p99": 2888,
+     "maxdisp_max": 4504
+    },
+    "fib128": {
+     "angle_deg": 7.046338120884751,
+     "inv_per_pair": 30.292076459634583,
+     "kendall_dist": 0.009756101964793682,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 149,
+     "maxdisp_p99": 1623,
+     "maxdisp_max": 2152
+    },
+    "fib512": {
+     "angle_deg": 4.869346271661512,
+     "inv_per_pair": 16.30596213345679,
+     "kendall_dist": 0.005251625104672281,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 94,
+     "maxdisp_p99": 937,
+     "maxdisp_max": 1297
+    },
+    "fib2048": {
+     "angle_deg": 1.8582807899468967,
+     "inv_per_pair": 7.355559629870143,
+     "kendall_dist": 0.0023689887965507553,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 47,
+     "maxdisp_p99": 486,
+     "maxdisp_max": 750
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.951986023507657,
+     "kendall_dist": 0.0003066040298285717,
+     "tiles_sorted": 0.00390625,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 75,
+     "maxdisp_max": 119
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.8478342514198074,
+     "kendall_dist": 0.0012392634539431656,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 28,
+     "maxdisp_p99": 272,
+     "maxdisp_max": 356
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 16.16345216902624,
+     "kendall_dist": 0.005205727236104694,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 90,
+     "maxdisp_p99": 930,
+     "maxdisp_max": 1489
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 85.1430067349103,
+     "kendall_dist": 0.027421819577201755,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 276,
+     "maxdisp_p99": 2767,
+     "maxdisp_max": 4591
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.7893331170252624,
+     "inv_per_pair": 12.579290031335804,
+     "kendall_dist": 0.00405138407576518,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 67,
+     "maxdisp_p99": 712,
+     "maxdisp_max": 1243
+    }
+   }
+  },
+  {
+   "view": "orb_13",
+   "visible": 1873437,
+   "pairs": 2830649,
+   "nonempty_tiles": 1024,
+   "max_tile": 21127,
+   "exact_fwd_inv": 3278,
+   "equal_depth_neighbours": 7926,
+   "presort": {
+    "fib26": {
+     "angle_deg": 11.748455375247705,
+     "inv_per_pair": 71.12992532807847,
+     "kendall_dist": 0.023048309018654622,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 206,
+     "maxdisp_p99": 2765,
+     "maxdisp_max": 3750
+    },
+    "fib128": {
+     "angle_deg": 8.95196160215298,
+     "inv_per_pair": 40.08366597200854,
+     "kendall_dist": 0.012988354980863316,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 172,
+     "maxdisp_p99": 1918,
+     "maxdisp_max": 2749
+    },
+    "fib512": {
+     "angle_deg": 3.294205741912875,
+     "inv_per_pair": 9.05021675241261,
+     "kendall_dist": 0.0029325518258778364,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 61,
+     "maxdisp_p99": 666,
+     "maxdisp_max": 925
+    },
+    "fib2048": {
+     "angle_deg": 2.6997915058604893,
+     "inv_per_pair": 14.874436922416026,
+     "kendall_dist": 0.004819780381956882,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 62,
+     "maxdisp_p99": 1092,
+     "maxdisp_max": 1567
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.0230244018244579,
+     "kendall_dist": 0.00033149173766342503,
+     "tiles_sorted": 0.00390625,
+     "maxdisp_p50": 9,
+     "maxdisp_p99": 81,
+     "maxdisp_max": 98
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.142109459703411,
+     "kendall_dist": 0.0013421723469552215,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 26,
+     "maxdisp_p99": 283,
+     "maxdisp_max": 428
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 17.79132347387472,
+     "kendall_dist": 0.00576494238374854,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 76,
+     "maxdisp_p99": 1144,
+     "maxdisp_max": 1733
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 83.78564633057648,
+     "kendall_dist": 0.02714915640706466,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 263,
+     "maxdisp_p99": 2820,
+     "maxdisp_max": 4346
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.394895596212259,
+     "inv_per_pair": 11.181010079313966,
+     "kendall_dist": 0.0036229951635699544,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 57,
+     "maxdisp_p99": 692,
+     "maxdisp_max": 1082
+    }
+   }
+  },
+  {
+   "view": "orb_14",
+   "visible": 1819349,
+   "pairs": 2763495,
+   "nonempty_tiles": 1024,
+   "max_tile": 21462,
+   "exact_fwd_inv": 3184,
+   "equal_depth_neighbours": 7796,
+   "presort": {
+    "fib26": {
+     "angle_deg": 10.46496443398067,
+     "inv_per_pair": 64.09392671236967,
+     "kendall_dist": 0.02093994277798044,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 190,
+     "maxdisp_p99": 2634,
+     "maxdisp_max": 3726
+    },
+    "fib128": {
+     "angle_deg": 7.542891733508447,
+     "inv_per_pair": 38.21347243255371,
+     "kendall_dist": 0.012484613864844969,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 130,
+     "maxdisp_p99": 1877,
+     "maxdisp_max": 3787
+    },
+    "fib512": {
+     "angle_deg": 2.323454741723643,
+     "inv_per_pair": 10.217044358683479,
+     "kendall_dist": 0.003337981228565143,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 50,
+     "maxdisp_p99": 649,
+     "maxdisp_max": 1132
+    },
+    "fib2048": {
+     "angle_deg": 1.4551016417709295,
+     "inv_per_pair": 7.866081899912973,
+     "kendall_dist": 0.0025699050334405,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 35,
+     "maxdisp_p99": 519,
+     "maxdisp_max": 907
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.0993093890164447,
+     "kendall_dist": 0.0003591522142901942,
+     "tiles_sorted": 0.009765625,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 84,
+     "maxdisp_max": 142
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.4741803404746525,
+     "kendall_dist": 0.0014617466133467988,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 24,
+     "maxdisp_p99": 317,
+     "maxdisp_max": 493
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 19.27708933795791,
+     "kendall_dist": 0.006297962511710987,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 76,
+     "maxdisp_p99": 1084,
+     "maxdisp_max": 1626
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 80.61965518302006,
+     "kendall_dist": 0.026339016080085938,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 248,
+     "maxdisp_p99": 2936,
+     "maxdisp_max": 4053
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.0749928993211486,
+     "inv_per_pair": 8.822140079862638,
+     "kendall_dist": 0.0028822560565008866,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 43,
+     "maxdisp_p99": 580,
+     "maxdisp_max": 1008
+    }
+   }
+  },
+  {
+   "view": "orb_15",
+   "visible": 1782481,
+   "pairs": 2707107,
+   "nonempty_tiles": 1024,
+   "max_tile": 19599,
+   "exact_fwd_inv": 2976,
+   "equal_depth_neighbours": 7283,
+   "presort": {
+    "fib26": {
+     "angle_deg": 10.29278480605004,
+     "inv_per_pair": 62.34399342175983,
+     "kendall_dist": 0.02039174405989563,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 174,
+     "maxdisp_p99": 2448,
+     "maxdisp_max": 3184
+    },
+    "fib128": {
+     "angle_deg": 5.922210875565088,
+     "inv_per_pair": 32.99541170703633,
+     "kendall_dist": 0.010792282523979778,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 109,
+     "maxdisp_p99": 1769,
+     "maxdisp_max": 3305
+    },
+    "fib512": {
+     "angle_deg": 2.146169357239904,
+     "inv_per_pair": 11.639124718749573,
+     "kendall_dist": 0.0038069754489468885,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 50,
+     "maxdisp_p99": 835,
+     "maxdisp_max": 1540
+    },
+    "fib2048": {
+     "angle_deg": 1.88316580283059,
+     "inv_per_pair": 9.547686146133122,
+     "kendall_dist": 0.0031228986397942894,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 44,
+     "maxdisp_p99": 696,
+     "maxdisp_max": 1095
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.1393099718629518,
+     "kendall_dist": 0.0003726504523691194,
+     "tiles_sorted": 0.01171875,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 94,
+     "maxdisp_max": 145
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.634511306719682,
+     "kendall_dist": 0.0015158760807955402,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 24,
+     "maxdisp_p99": 310,
+     "maxdisp_max": 566
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 19.98356843671122,
+     "kendall_dist": 0.00653631233097421,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 74,
+     "maxdisp_p99": 1098,
+     "maxdisp_max": 1606
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 79.41480628582468,
+     "kendall_dist": 0.025975339651269573,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 241,
+     "maxdisp_p99": 2579,
+     "maxdisp_max": 4198
+    },
+    "prev_view_fwd": {
+     "angle_deg": 1.9467316862109665,
+     "inv_per_pair": 6.266156084705924,
+     "kendall_dist": 0.0020495615392209184,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 37,
+     "maxdisp_p99": 477,
+     "maxdisp_max": 852
+    }
+   }
+  },
+  {
+   "view": "orb_16",
+   "visible": 1759030,
+   "pairs": 2667121,
+   "nonempty_tiles": 1024,
+   "max_tile": 19991,
+   "exact_fwd_inv": 3142,
+   "equal_depth_neighbours": 7823,
+   "presort": {
+    "fib26": {
+     "angle_deg": 11.296494596884182,
+     "inv_per_pair": 67.53486287273806,
+     "kendall_dist": 0.02186311963140143,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 186,
+     "maxdisp_p99": 2592,
+     "maxdisp_max": 3039
+    },
+    "fib128": {
+     "angle_deg": 5.285245119305428,
+     "inv_per_pair": 33.60104209745265,
+     "kendall_dist": 0.010877694450948681,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 97,
+     "maxdisp_p99": 1722,
+     "maxdisp_max": 3040
+    },
+    "fib512": {
+     "angle_deg": 2.9137836369973535,
+     "inv_per_pair": 12.713832255829413,
+     "kendall_dist": 0.004115859924178141,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 56,
+     "maxdisp_p99": 804,
+     "maxdisp_max": 1303
+    },
+    "fib2048": {
+     "angle_deg": 1.7130421679392787,
+     "inv_per_pair": 8.282969539064782,
+     "kendall_dist": 0.002681452900512646,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 37,
+     "maxdisp_p99": 559,
+     "maxdisp_max": 830
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.1558354495352854,
+     "kendall_dist": 0.0003741796108333472,
+     "tiles_sorted": 0.0126953125,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 86,
+     "maxdisp_max": 130
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.68949140290223,
+     "kendall_dist": 0.0015181331121569101,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 23,
+     "maxdisp_p99": 318,
+     "maxdisp_max": 558
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 19.925659915691863,
+     "kendall_dist": 0.006450551136711435,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 73,
+     "maxdisp_p99": 1081,
+     "maxdisp_max": 1673
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 80.88495910009333,
+     "kendall_dist": 0.026184957841977125,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 234,
+     "maxdisp_p99": 2792,
+     "maxdisp_max": 3420
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.076897104255466,
+     "inv_per_pair": 6.361835852216679,
+     "kendall_dist": 0.0020595226286969854,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 38,
+     "maxdisp_p99": 540,
+     "maxdisp_max": 1042
+    }
+   }
+  },
+  {
+   "view": "orb_17",
+   "visible": 1760231,
+   "pairs": 2663931,
+   "nonempty_tiles": 1024,
+   "max_tile": 18493,
+   "exact_fwd_inv": 2986,
+   "equal_depth_neighbours": 7464,
+   "presort": {
+    "fib26": {
+     "angle_deg": 13.289133382331123,
+     "inv_per_pair": 78.45295054564102,
+     "kendall_dist": 0.02495073670337182,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 223,
+     "maxdisp_p99": 2715,
+     "maxdisp_max": 3461
+    },
+    "fib128": {
+     "angle_deg": 6.23289979086326,
+     "inv_per_pair": 41.022497955089676,
+     "kendall_dist": 0.013046565339777667,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 115,
+     "maxdisp_p99": 1869,
+     "maxdisp_max": 2879
+    },
+    "fib512": {
+     "angle_deg": 4.459001067597545,
+     "inv_per_pair": 13.935253578264602,
+     "kendall_dist": 0.004431889948150824,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 72,
+     "maxdisp_p99": 1018,
+     "maxdisp_max": 1417
+    },
+    "fib2048": {
+     "angle_deg": 2.7420407018287865,
+     "inv_per_pair": 14.43892428144723,
+     "kendall_dist": 0.004592074555777543,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 61,
+     "maxdisp_p99": 818,
+     "maxdisp_max": 1736
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.1335807871900585,
+     "kendall_dist": 0.00036051768042459696,
+     "tiles_sorted": 0.013671875,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 88,
+     "maxdisp_max": 127
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.572739684323656,
+     "kendall_dist": 0.001454288501364189,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 24,
+     "maxdisp_p99": 313,
+     "maxdisp_max": 462
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 19.1600833505072,
+     "kendall_dist": 0.006093565526449472,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 77,
+     "maxdisp_p99": 1132,
+     "maxdisp_max": 1665
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 82.96157483057932,
+     "kendall_dist": 0.026384634302449108,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 250,
+     "maxdisp_p99": 2702,
+     "maxdisp_max": 3533
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.4069613255712867,
+     "inv_per_pair": 9.729998261966996,
+     "kendall_dist": 0.0030944741156340447,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 49,
+     "maxdisp_p99": 656,
+     "maxdisp_max": 890
+    }
+   }
+  },
+  {
+   "view": "orb_18",
+   "visible": 1772164,
+   "pairs": 2681095,
+   "nonempty_tiles": 1024,
+   "max_tile": 17924,
+   "exact_fwd_inv": 3163,
+   "equal_depth_neighbours": 7744,
+   "presort": {
+    "fib26": {
+     "angle_deg": 16.003878576946654,
+     "inv_per_pair": 93.97998728131603,
+     "kendall_dist": 0.029291023679725046,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 257,
+     "maxdisp_p99": 2892,
+     "maxdisp_max": 3932
+    },
+    "fib128": {
+     "angle_deg": 8.531527415201506,
+     "inv_per_pair": 54.11872984731985,
+     "kendall_dist": 0.016867346371620944,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 159,
+     "maxdisp_p99": 2180,
+     "maxdisp_max": 3317
+    },
+    "fib512": {
+     "angle_deg": 2.5398097569946065,
+     "inv_per_pair": 11.649300006154203,
+     "kendall_dist": 0.00363077216972896,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 57,
+     "maxdisp_p99": 680,
+     "maxdisp_max": 919
+    },
+    "fib2048": {
+     "angle_deg": 2.044141482751625,
+     "inv_per_pair": 7.8197273875039865,
+     "kendall_dist": 0.002437197819475661,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 42,
+     "maxdisp_p99": 539,
+     "maxdisp_max": 1082
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.0860584947568064,
+     "kendall_dist": 0.0003384950988795525,
+     "tiles_sorted": 0.0166015625,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 83,
+     "maxdisp_max": 145
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.387412978652379,
+     "kendall_dist": 0.0013674381234566203,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 25,
+     "maxdisp_p99": 270,
+     "maxdisp_max": 577
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 18.297174102372352,
+     "kendall_dist": 0.005702734969524626,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 78,
+     "maxdisp_p99": 1041,
+     "maxdisp_max": 1468
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 84.0700240013875,
+     "kendall_dist": 0.026202355788882494,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 245,
+     "maxdisp_p99": 2665,
+     "maxdisp_max": 3411
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.8200774826184736,
+     "inv_per_pair": 12.895698585838995,
+     "kendall_dist": 0.004019240942369251,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 60,
+     "maxdisp_p99": 732,
+     "maxdisp_max": 1242
+    }
+   }
+  },
+  {
+   "view": "orb_19",
+   "visible": 1764576,
+   "pairs": 2675579,
+   "nonempty_tiles": 1024,
+   "max_tile": 18419,
+   "exact_fwd_inv": 3096,
+   "equal_depth_neighbours": 7757,
+   "presort": {
+    "fib26": {
+     "angle_deg": 19.21928688429936,
+     "inv_per_pair": 113.40709693116892,
+     "kendall_dist": 0.034599661394318144,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 314,
+     "maxdisp_p99": 3491,
+     "maxdisp_max": 4574
+    },
+    "fib128": {
+     "angle_deg": 11.034865782426657,
+     "inv_per_pair": 45.95267603759784,
+     "kendall_dist": 0.014019819518250097,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 209,
+     "maxdisp_p99": 2100,
+     "maxdisp_max": 3442
+    },
+    "fib512": {
+     "angle_deg": 0.685465713425202,
+     "inv_per_pair": 3.0434855408866643,
+     "kendall_dist": 0.0009285447914877368,
+     "tiles_sorted": 0.005859375,
+     "maxdisp_p50": 19,
+     "maxdisp_p99": 211,
+     "maxdisp_max": 381
+    },
+    "fib2048": {
+     "angle_deg": 1.1501173590394849,
+     "inv_per_pair": 5.5959024196258085,
+     "kendall_dist": 0.0017072681882705427,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 28,
+     "maxdisp_p99": 325,
+     "maxdisp_max": 511
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 1.0485367840007713,
+     "kendall_dist": 0.0003199007704776458,
+     "tiles_sorted": 0.0166015625,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 83,
+     "maxdisp_max": 143
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 4.2168069042252165,
+     "kendall_dist": 0.0012865164085803884,
+     "tiles_sorted": 0.0048828125,
+     "maxdisp_p50": 25,
+     "maxdisp_p99": 296,
+     "maxdisp_max": 487
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 17.492092365801945,
+     "kendall_dist": 0.005336707219498053,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 80,
+     "maxdisp_p99": 1108,
+     "maxdisp_max": 1481
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 82.52598745916305,
+     "kendall_dist": 0.02517806468542106,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 250,
+     "maxdisp_p99": 2785,
+     "maxdisp_max": 3807
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.2221971606203943,
+     "inv_per_pair": 15.280805762042533,
+     "kendall_dist": 0.004662060131209531,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 68,
+     "maxdisp_p99": 888,
+     "maxdisp_max": 1230
+    }
+   }
+  },
+  {
+   "view": "orb_20",
+   "visible": 1757685,
+   "pairs": 2659664,
+   "nonempty_tiles": 1024,
+   "max_tile": 18543,
+   "exact_fwd_inv": 3143,
+   "equal_depth_neighbours": 7887,
+   "presort": {
+    "fib26": {
+     "angle_deg": 22.763223887374032,
+     "inv_per_pair": 132.24131506836954,
+     "kendall_dist": 0.04013815600834605,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 367,
+     "maxdisp_p99": 4008,
+     "maxdisp_max": 6526
+    },
+    "fib128": {
+     "angle_deg": 7.511879490792249,
+     "inv_per_pair": 29.964177805918343,
+     "kendall_dist": 0.009094788892669164,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 149,
+     "maxdisp_p99": 1606,
+     "maxdisp_max": 2561
+    },
+    "fib512": {
+     "angle_deg": 4.224772468871848,
+     "inv_per_pair": 19.464638014425883,
+     "kendall_dist": 0.005907946974552434,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 88,
+     "maxdisp_p99": 1015,
+     "maxdisp_max": 2173
+    },
+    "fib2048": {
+     "angle_deg": 1.3717123381112106,
+     "inv_per_pair": 5.429772332144211,
+     "kendall_dist": 0.001648055668871173,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 33,
+     "maxdisp_p99": 359,
+     "maxdisp_max": 782
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.9778246425112345,
+     "kendall_dist": 0.00029679134716430823,
+     "tiles_sorted": 0.0185546875,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 83,
+     "maxdisp_max": 173
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.928051062089046,
+     "kendall_dist": 0.0011922501395072024,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 26,
+     "maxdisp_p99": 261,
+     "maxdisp_max": 709
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 16.18952807572686,
+     "kendall_dist": 0.004913878868106109,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 80,
+     "maxdisp_p99": 895,
+     "maxdisp_max": 2098
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 74.09176647877325,
+     "kendall_dist": 0.022488485389920824,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 260,
+     "maxdisp_p99": 2736,
+     "maxdisp_max": 3327
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.553678564546384,
+     "inv_per_pair": 16.399282766544946,
+     "kendall_dist": 0.004977544043389537,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 76,
+     "maxdisp_p99": 907,
+     "maxdisp_max": 2144
+    }
+   }
+  },
+  {
+   "view": "orb_21",
+   "visible": 1729685,
+   "pairs": 2628868,
+   "nonempty_tiles": 1024,
+   "max_tile": 22207,
+   "exact_fwd_inv": 3096,
+   "equal_depth_neighbours": 7650,
+   "presort": {
+    "fib26": {
+     "angle_deg": 19.181978420244608,
+     "inv_per_pair": 76.74990604320948,
+     "kendall_dist": 0.022922608353611415,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 334,
+     "maxdisp_p99": 3296,
+     "maxdisp_max": 5289
+    },
+    "fib128": {
+     "angle_deg": 4.010976828829416,
+     "inv_per_pair": 14.224063361112083,
+     "kendall_dist": 0.004248247984045236,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 80,
+     "maxdisp_p99": 839,
+     "maxdisp_max": 1149
+    },
+    "fib512": {
+     "angle_deg": 4.820197744323458,
+     "inv_per_pair": 19.155748025385833,
+     "kendall_dist": 0.005721175859931029,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 86,
+     "maxdisp_p99": 1041,
+     "maxdisp_max": 1615
+    },
+    "fib2048": {
+     "angle_deg": 2.5820584797469874,
+     "inv_per_pair": 11.839271123540627,
+     "kendall_dist": 0.00353599097573298,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 60,
+     "maxdisp_p99": 681,
+     "maxdisp_max": 1286
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.928581427443295,
+     "kendall_dist": 0.0002773359536588429,
+     "tiles_sorted": 0.013671875,
+     "maxdisp_p50": 8,
+     "maxdisp_p99": 77,
+     "maxdisp_max": 106
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.7338493222177758,
+     "kendall_dist": 0.001115174859190178,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 26,
+     "maxdisp_p99": 268,
+     "maxdisp_max": 369
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 15.28162616000499,
+     "kendall_dist": 0.004564106323138487,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 82,
+     "maxdisp_p99": 910,
+     "maxdisp_max": 1577
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 68.24375586754451,
+     "kendall_dist": 0.020382108187213855,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 260,
+     "maxdisp_p99": 2710,
+     "maxdisp_max": 3922
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.7790201450911,
+     "inv_per_pair": 16.92039387295216,
+     "kendall_dist": 0.005053550967478284,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 85,
+     "maxdisp_p99": 907,
+     "maxdisp_max": 1669
+    }
+   }
+  },
+  {
+   "view": "orb_22",
+   "visible": 1675122,
+   "pairs": 2548904,
+   "nonempty_tiles": 1024,
+   "max_tile": 18658,
+   "exact_fwd_inv": 2780,
+   "equal_depth_neighbours": 6869,
+   "presort": {
+    "fib26": {
+     "angle_deg": 15.476916676867068,
+     "inv_per_pair": 60.10302114163578,
+     "kendall_dist": 0.01805868933915404,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 236,
+     "maxdisp_p99": 2968,
+     "maxdisp_max": 3926
+    },
+    "fib128": {
+     "angle_deg": 2.4916118298308203,
+     "inv_per_pair": 8.890300301619833,
+     "kendall_dist": 0.002671199687290304,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 47,
+     "maxdisp_p99": 573,
+     "maxdisp_max": 900
+    },
+    "fib512": {
+     "angle_deg": 3.728380660267597,
+     "inv_per_pair": 15.742462642767244,
+     "kendall_dist": 0.004730015844445358,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 75,
+     "maxdisp_p99": 909,
+     "maxdisp_max": 1816
+    },
+    "fib2048": {
+     "angle_deg": 1.658817497672861,
+     "inv_per_pair": 4.7507732735324675,
+     "kendall_dist": 0.001427428056657981,
+     "tiles_sorted": 0.001953125,
+     "maxdisp_p50": 28,
+     "maxdisp_p99": 368,
+     "maxdisp_max": 568
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8957191012293911,
+     "kendall_dist": 0.00026912978211410433,
+     "tiles_sorted": 0.025390625,
+     "maxdisp_p50": 7,
+     "maxdisp_p99": 68,
+     "maxdisp_max": 109
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.5934790011706994,
+     "kendall_dist": 0.0010797048084486532,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 23,
+     "maxdisp_p99": 231,
+     "maxdisp_max": 417
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 14.57411342286724,
+     "kendall_dist": 0.0043789710017560594,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 76,
+     "maxdisp_p99": 842,
+     "maxdisp_max": 1313
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 62.83369636518284,
+     "kendall_dist": 0.018879154177884095,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 238,
+     "maxdisp_p99": 2613,
+     "maxdisp_max": 3999
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.878766530613915,
+     "inv_per_pair": 16.88330278425551,
+     "kendall_dist": 0.0050727952473679375,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 78,
+     "maxdisp_p99": 1032,
+     "maxdisp_max": 1796
+    }
+   }
+  },
+  {
+   "view": "orb_23",
+   "visible": 1592796,
+   "pairs": 2446035,
+   "nonempty_tiles": 1024,
+   "max_tile": 20396,
+   "exact_fwd_inv": 2657,
+   "equal_depth_neighbours": 6615,
+   "presort": {
+    "fib26": {
+     "angle_deg": 12.103920021225083,
+     "inv_per_pair": 44.548104585584426,
+     "kendall_dist": 0.01320178395947573,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 177,
+     "maxdisp_p99": 2167,
+     "maxdisp_max": 2866
+    },
+    "fib128": {
+     "angle_deg": 5.290743011268709,
+     "inv_per_pair": 23.066034214555394,
+     "kendall_dist": 0.006835594989623302,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 92,
+     "maxdisp_p99": 1190,
+     "maxdisp_max": 2025
+    },
+    "fib512": {
+     "angle_deg": 0.17377574720730027,
+     "inv_per_pair": 0.683311563407719,
+     "kendall_dist": 0.00020249866343448073,
+     "tiles_sorted": 0.044921875,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 43,
+     "maxdisp_max": 85
+    },
+    "fib2048": {
+     "angle_deg": 0.6298078372650405,
+     "inv_per_pair": 1.7398500021463308,
+     "kendall_dist": 0.0005156027189911455,
+     "tiles_sorted": 0.029296875,
+     "maxdisp_p50": 11,
+     "maxdisp_p99": 125,
+     "maxdisp_max": 250
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8688816799432552,
+     "kendall_dist": 0.00025749217237559167,
+     "tiles_sorted": 0.0283203125,
+     "maxdisp_p50": 7,
+     "maxdisp_p99": 64,
+     "maxdisp_max": 109
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.4837919326583635,
+     "kendall_dist": 0.001032418076651527,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 21,
+     "maxdisp_p99": 221,
+     "maxdisp_max": 445
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 14.069785182959361,
+     "kendall_dist": 0.00416956604707642,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 66,
+     "maxdisp_p99": 851,
+     "maxdisp_max": 1295
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 59.80315694583275,
+     "kendall_dist": 0.017722602688442682,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 215,
+     "maxdisp_p99": 2544,
+     "maxdisp_max": 4114
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.8452539888531683,
+     "inv_per_pair": 16.33713622249886,
+     "kendall_dist": 0.004841493143924877,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 74,
+     "maxdisp_p99": 957,
+     "maxdisp_max": 1625
+    }
+   }
+  },
+  {
+   "view": "orb_24",
+   "visible": 1473744,
+   "pairs": 2266173,
+   "nonempty_tiles": 1024,
+   "max_tile": 19129,
+   "exact_fwd_inv": 2352,
+   "equal_depth_neighbours": 6101,
+   "presort": {
+    "fib26": {
+     "angle_deg": 9.528279893591712,
+     "inv_per_pair": 31.530164290193202,
+     "kendall_dist": 0.00955267338108944,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 121,
+     "maxdisp_p99": 1493,
+     "maxdisp_max": 2033
+    },
+    "fib128": {
+     "angle_deg": 8.843670012247506,
+     "inv_per_pair": 38.286667434480954,
+     "kendall_dist": 0.011599686747136486,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 131,
+     "maxdisp_p99": 1932,
+     "maxdisp_max": 2957
+    },
+    "fib512": {
+     "angle_deg": 3.814938614585651,
+     "inv_per_pair": 15.855778442334278,
+     "kendall_dist": 0.00480381488876823,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 62,
+     "maxdisp_p99": 1001,
+     "maxdisp_max": 1797
+    },
+    "fib2048": {
+     "angle_deg": 2.3145978403447223,
+     "inv_per_pair": 6.648059084632991,
+     "kendall_dist": 0.002014158139779686,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 29,
+     "maxdisp_p99": 401,
+     "maxdisp_max": 662
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8528528051477093,
+     "kendall_dist": 0.00025838826004011484,
+     "tiles_sorted": 0.0224609375,
+     "maxdisp_p50": 6,
+     "maxdisp_p99": 65,
+     "maxdisp_max": 89
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.4208372441115484,
+     "kendall_dist": 0.001036408836379822,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 18,
+     "maxdisp_p99": 202,
+     "maxdisp_max": 338
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.779370330508748,
+     "kendall_dist": 0.00417472687274786,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 60,
+     "maxdisp_p99": 784,
+     "maxdisp_max": 1110
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 58.00909683417815,
+     "kendall_dist": 0.017574978363219237,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 185,
+     "maxdisp_p99": 2573,
+     "maxdisp_max": 3758
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.6810028566335857,
+     "inv_per_pair": 15.260248445286393,
+     "kendall_dist": 0.004623387552643976,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 61,
+     "maxdisp_p99": 974,
+     "maxdisp_max": 1697
+    }
+   }
+  },
+  {
+   "view": "orb_25",
+   "visible": 1373804,
+   "pairs": 2127079,
+   "nonempty_tiles": 1024,
+   "max_tile": 21422,
+   "exact_fwd_inv": 2202,
+   "equal_depth_neighbours": 5549,
+   "presort": {
+    "fib26": {
+     "angle_deg": 8.372953140822219,
+     "inv_per_pair": 24.21093010649816,
+     "kendall_dist": 0.007373991044222631,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 92,
+     "maxdisp_p99": 1029,
+     "maxdisp_max": 1709
+    },
+    "fib128": {
+     "angle_deg": 7.15947756594959,
+     "inv_per_pair": 27.066632221934398,
+     "kendall_dist": 0.00824376026546137,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 92,
+     "maxdisp_p99": 1406,
+     "maxdisp_max": 2143
+    },
+    "fib512": {
+     "angle_deg": 4.990685288060893,
+     "inv_per_pair": 19.46807194279103,
+     "kendall_dist": 0.005929445400195197,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 70,
+     "maxdisp_p99": 1130,
+     "maxdisp_max": 1553
+    },
+    "fib2048": {
+     "angle_deg": 0.9312574068302745,
+     "inv_per_pair": 2.9215332387748645,
+     "kendall_dist": 0.00088981959153822,
+     "tiles_sorted": 0.00390625,
+     "maxdisp_p50": 15,
+     "maxdisp_p99": 178,
+     "maxdisp_max": 253
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8405794989278724,
+     "kendall_dist": 0.000256017661022764,
+     "tiles_sorted": 0.033203125,
+     "maxdisp_p50": 6,
+     "maxdisp_p99": 60,
+     "maxdisp_max": 85
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.366160354175844,
+     "kendall_dist": 0.0010252409220101698,
+     "tiles_sorted": 0.00390625,
+     "maxdisp_p50": 17,
+     "maxdisp_p99": 203,
+     "maxdisp_max": 394
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.523893094708754,
+     "kendall_dist": 0.004119010138178898,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 52,
+     "maxdisp_p99": 787,
+     "maxdisp_max": 1139
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 57.058219276293926,
+     "kendall_dist": 0.017378382246857792,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 178,
+     "maxdisp_p99": 2237,
+     "maxdisp_max": 3928
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.3992384512537934,
+     "inv_per_pair": 13.569946861400071,
+     "kendall_dist": 0.004133036863366269,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 53,
+     "maxdisp_p99": 956,
+     "maxdisp_max": 1381
+    }
+   }
+  },
+  {
+   "view": "orb_26",
+   "visible": 1307482,
+   "pairs": 2039314,
+   "nonempty_tiles": 1024,
+   "max_tile": 21349,
+   "exact_fwd_inv": 1998,
+   "equal_depth_neighbours": 5092,
+   "presort": {
+    "fib26": {
+     "angle_deg": 8.883233018441647,
+     "inv_per_pair": 23.05315758142199,
+     "kendall_dist": 0.007012792052194257,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 76,
+     "maxdisp_p99": 1077,
+     "maxdisp_max": 1567
+    },
+    "fib128": {
+     "angle_deg": 4.186212970040194,
+     "inv_per_pair": 15.084162125106776,
+     "kendall_dist": 0.004588616196776697,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 53,
+     "maxdisp_p99": 866,
+     "maxdisp_max": 1124
+    },
+    "fib512": {
+     "angle_deg": 2.0590296496114733,
+     "inv_per_pair": 7.837823895682567,
+     "kendall_dist": 0.0023842733442483383,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 31,
+     "maxdisp_p99": 490,
+     "maxdisp_max": 769
+    },
+    "fib2048": {
+     "angle_deg": 1.3086331503140554,
+     "inv_per_pair": 4.8151966788831935,
+     "kendall_dist": 0.0014647873238257424,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 20,
+     "maxdisp_p99": 277,
+     "maxdisp_max": 462
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8316796726742424,
+     "kendall_dist": 0.00025299773264906856,
+     "tiles_sorted": 0.01953125,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 54,
+     "maxdisp_max": 87
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.3284334830241935,
+     "kendall_dist": 0.0010125125720226622,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 15,
+     "maxdisp_p99": 206,
+     "maxdisp_max": 301
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.362415988906074,
+     "kendall_dist": 0.004064859415207875,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 52,
+     "maxdisp_p99": 651,
+     "maxdisp_max": 896
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 55.617662606150894,
+     "kendall_dist": 0.016918944873753738,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 166,
+     "maxdisp_p99": 2348,
+     "maxdisp_max": 3489
+    },
+    "prev_view_fwd": {
+     "angle_deg": 3.0267054204573616,
+     "inv_per_pair": 11.610606802091292,
+     "kendall_dist": 0.003531957425583866,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 44,
+     "maxdisp_p99": 673,
+     "maxdisp_max": 995
+    }
+   }
+  },
+  {
+   "view": "orb_27",
+   "visible": 1271041,
+   "pairs": 1989907,
+   "nonempty_tiles": 1024,
+   "max_tile": 21754,
+   "exact_fwd_inv": 1949,
+   "equal_depth_neighbours": 5039,
+   "presort": {
+    "fib26": {
+     "angle_deg": 10.477350213936779,
+     "inv_per_pair": 28.685866223898906,
+     "kendall_dist": 0.008799118096318432,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 92,
+     "maxdisp_p99": 1257,
+     "maxdisp_max": 2179
+    },
+    "fib128": {
+     "angle_deg": 1.5819558407149354,
+     "inv_per_pair": 5.555867183742758,
+     "kendall_dist": 0.0017042097001931868,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 23,
+     "maxdisp_p99": 319,
+     "maxdisp_max": 542
+    },
+    "fib512": {
+     "angle_deg": 1.4793535029915517,
+     "inv_per_pair": 3.8052401443886574,
+     "kendall_dist": 0.0011672214167767498,
+     "tiles_sorted": 0.0048828125,
+     "maxdisp_p50": 15,
+     "maxdisp_p99": 222,
+     "maxdisp_max": 348
+    },
+    "fib2048": {
+     "angle_deg": 1.301306713477893,
+     "inv_per_pair": 4.71446404279195,
+     "kendall_dist": 0.001446117246367571,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 19,
+     "maxdisp_p99": 293,
+     "maxdisp_max": 372
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8217876513827028,
+     "kendall_dist": 0.0002520755879628356,
+     "tiles_sorted": 0.017578125,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 53,
+     "maxdisp_max": 77
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2880119523173694,
+     "kendall_dist": 0.0010085665618297915,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 15,
+     "maxdisp_p99": 186,
+     "maxdisp_max": 284
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.18779118823141,
+     "kendall_dist": 0.004045230190683912,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 48,
+     "maxdisp_p99": 660,
+     "maxdisp_max": 1249
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 55.550049826449175,
+     "kendall_dist": 0.01703945228162834,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 153,
+     "maxdisp_p99": 2394,
+     "maxdisp_max": 3432
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.609683950426957,
+     "inv_per_pair": 9.517955864269034,
+     "kendall_dist": 0.002919542921645361,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 34,
+     "maxdisp_p99": 516,
+     "maxdisp_max": 688
+    }
+   }
+  },
+  {
+   "view": "orb_28",
+   "visible": 1278476,
+   "pairs": 1988474,
+   "nonempty_tiles": 1024,
+   "max_tile": 20609,
+   "exact_fwd_inv": 1936,
+   "equal_depth_neighbours": 4994,
+   "presort": {
+    "fib26": {
+     "angle_deg": 12.449700349137174,
+     "inv_per_pair": 34.427941225281295,
+     "kendall_dist": 0.01078821342588395,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 114,
+     "maxdisp_p99": 1419,
+     "maxdisp_max": 2142
+    },
+    "fib128": {
+     "angle_deg": 0.7253237495512759,
+     "inv_per_pair": 1.9771422709072384,
+     "kendall_dist": 0.0006195500524504532,
+     "tiles_sorted": 0.0068359375,
+     "maxdisp_p50": 10,
+     "maxdisp_p99": 130,
+     "maxdisp_max": 190
+    },
+    "fib512": {
+     "angle_deg": 3.5332001929231063,
+     "inv_per_pair": 10.376939804090977,
+     "kendall_dist": 0.003251679808023988,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 41,
+     "maxdisp_p99": 539,
+     "maxdisp_max": 763
+    },
+    "fib2048": {
+     "angle_deg": 1.3155918846316939,
+     "inv_per_pair": 4.701389608312706,
+     "kendall_dist": 0.0014732102091386675,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 21,
+     "maxdisp_p99": 265,
+     "maxdisp_max": 433
+    },
+    "rot0.25": {
+     "angle_deg": 0.25,
+     "inv_per_pair": 0.8230814182131625,
+     "kendall_dist": 0.00025791777522968305,
+     "tiles_sorted": 0.0283203125,
+     "maxdisp_p50": 5,
+     "maxdisp_p99": 57,
+     "maxdisp_max": 137
+    },
+    "rot1.0": {
+     "angle_deg": 1.0,
+     "inv_per_pair": 3.2870241200035806,
+     "kendall_dist": 0.0010300098257570807,
+     "tiles_sorted": 0.0009765625,
+     "maxdisp_p50": 16,
+     "maxdisp_p99": 188,
+     "maxdisp_max": 298
+    },
+    "rot4.0": {
+     "angle_deg": 4.0,
+     "inv_per_pair": 13.137312833861545,
+     "kendall_dist": 0.004116660179210138,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 47,
+     "maxdisp_p99": 638,
+     "maxdisp_max": 934
+    },
+    "rot16.0": {
+     "angle_deg": 16.0,
+     "inv_per_pair": 55.09382974079621,
+     "kendall_dist": 0.01726400047576954,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 154,
+     "maxdisp_p99": 2223,
+     "maxdisp_max": 4139
+    },
+    "prev_view_fwd": {
+     "angle_deg": 2.2240260046385236,
+     "inv_per_pair": 7.140791883625333,
+     "kendall_dist": 0.0022376123616070368,
+     "tiles_sorted": 0.0,
+     "maxdisp_p50": 30,
+     "maxdisp_p99": 398,
+     "maxdisp_max": 579
+    }
+   }
+  }
+ ]
+}

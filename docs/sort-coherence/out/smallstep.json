@@ -1,0 +1,112 @@
+[
+ {
+  "pairs_a": 2763495,
+  "pairs_b": 2763311,
+  "common": 2679493,
+  "kept_frac_of_new": 0.9696675473734226,
+  "kept_frac_of_old": 0.9696029846263517,
+  "tiles_identical": 0.0009765625,
+  "common_inv_per_pair": 0.190151271154655,
+  "common_kendall": 6.388844105074037e-05,
+  "common_tiles_sorted": 0.0673828125,
+  "common_maxdisp_p99": 26,
+  "frac": 0.03125,
+  "step_deg": 0.0608353651940927,
+  "prev_fwd_presort": {
+   "inv_per_pair": 0.19354390439584976,
+   "kendall_dist": 6.317404547226006e-05,
+   "tiles_sorted": 0.064453125,
+   "maxdisp_p50": 3,
+   "maxdisp_p99": 26,
+   "maxdisp_max": 47
+  }
+ },
+ {
+  "pairs_a": 2763495,
+  "pairs_b": 2756883,
+  "common": 2429241,
+  "kept_frac_of_new": 0.8811549129941314,
+  "kept_frac_of_old": 0.8790466420239588,
+  "tiles_identical": 0.0,
+  "common_inv_per_pair": 0.7140670686852395,
+  "common_kendall": 0.0002621643373453634,
+  "common_tiles_sorted": 0.0166015625,
+  "common_maxdisp_p99": 76,
+  "frac": 0.125,
+  "step_deg": 0.2433414607763708,
+  "prev_fwd_presort": {
+   "inv_per_pair": 0.776432659637714,
+   "kendall_dist": 0.00025360851646206235,
+   "tiles_sorted": 0.013671875,
+   "maxdisp_p50": 7,
+   "maxdisp_p99": 80,
+   "maxdisp_max": 119
+  }
+ },
+ {
+  "pairs_a": 2763495,
+  "pairs_b": 2738072,
+  "common": 2109059,
+  "kept_frac_of_new": 0.7702715633482246,
+  "kept_frac_of_old": 0.7631853866209275,
+  "tiles_identical": 0.0,
+  "common_inv_per_pair": 1.3109111693888127,
+  "common_kendall": 0.0005436315896933848,
+  "common_tiles_sorted": 0.0087890625,
+  "common_maxdisp_p99": 122,
+  "frac": 0.25,
+  "step_deg": 0.4866829215527416,
+  "prev_fwd_presort": {
+   "inv_per_pair": 1.5617858113300163,
+   "kendall_dist": 0.0005124794687999848,
+   "tiles_sorted": 0.0048828125,
+   "maxdisp_p50": 11,
+   "maxdisp_p99": 144,
+   "maxdisp_max": 227
+  }
+ },
+ {
+  "pairs_a": 2763495,
+  "pairs_b": 2713907,
+  "common": 1526791,
+  "kept_frac_of_new": 0.5625804421448487,
+  "kept_frac_of_old": 0.5524855300986613,
+  "tiles_identical": 0.0,
+  "common_inv_per_pair": 2.106770343812611,
+  "common_kendall": 0.001136567285676355,
+  "common_tiles_sorted": 0.0087890625,
+  "common_maxdisp_p99": 161,
+  "frac": 0.5,
+  "step_deg": 0.9733658431054832,
+  "prev_fwd_presort": {
+   "inv_per_pair": 3.183595458503184,
+   "kendall_dist": 0.0010542281070913073,
+   "tiles_sorted": 0.00390625,
+   "maxdisp_p50": 20,
+   "maxdisp_p99": 260,
+   "maxdisp_max": 365
+  }
+ },
+ {
+  "pairs_a": 2763495,
+  "pairs_b": 2707107,
+  "common": 474695,
+  "kept_frac_of_new": 0.1753513991135186,
+  "kept_frac_of_old": 0.17177342459458042,
+  "tiles_identical": 0.0,
+  "common_inv_per_pair": 2.119440904159513,
+  "common_kendall": 0.0029395859468573323,
+  "common_tiles_sorted": 0.009765625,
+  "common_maxdisp_p99": 145,
+  "frac": 1.0,
+  "step_deg": 1.9467316862109665,
+  "prev_fwd_presort": {
+   "inv_per_pair": 6.266156084705924,
+   "kendall_dist": 0.0020495615392209184,
+   "tiles_sorted": 0.0,
+   "maxdisp_p50": 37,
+   "maxdisp_p99": 477,
+   "maxdisp_max": 852
+  }
+ }
+]

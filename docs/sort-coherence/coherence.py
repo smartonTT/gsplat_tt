@@ -8,10 +8,12 @@ Mirrors the CPU reference pipeline (gsplat/rasterization.py: EWA project, opacit
              identical list, inversions of the previous view's order on the common pairs.
   presort    per view: inversions / max displacement when each tile's list is in the order of a
              view-independent key d.x (d = camera forward is exact), for several choices of d.
+  smallstep  viewer-like motion: views interpolated between orb_14 and orb_15 (fractions of the
+             1.9 deg step), coherence of orb_14 -> each, plus the prev-frame forward presort.
   psnr       blend chosen orders with sc_native.c and compare with the exact order and with
              benchmarks/reference_v2/hero.png.
 
-Usage: python coherence.py {coherence,presort,psnr,all} [--out DIR]
+Usage: python coherence.py {coherence,presort,psnr,smallstep,all} [--out DIR]
 Needs numpy, Pillow and sc_native.so (cc -O3 -shared -fPIC -o sc_native.so sc_native.c).
 """
 import argparse
@@ -243,6 +245,22 @@ def run(mode, out):
     print("forward-direction step between consecutive views (deg):",
           " ".join(f"{s:.1f}" for s in steps), flush=True)
 
+    if mode == "smallstep":
+        a, b = views[[v["name"] for v in views].index("orb_14")], views[[v["name"] for v in views].index("orb_15")]
+        A = project_and_bin(sc, a, W, H, f, floor)
+        rows = []
+        for frac in (1 / 32, 1 / 8, 1 / 4, 1 / 2, 1.0):
+            v = interp_view(a, b, frac)
+            B = project_and_bin(sc, v, W, H, f, floor)
+            c = compare(A, B, sc)
+            inv, md = tile_inv(B["off"], presort_keys(B, sc, a["R"][2]))
+            c.update(frac=frac, step_deg=frac * steps[[x["name"] for x in views].index("orb_14")],
+                     prev_fwd_presort=inv_summary(B["off"], inv, md))
+            rows.append(c)
+            print(json.dumps(c), flush=True)
+        json.dump(rows, open(out / "smallstep.json", "w"), indent=1)
+        return
+
     if mode in ("coherence", "presort", "all"):
         prev = None
         coh, pre = [], []
@@ -326,6 +344,15 @@ def run(mode, out):
         json.dump(rows, open(out / "psnr.json", "w"), indent=1)
 
 
+def interp_view(a, b, frac):
+    """Camera between views a and b: lerp position, slerp-free rotation via orthonormalised lerp."""
+    pos = (1 - frac) * a["pos"] + frac * b["pos"]
+    Rc = (1 - frac) * a["R"].T + frac * b["R"].T  # c2w rotation
+    u, _, vt = np.linalg.svd(Rc)
+    Rc = u @ vt
+    return dict(name=f"interp{frac:g}", R=Rc.T, t=-Rc.T @ pos, pos=pos)
+
+
 def compare(A, B, sc):
     """Coherence of view A -> view B (pairs keyed by scene gaussian id)."""
     N = np.int64(sc["n"])
@@ -363,7 +390,7 @@ def compare(A, B, sc):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["coherence", "presort", "psnr", "all"])
+    ap.add_argument("mode", choices=["coherence", "presort", "psnr", "smallstep", "all"])
     ap.add_argument("--out", type=Path, default=HERE / "out")
     a = ap.parse_args()
     run(a.mode, a.out)
