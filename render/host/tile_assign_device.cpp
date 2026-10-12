@@ -247,6 +247,19 @@ static bool k2_diet_enabled() {
     }();
     return v;
 }
+// Task #551 (profiling only, GSPLAT_TT_K2_EXTRA=<n>, default 0): enqueue the
+// segment K2 n more times right after the real one. K2 rewrites the same
+// outputs from the same inputs, so the image is unchanged; the b2b ms/view
+// added per extra K2 is how much K2 time sits on the critical path, i.e. the
+// most a K2(N+1) fold into blend(N) (B4a step 1) can remove.
+static int k2_extra_runs() {
+    static const int n = [] {
+        const char* e = std::getenv("GSPLAT_TT_K2_EXTRA");
+        return e == nullptr ? 0 : std::max(0, std::min(4, std::atoi(e)));
+    }();
+    return n;
+}
+
 static bool k2_fold_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_K2_FOLD");
@@ -982,6 +995,8 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                 }
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
+            for (int x = 0; x < k2_extra_runs(); x++)
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
             if (b4a && ctx->b4a_verified < b4a_verify_views()) {
                 // Verify mode only: copy the real outputs before the sort runs.
                 distributed::Finish(*ctx->cq);
