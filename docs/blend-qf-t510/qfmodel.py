@@ -139,6 +139,64 @@ def power_base(u, v, mu, mv, A, B, C):
 
 
 def power_qf(u, v, mu, mv, A, B, C, fmt, origin, hilo, mb_origin=False):
+    """u, v: (N,) tile-local pixel centres; mu, mv: (P,) tile-local means.
+    Coefficients are rounded per gaussian (per microblock with mb_origin), features
+    per pixel; products of two rounded operands are exact in fp32, sums are fp32."""
+    m = FMT[fmt]
+    if mb_origin:  # per-microblock (4 rows x 8 cols) centre
+        ou = (torch.floor(u / 8.0) * 8.0 + 4.0)
+        ov = (torch.floor(v / 4.0) * 4.0 + 2.0)
+        key = torch.floor(v / 4.0) * 4.0 + torch.floor(u / 8.0)  # 0..31
+        mbi = key.long()
+        ou_k = torch.zeros(32).index_put_((mbi,), ou)[None, :]
+        ov_k = torch.zeros(32).index_put_((mbi,), ov)[None, :]
+    else:
+        ou = torch.full_like(u, float(origin))
+        ov = ou
+        mbi = torch.zeros_like(u, dtype=torch.long)
+        ou_k = torch.full((1, 1), float(origin))
+        ov_k = ou_k
+    uu = (u - ou)[None, :]  # exact (half-integers)
+    vv = (v - ov)[None, :]
+    mu_ = mu[:, None] - ou_k  # (P, K) fp32, K = 1 or 32 origins
+    mv_ = mv[:, None] - ov_k
+    A_, B_, C_ = A[:, None], B[:, None], C[:, None]
+    D = -(2.0 * A_ * mu_ + B_ * mv_)
+    E = -(B_ * mu_ + 2.0 * C_ * mv_)
+    F = A_ * (mu_ * mu_) + B_ * (mu_ * mv_) + C_ * (mv_ * mv_)
+    feats = [rnd(f.contiguous(), m) for f in (uu * uu, uu * vv, vv * vv, uu, vv, torch.ones_like(uu))]
+    coefs = [A_.expand_as(D), B_.expand_as(D), C_.expand_as(D), D, E, F]
+    p = None
+    for f, c in zip(feats, coefs):
+        hi = rnd(c.contiguous(), m)
+        parts = [hi] + ([rnd((c - hi).contiguous(), m)] if hilo else [])
+        for q in parts:
+            t = f * q[:, mbi]
+            p = t if p is None else p + t
+    return p
+
+
+def blend(self, *a):
+        self.args = a
+        return np.zeros((1, 1, 3), np.float32), {}
+
+
+def conic(covs):
+    a, b, c = covs[:, 0, 0], covs[:, 0, 1], covs[:, 1, 1]
+    det = a * c - b * b
+    inv = 1.0 / det
+    return -0.5 * c * inv, b * inv, -0.5 * a * inv  # A, B, C (-0.5 folded)
+
+
+def power_base(u, v, mu, mv, A, B, C):
+    dx = u[None, :] - mu[:, None]
+    dy = v[None, :] - mv[:, None]
+    p = A[:, None] * (dx * dx)
+    p = p + B[:, None] * (dx * dy)
+    return p + C[:, None] * (dy * dy)
+
+
+def power_qf(u, v, mu, mv, A, B, C, fmt, origin, hilo, mb_origin=False):
     """u, v: (1024,) tile-local pixel centres; mu, mv: tile-local means."""
     m = FMT[fmt]
     if mb_origin:  # per-microblock (4 rows x 8 cols) centre
