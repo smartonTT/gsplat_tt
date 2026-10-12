@@ -254,7 +254,8 @@ try_reserve() {  # try candidates in order; 0 reserved, 4 queued, 5 none worked
   local m c rc
   while read -r m c; do
     [ -n "$m" ] || continue
-    reserve "$m" "$c"; rc=$?
+    # ssh inside reserve() would read the candidate list on stdin and end the loop after one try.
+    reserve "$m" "$c" </dev/null; rc=$?
     [ $rc = 0 ] && { ACTION=reserved; return 0; }
     [ $rc = 4 ] && { ACTION=reserve_queued; return 4; }
     log "reserve $m failed; trying the next free box"
