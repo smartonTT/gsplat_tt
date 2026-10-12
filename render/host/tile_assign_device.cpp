@@ -791,7 +791,7 @@ namespace {
 void b4a_verify(TileAssignDeviceContext& ctx) {
     ctx.b4a_verify_pending = false;
     distributed::Finish(*ctx.cq);
-    auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+    auto rd = [&](std::shared_ptr<distributed::MeshBuffer> b) {
         std::vector<uint32_t> v(b->size() / 4);
         distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
         return v;
@@ -985,7 +985,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             if (b4a && ctx->b4a_verified < b4a_verify_views()) {
                 // Verify mode only: copy the real outputs before the sort runs.
                 distributed::Finish(*ctx->cq);
-                auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+                auto rd = [&](std::shared_ptr<distributed::MeshBuffer> b) {
                     std::vector<uint32_t> v(b->size() / 4);
                     distributed::EnqueueReadMeshBuffer(*ctx->cq, v, b, true);
                     return v;
