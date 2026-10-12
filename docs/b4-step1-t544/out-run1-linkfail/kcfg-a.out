@@ -12,7 +12,7 @@
 [ttw 2026-10-12T13:02:14-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=52c6e47d bin=50938765129bddec t544 52c6e47d blend alias fifo cut (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t544-kcfg-a  timeout=590s  worry=600s  ts=2026-10-12T13:02:15-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step1-t544/remote_kcfg.sh a
