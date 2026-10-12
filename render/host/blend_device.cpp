@@ -390,6 +390,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (const char* mcp = std::getenv("GSPLAT_TT_MATCULL_PROF"); fused && mcp != nullptr && mcp[0] == '1') {
         compute_defines["MATCULL_PROF"] = "1";
     }
+    // Task #550: GSPLAT_TT_T2_PROF=1 (profiler builds) adds TRISC 2 (PACK) wait counters
+    // over the blend phase ("t2_pc" timestamped data). Default OFF.
+    if (const char* t2 = std::getenv("GSPLAT_TT_T2_PROF"); t2 != nullptr && t2[0] == '1') {
+        compute_defines["T2_PROF"] = "1";
+    }
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.

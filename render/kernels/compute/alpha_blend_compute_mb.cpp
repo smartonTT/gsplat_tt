@@ -513,6 +513,39 @@ inline void blend_stage_floor() {
 #define BLEND_PZ_SUB(name) ((void)0)
 #endif
 
+// Task #550: GSPLAT_TT_T2_PROF=1 (T2_PROF, profiler builds only): TRISC 2 (PACK) cycle
+// counters over the blend phase, reported once per launch as "t2_pc" timestamped data,
+// value = (index << 32) | count. Waits: the mailbox reads behind get_tile_address (MB
+// counts page, bulk slab, T readback slot), tile_regs_wait (MATH done) and cb_reserve_back.
+// L1K/L4K/L16K/L64K: cycles spent in single waits of >= 1K/4K/16K/64K cycles, the idle
+// that coarse foreign work (sort batches) could fill without delaying the next pack.
+#if defined(T2_PROF) && T2_PROF && defined(PROFILE_KERNEL) && defined(TRISC_PACK)
+enum : uint32_t {
+    T2_TOT, T2_PRE, T2_WCNT, T2_WBULK, T2_WRBA, T2_WMATH, T2_WRES,
+    T2_L1K, T2_L4K, T2_L16K, T2_L64K, T2_NW, T2_NT, T2_NSC, T2_NRB, T2_N
+};
+uint32_t g_t2[T2_N];
+inline uint32_t t2_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+inline void t2_wait(uint32_t i, uint32_t t0) {
+    const uint32_t d = t2_now() - t0;
+    g_t2[i] += d;
+    ++g_t2[T2_NW];
+    if (d >= 1024u) g_t2[T2_L1K] += d;
+    if (d >= 4096u) g_t2[T2_L4K] += d;
+    if (d >= 16384u) g_t2[T2_L16K] += d;
+    if (d >= 65536u) g_t2[T2_L64K] += d;
+}
+#define T2_T0(v) const uint32_t v = t2_now()
+#define T2_W(i, t0) t2_wait(i, t0)
+#define T2_INC(i) (++g_t2[i])
+#define T2_SET(i, v) (g_t2[i] = (v))
+#else
+#define T2_T0(v)
+#define T2_W(i, t0) ((void)0)
+#define T2_INC(i) ((void)0)
+#define T2_SET(i, v) ((void)0)
+#endif
+
 #ifndef BLEND_ABL
 #define BLEND_ABL 0
 #endif
@@ -1009,14 +1042,21 @@ inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
 inline void blend_t_readback(uint32_t& live_mb_mask) {
     MATH((_llk_math_eltwise_unary_sfpu_done_()));    // drain SFPU writes into dest
     tile_regs_commit();                               // MATH: dest section done (no zero)
+    T2_INC(T2_NRB);
+    T2_T0(t2a);
     tile_regs_wait();                                 // PACK: wait for math done
+    T2_W(T2_WMATH, t2a);
+    T2_T0(t2b);
     cb_reserve_back(CB_T_RB, 1);                       // PACK: reserve scratch slot
+    T2_W(T2_WRES, t2b);
     pack_tile(3, CB_T_RB);                             // PACK: pack T (dest tile 3) -> slot tile 0
     cb_push_back(CB_T_RB, 1);                          // PACK: publish to UNPACK/MATH
     PACK((non_zeroing_pack_release()));               // release WITHOUT zeroing the acc
     tile_regs_acquire();                              // MATH: re-acquire dest (acc intact)
     cb_wait_front(CB_T_RB, 1);                         // UNPACK: wait for the packed T
+    T2_T0(t2c);
     const uint32_t t_rb_addr = get_tile_address(CB_T_RB, 0);  // all threads (mailbox sync)
+    T2_W(T2_WRBA, t2c);
 #if BLEND_DECODE_AHEAD != 2
     MATH((blend_t_reduce(live_mb_mask, t_rb_addr)));  // MATH-only: rebuild live mask
 #endif
@@ -1531,7 +1571,10 @@ inline void process_tile_l1_blend(
         BLEND_PZ_WAIT("cmp_bulk_wait");
         cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
     }
+    T2_INC(T2_NSC);
+    T2_T0(t2a);
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
+    T2_W(T2_WBULK, t2a);
     TC_BEGIN();
     TC_PART0();
     {
@@ -1656,6 +1699,10 @@ inline void process_tile_l1_blend(
 
 void kernel_main() {
     DeviceZoneScopedN("tile_blend_sfpu");
+#if defined(T2_PROF) && T2_PROF && defined(PROFILE_KERNEL) && defined(TRISC_PACK)
+    for (uint32_t i = 0; i < T2_N; i++) g_t2[i] = 0u;
+    const uint32_t t2_start = t2_now();
+#endif
     // Runtime-arg 0: saturation epsilon bits (viewer slider). 0 => keep the
     // compile-time default (kBlendTEps) so non-forwarding callers are unchanged.
     {
@@ -1693,11 +1740,16 @@ void kernel_main() {
     // Task #60: num_tiles == 0xFFFFFFFF => the reader claims tiles dynamically
     // and ends the stream with an MB_FLAG_DONE counts page.
     const bool dynamic = num_tiles == 0xFFFFFFFFu;
+#if defined(T2_PROF) && T2_PROF && defined(PROFILE_KERNEL) && defined(TRISC_PACK)
+    T2_SET(T2_PRE, t2_now() - t2_start);
+#endif
     for (uint32_t t = 0; dynamic || t < num_tiles; t++) {
         if (dynamic) {
             cb_wait_front(CB_MB_COUNTS, 1);
+            T2_T0(t2a);
             const uint32_t f0 =
                 reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0))[1];
+            T2_W(T2_WCNT, t2a);
             if ((f0 & MB_FLAG_DONE) != 0u) {
                 cb_pop_front(CB_MB_COUNTS, 1);
                 break;
@@ -1717,7 +1769,9 @@ void kernel_main() {
             uint32_t num_g;
             uint32_t flags = 1u;
             {
+                T2_T0(t2a);
                 auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
+                T2_W(T2_WCNT, t2a);
                 num_g = cptr[0];
                 flags = cptr[1];
             }
@@ -1752,8 +1806,13 @@ void kernel_main() {
                 BLEND_PZ("cmp_emit");
                 TC_PART0();
                 tile_regs_commit();
+                T2_T0(t2a);
                 tile_regs_wait();
+                T2_W(T2_WMATH, t2a);
+                T2_T0(t2b);
                 cb_reserve_back(CB_COLOR_OUT, 3);
+                T2_W(T2_WRES, t2b);
+                T2_INC(T2_NT);
                 pack_tile(0, CB_COLOR_OUT);
                 pack_tile(1, CB_COLOR_OUT);
                 pack_tile(2, CB_COLOR_OUT);
@@ -1774,4 +1833,9 @@ void kernel_main() {
     cb_pop_front(CB_YRAMP, 1);
     MB_STATS_EMIT();
     TC_DUMP();
+#if defined(T2_PROF) && T2_PROF && defined(PROFILE_KERNEL) && defined(TRISC_PACK)
+    g_t2[T2_TOT] = t2_now() - t2_start;
+    // One marker per counter, (index << 32) | value (as sort_ol_town's town_pc).
+    for (uint32_t i = 0; i < T2_N; i++) DeviceTimestampedData("t2_pc", (uint64_t(i) << 32) | g_t2[i]);
+#endif
 }
