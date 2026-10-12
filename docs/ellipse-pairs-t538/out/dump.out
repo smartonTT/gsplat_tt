@@ -1,0 +1,17 @@
+================ BUILD ID ================
+  cpp : #124 sha=7acc5f92 bin=c3d3e944448c078c t538 1c9cedf4 ellipse probe (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t538-dump  timeout=300s  worry=600s  ts=2026-10-12T12:43:12-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/ellipse-pairs-t538/remote_ab.sh 0 dump probe
+-----------------------------------------
+=== r0-dump-probe 1c9cedf ELLIPSE_PROBE=1 19:43:14 load=47.67
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.3 p50_ms=8.2 min_ms=7.0 max_ms=10.7 n_views=30 warmup_s=11.3 out=/localdev/smarton/gstt2-t513/tmp/t538-r0-dump-probe
+TTW_TIMING ms_view=8.343
+STAGES n=30 head=0.012 project=1.116 tile_assign=0.012 sort=1.556 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.265 d2h=0.014 assemble=0.000 tail=0.016 xview=0.200 | sum=8.191 view_total=8.197 resid_in_view=+0.006 avg_frame_ms=8.343 resid_vs_frame=+0.152 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 0 dump 19:43:44
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t538/tmp/ttw-state/logs/t538-dump-20261012-124312.log

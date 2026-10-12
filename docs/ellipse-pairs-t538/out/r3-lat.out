@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #124 sha=7acc5f92 bin=c3d3e944448c078c t538 1c9cedf4 ellipse probe (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t538-r3-lat  timeout=300s  worry=600s  ts=2026-10-12T12:47:26-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/ellipse-pairs-t538/remote_ab.sh 3 lat off probe
+-----------------------------------------
+=== r3-lat-off 1c9cedf ELLIPSE_PROBE=unset 19:47:28 load=53.77
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=8.9 min_ms=7.6 max_ms=10.5 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t513/tmp/t538-r3-lat-off
+TTW_TIMING ms_view=8.885
+STAGES n=30 head=0.005 project=1.772 tile_assign=0.009 sort=1.485 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.306 d2h=0.014 assemble=0.000 tail=0.011 xview=0.178 | sum=8.780 view_total=8.784 resid_in_view=+0.004 avg_frame_ms=8.885 resid_vs_frame=+0.105 xview_hits=29 xview_misses=0
+=== r3-lat-probe 1c9cedf ELLIPSE_PROBE=1 19:47:34 load=54.35
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.6 max_ms=10.3 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t513/tmp/t538-r3-lat-probe
+TTW_TIMING ms_view=8.950
+STAGES n=30 head=0.006 project=1.749 tile_assign=0.011 sort=1.580 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.235 d2h=0.015 assemble=0.000 tail=0.015 xview=0.199 | sum=8.811 view_total=8.816 resid_in_view=+0.005 avg_frame_ms=8.950 resid_vs_frame=+0.139 xview_hits=29 xview_misses=0
+=== done 3 lat 19:47:41
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t538/tmp/ttw-state/logs/t538-r3-lat-20261012-124726.log
