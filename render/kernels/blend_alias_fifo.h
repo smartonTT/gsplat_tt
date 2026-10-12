@@ -30,7 +30,13 @@ inline void blend_fifo_shrink_iface(Iface& c, uint32_t bytes, uint32_t page_byte
 }
 
 #if defined(BLEND_ALIAS_CUT) && !defined(BLEND_ALIAS_FIFO_HOST_TEST)
+#ifdef TRISC_MATH
+// The math TRISC has no cb_interface (its link fails on any reference) and never
+// moves a fifo pointer, so there is nothing to shrink.
+FORCE_INLINE void blend_fifo_shrink(uint32_t, uint32_t, uint32_t) {}
+#else
 FORCE_INLINE void blend_fifo_shrink(uint32_t cb, uint32_t bytes, uint32_t page_bytes) {
     blend_fifo_shrink_iface(get_local_cb_interface(cb), bytes, page_bytes, cb_addr_shift);
 }
+#endif
 #endif
