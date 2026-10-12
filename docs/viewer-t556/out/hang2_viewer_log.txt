@@ -1,0 +1,26 @@
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.43 layout=0.07 pub_host=0.35 total=0.85ms
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.44 layout=0.07 pub_host=0.34 total=0.85ms
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=9.24 ms (108.2 FPS) min=9.18 max=9.28
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.44 layout=0.07 pub_host=0.32 total=0.84ms
+[viewer_clean] HERO saved /localdev/smarton/viewer/hero_viewer.png PSNR vs reference_v2/hero.png = 42.51 dB
+[viewer_clean] READY port=8080
+[viewer 2026-10-12T23:46:00.408Z] heartbeat frames_rendered=0 (+0) frames_sent=0 (+0) clients=0 open_connections=0 next_pose_hints=0
+[viewer 2026-10-12T23:46:43.197Z] client 0 connected from ('127.0.0.1', 50776) open_connections=1
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=1.57 layout=0.08 pub_host=0.35 total=2.02ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[watchdog 2026-10-12T23:46:48.324Z] render seq=35 1024x1024 stuck 5.0 s: pose and stacks in /localdev/smarton/viewer/viewer_hang.log, pose json /localdev/smarton/viewer/viewer_hang_pose_20261012T234648Z.json; exiting 86
+[supervisor 2026-10-12T23:46:50Z pid 64109] viewer exited rc=86 after 58s
+[supervisor 2026-10-12T23:46:50Z pid 64109] restart 1/6 this hour in 5s
+[supervisor 2026-10-12T23:46:55Z pid 64109] starting viewer_clean.py port 8080
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/viewer-eth-overlay, JIT cache /localdev/smarton/viewer-eth-overlay-cache
+[viewer_clean] sha=9026845799508627a52d595cdbe9286b0a74d597 loading scenes/bicycle.ply
+╭────── viser (listening *:8080) ───────╮
+│             ╷                         │
+│   HTTP      │ http://localhost:8080   │
+│   Websocket │ ws://localhost:8080     │
+│             ╵                         │
+╰───────────────────────────────────────╯
+Viewer running at http://localhost:8080 (backend=tt_clean, render=1024x1024)
