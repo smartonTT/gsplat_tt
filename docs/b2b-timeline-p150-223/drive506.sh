@@ -21,8 +21,10 @@ echo "=== sync tree506 ${REV:0:8} $(date -u +%FT%TZ)"
 rsh "test -d $T || { mkdir -p $T && cd $P/tree392 && tar --exclude=./tmp --exclude=./render/build-tt \
   --exclude=./render/bench/build --exclude=./generated -cf - . | tar -xf - -C $T && mkdir -p $T/tmp && echo copied; }"
 base=$(rsh "cat $T/SHA")
-git diff --name-only --diff-filter=d "$base" "$REV" | grep -vE '^(opt/metal-screenshots|opt/profiler/ttw-)' > tmp/t506-files.txt
-git archive --format=tar "$REV" $(cat tmp/t506-files.txt) | rsh "cd $T && tar -xmf - && echo $REV > SHA"
+git diff --name-only --diff-filter=d "$base" "$REV" | { grep -vE '^(opt/metal-screenshots|opt/profiler/ttw-)' || true; } > tmp/t506-files.txt
+if [ -s tmp/t506-files.txt ]; then
+  git archive --format=tar "$REV" $(cat tmp/t506-files.txt) | rsh "cd $T && tar -xmf - && echo $REV > SHA"
+else echo "tree already at ${REV:0:8}"; fi
 rsh "cd $T && export TT_METAL_HOME=$TTMH TT_METAL_ARCH_NAME=blackhole && J=\$(( \$(nproc) / 2 )) &&
   { test -f render/build-tt/build.ninja || nice -n 19 ionice -c3 cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release > tmp/cfg506.log 2>&1 || { tail -30 tmp/cfg506.log; exit 1; }; } &&
   { nice -n 19 ionice -c3 cmake --build render/build-tt -j \$J > tmp/build506.log 2>&1 || { tail -30 tmp/build506.log; exit 1; }; } &&
