@@ -19,7 +19,22 @@ Results so far: `base` hero 42.493 dB vs `benchmarks/reference_v2/hero.png` (dev
 best-iter-223: 42.51 dB, docs/b2b-timeline-p150-223), so the model tracks the device.
 Synthetic check (500 random gaussians, one tile, max |p - p_fp32|): tf32 corner 0.70, tf32
 centre 0.19, tf32 centre hi/lo 2.4e-4, tf32 microblock 0.52 (relative 4e-3), bf16 centre hi/lo
-0.16, bf16 microblock hi/lo 4.0e-3. Hero and 30-view PSNR per variant: pending (run_cpu.sh).
+0.16, bf16 microblock hi/lo 4.0e-3.
+
+Hero and 30-view results (bh-33 CPU, `run_remote.sh` then `run_resume.sh` after the 01:49 PDT
+reboot; table from `summarize.py <out>`; the 30 views are hero + orb_00..orb_28; PSNR vs base is
+against the fp32 model, which stands in for the current device output):
+
+<!-- SUMMARY -->
+(pending: 9 of 30 views done at 08:55 PDT)
+<!-- /SUMMARY -->
+
+Hero gate (>=42.4 dB vs `benchmarks/reference_v2/hero.png`): tf32_center_hilo 42.494,
+tf32_mb 42.490 and bf16_mb_hilo 42.493 pass; tf32_corner 35.949, tf32_center 41.899 and
+bf16_center_hilo 36.300 fail, so only those three ran on the other 29 views. Visual check of
+the hero (images and x16 diffs vs base): the three passing variants show no seams or tile
+artifacts; tf32_mb shows a faint 8x4 microblock-grid noise only at x16 (max 3-4 LSB);
+tf32_center, which fails, shows a clear 32-px tile grid in its diff.
 
 ## Cost model: why the FPU form does not pay at today's occupancy
 
