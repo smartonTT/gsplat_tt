@@ -449,7 +449,10 @@ if [ "$DEPLOY" = 1 ] && [ "$ROLE" = viewer ]; then
   [ "$DRY" = 1 ] && DEPLOY_MSG="planned: $DEPLOY_MSG"
 fi
 
-if [ "$DEPLOY" = 1 ] && [ "$ROLE" = measure ] && { [ "$HOST" != "$CUR" ] || [ -n "$OLD_JOB" ]; }; then
+# A box kept from an earlier run still needs setup and a first build while sync_remote.sh has not
+# written its .host_src.md5 there (setup is started on one run and finished on a later one).
+if [ "$DEPLOY" = 1 ] && [ "$ROLE" = measure ] && { [ "$HOST" != "$CUR" ] || [ -n "$OLD_JOB" ] ||
+   ! box "$HOST" "test -s $RROOT/gstt2/.host_src.md5" 2>/dev/null; }; then
   # New measurement box: base tree /localdev/$USER/gstt2 with its own venv and scenes, built at the newest tag.
   ensure_setup "$RROOT/tt-metal" "$RROOT/gstt2/.venv" "$RROOT/gstt2/scenes" ttp lock p100 --; rc=$?
   if [ $rc = 4 ] || [ $rc = 6 ]; then
