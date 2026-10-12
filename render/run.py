@@ -780,10 +780,31 @@ def morton_order(means: np.ndarray) -> np.ndarray:
     return np.argsort(code, kind="stable")
 
 
+def chunk_scatter(order: np.ndarray, chunk: int = 1024) -> np.ndarray:
+    """Task #493 (GSPLAT_TT_CHUNK_SCATTER=1): inside each full `chunk` block of a Morton
+    order, put the gaussians in bit-reversed position order. Each pfwc tile keeps the same
+    gaussian set (same cull bounds), but neighbouring gids sit far apart in the chunk, so
+    a multi-tile chunk's pairs alternate between its screen tiles instead of bursting
+    into one tile's emit run (docs/chunk-cull-t479). A partial last block is kept."""
+    bits = chunk.bit_length() - 1
+    assert chunk == 1 << bits, "chunk: power of two"
+    pos = np.arange(chunk)
+    rev = np.zeros(chunk, dtype=np.int64)
+    for b in range(bits):
+        rev |= ((pos >> b) & 1) << (bits - 1 - b)
+    full = len(order) // chunk * chunk
+    out = order.copy()
+    out[:full] = order[:full].reshape(-1, chunk)[:, rev].reshape(-1)
+    return out
+
+
 def morton_reorder(gauss):
     """Gaussians permuted into Morton order (tasks #169/#433 chunk cull)."""
     import dataclasses
-    idx = torch.from_numpy(morton_order(gauss.means.detach().cpu().numpy()))
+    order = morton_order(gauss.means.detach().cpu().numpy())
+    if os.environ.get("GSPLAT_TT_CHUNK_SCATTER", "0") not in ("", "0"):
+        order = chunk_scatter(order)
+    idx = torch.from_numpy(order)
     return dataclasses.replace(
         gauss, **{f.name: getattr(gauss, f.name)[idx] for f in dataclasses.fields(gauss)})
 
