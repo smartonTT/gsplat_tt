@@ -129,6 +129,12 @@ class CleanBackend(CpuCppBackend):
         kwargs["render_fused"] = True
         super().__init__(**kwargs)
         self._clean = _load_render_clean()
+        # Task #536 (GSPLAT_TT_OPACITY_PRUNE, default on, =0 opts out): drop
+        # opacity < min_opacity once, in pfwc's sequence order
+        # (render/opacity_prune.py); keyed by the cached arrays so the C++ side
+        # sees the same pointers every view.
+        self._prune = _env_flag_on(os.environ, "GSPLAT_TT_OPACITY_PRUNE")
+        self._pruned = None
         # Next view's w2c (torch 4x4) for the cross-view overlap; set by the
         # loops before a render, used by that render only.
         self.next_extrinsics = None
@@ -143,6 +149,9 @@ class CleanBackend(CpuCppBackend):
         extr_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
         intr_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
         cov3d = self._cached_cov3d(gnp["scales"], gnp["rotations"])
+        means, opac, colors = gnp["means"], gnp["opacities"], gnp["colors"]
+        if self._prune:
+            means, cov3d, opac, colors = self._pruned_scene(means, cov3d, opac, colors)
         effective_contrib_floor = (
             float(self._mb_contrib_floor) if self.contrib_floor_override is None
             else float(self.contrib_floor_override))
@@ -153,13 +162,25 @@ class CleanBackend(CpuCppBackend):
             kw["next_extrinsics"] = np.ascontiguousarray(
                 nxt.detach().cpu().numpy().astype(np.float32, copy=False))
         image, stats = self._clean.render_view(
-            gnp["means"], cov3d, gnp["opacities"], gnp["colors"],
+            means, cov3d, opac, colors,
             extr_np, intr_np, int(image_height), int(image_width), 32,
             float(self.min_opacity), effective_contrib_floor,
             float(self._mb_contrib_floor), bool(self.cull_disabled),
             float(self.transmittance_threshold), int(self.max_radius),
             float(self.k_cap), bool(self.use_isoellipse), 2, **kw)
         return np.asarray(image), dict(stats)
+
+    def _pruned_scene(self, means, cov3d, opac, colors):
+        key = (id(means), id(cov3d), id(opac), id(colors))
+        if self._pruned is None or self._pruned[0] != key:
+            from opacity_prune import prune_layout
+            ncores = int(self._clean.pfwc_num_cores())
+            src = prune_layout(opac, self.min_opacity, ncores)
+            arrs = tuple(np.ascontiguousarray(a[src]) for a in (means, cov3d, opac, colors))
+            print(f"[run] opacity prune: kept {src.shape[0]} of {opac.shape[0]} gaussians "
+                  f"(pfwc cores {ncores})", flush=True)
+            self._pruned = (key, arrs)
+        return self._pruned[1]
 
     def close(self):
         if hasattr(self._clean, "device_shutdown"):

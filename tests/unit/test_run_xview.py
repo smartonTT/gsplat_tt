@@ -116,7 +116,8 @@ def _backend(run):
     b._cached_cov3d = lambda s, r: np.zeros(1, np.float32)
     for k, v in dict(_mb_contrib_floor=0.0, contrib_floor_override=None, min_opacity=0.0,
                      cull_disabled=False, transmittance_threshold=0.0, max_radius=0,
-                     k_cap=3.0, use_isoellipse=False, next_extrinsics=None).items():
+                     k_cap=3.0, use_isoellipse=False, next_extrinsics=None,
+                     _prune=False, _pruned=None).items():
         setattr(b, k, v)
     return b, torch.eye(4) * 2.0
 

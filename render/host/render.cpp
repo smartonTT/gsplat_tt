@@ -543,6 +543,16 @@ PYBIND11_MODULE(render_clean, m) {
           py::arg("transmittance_threshold"), py::arg("max_radius"),
           py::arg("k_cap"), py::arg("use_isoellipse"), py::arg("blend_mode") = 2,
           py::arg("next_extrinsics") = py::none());
+    // Task #536: pfwc's core count (its capped grid, pfwc_device.cpp
+    // init_context), for the order-keeping opacity prune in render/run.py.
+    m.def("pfwc_num_cores", []() {
+        py::gil_scoped_release nogil;
+        std::lock_guard<std::mutex> lock(render_view_mutex);
+        const auto g = gsplat_tt::device_state::get_device()->compute_with_storage_grid_size();
+        std::size_t gx = g.x, gy = g.y;
+        gsplat_tt::device_state::cap_grid(gx, gy);
+        return static_cast<int64_t>(gx * gy);
+    });
     m.def("device_shutdown", []() {
         // Same lock order as render_view: GIL released, then the mutex, so a
         // close() waits for an in-flight viewer frame instead of freeing
