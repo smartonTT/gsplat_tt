@@ -318,6 +318,7 @@ void kernel_main() {
         for (uint32_t w = 0; w < PW; w++) w_cnt[w] = 0;
         w_cnt[pfwc_fuse::T_M] = m;
         w_cnt[pfwc_fuse::T_P] = pr;
+        w_cnt[pfwc_fuse::T_SB] = seg_base + 1u;  // task #517: the segment K2 takes it (0 = SeqMap)
         noc_async_write(l1a(w_cnt), get_noc_addr(core, o_cnt), PB);
     };
     ChunkPages pg;

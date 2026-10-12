@@ -19,7 +19,8 @@
 // legacy ones. proj_m_offs holds the SEGMENT-LOCAL exclusive pair offset; the
 // segment K2 adds the segment's pair base.
 //
-// Counts table: one 64 B page per pfwc core, [visible m_c, pairs p_c, 0...].
+// Counts table: one 64 B page per pfwc core, [visible m_c, pairs p_c, 0, seg_base + 1 (split
+// writer; 0 = SeqMap base), 0...]; seg_table turns words 2 and 3 into the bases.
 #pragma once
 
 #include <cstdint>
@@ -51,7 +52,10 @@ inline void seg_table(volatile uint32_t* tab, uint32_t nseg, uint32_t num_tiles,
     for (uint32_t c = 0; c < nseg; c++) {
         volatile uint32_t* t = tab + c * PAGE_WORDS;
         t[T_PB] = p;
-        t[T_SB] = sm.first(c) * vis_tile::TILE_ELEMS;
+        // Task #517: the split writer stores its seg_base + 1 (range deal: unequal runs);
+        // 0 (writer_pfwc_fuse) = the strided deal's base.
+        const uint32_t sb = t[T_SB];
+        t[T_SB] = sb != 0 ? sb - 1u : sm.first(c) * vis_tile::TILE_ELEMS;
         m += t[T_M];
         p += t[T_P];
     }
