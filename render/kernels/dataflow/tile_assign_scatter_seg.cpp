@@ -77,6 +77,15 @@
 #ifndef K2_PROF
 #define K2_PROF 0
 #endif
+// Task #542 (B4a): the fused mat+blend BRISC kernel (matblend_brisc.cpp) runs
+// this body after its mat part; K2_YIELD lets it serve the blend writer once
+// per pair page, and K2_CTA_BASE shifts the compile-time args past its own.
+#ifndef K2_YIELD
+#define K2_YIELD() ((void)0)
+#endif
+#ifndef K2_CTA_BASE
+#define K2_CTA_BASE 0
+#endif
 #if K2_PROF
 enum { K2P_SETUP, K2P_RISS, K2P_RDW, K2P_WISS, K2P_WFL, K2P_PAIRS, K2P_ROWS, K2P_WBAR, K2P_TOT, K2P_N };
 uint32_t g_k2p[K2P_N];
@@ -131,6 +140,7 @@ struct DietIo {
         noc_async_write(st_gid + o * 64u, get_noc_addr(page, gids_acc), 64u);
         noc_async_write(st_tid + o * 64u, get_noc_addr(page, tids_acc), 64u);
         K2P_ADD(K2P_WISS, t0);
+        K2_YIELD();
     }
     void writes_flushed() const {
         K2P_T0(t0);
@@ -161,7 +171,7 @@ void kernel_main() {
     const uint32_t p_cap = get_arg_val<uint32_t>(14);
     const uint32_t tiles_x = get_arg_val<uint32_t>(15);
 
-    constexpr auto a0 = TensorAccessorArgs<0>();
+    constexpr auto a0 = TensorAccessorArgs<K2_CTA_BASE>();
     constexpr auto a1 = TensorAccessorArgs<a0.next_compile_time_args_offset()>();
     constexpr auto a2 = TensorAccessorArgs<a1.next_compile_time_args_offset()>();
     constexpr auto a3 = TensorAccessorArgs<a2.next_compile_time_args_offset()>();

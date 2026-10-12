@@ -50,6 +50,7 @@
 #include "matblend_fuse.h"
 #include "out_ring.h"
 #include "pair_guard.h"
+#include "tile_assign.h"
 
 #include <cstdio>
 #include <deque>
@@ -65,6 +66,11 @@ using namespace gsplat;
 // Task #379: the one-shot hook blend_set_after_enqueue_hook() sets; taken (and
 // cleared) by the next resident frame end.
 static std::function<void()> g_after_enqueue_hook;
+
+// Task #542 (B4a shadow): fused BRISC args from here are 2 x 21 K2 args.
+static constexpr uint32_t kB4aRtaBase = 48;
+using gsplat_tt::b4a_shadow_enabled;
+using gsplat_tt::tile_assign_b4a_args;
 
 // Tasks #367/#374: one pinned output image. The caller's lease is the host
 // memory only; the pin (NoC mapping) belongs to the ring slot, so a frame the
@@ -467,6 +473,20 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         for (const auto& kv : writer_defines) d[kv.first] = kv.second;
         for (const auto& kv : fz_common) d[kv.first] = kv.second;
         d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
+        if (b4a_shadow_enabled()) {
+            // Task #542 (B4a shadow): BRISC reruns this view's K2 into scratch
+            // outputs, with its raw scratch CB and 8 accessors after ours.
+            constexpr uint32_t kB4aCb = 62;
+            constexpr uint32_t kB4aBytes = (128u + 6u + 128u) * 64u + 64u;
+            CircularBufferConfig c(kB4aBytes, {{kB4aCb, DataFormat::UInt32}});
+            c.set_page_size(kB4aCb, kB4aBytes);
+            CreateCircularBuffer(program, cores, c);
+            d["B4A_K2"] = "1";
+            d["TA_CB_OFFSET"] = std::to_string(kB4aCb);
+            d["K2_CTA_BASE"] = std::to_string(ct.size());
+            d["K2_RTA_BASE"] = std::to_string(kB4aRtaBase);
+            for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+        }
         ctx.fz_brisc = CreateKernel(
             program,
             OVERRIDE_KERNEL_PREFIX "kernels/dataflow/matblend_brisc.cpp",
@@ -898,6 +918,12 @@ static double process_frame_mb_devcull_resident(
                         cp.push_back(blend_eps_bits);
                         cp.push_back(floor_bits);
                         SetRuntimeArgs(*fz_program, ctx.fz_ncrisc, core, n);
+                        if (b4a_shadow_enabled()) {
+                            m0.resize(kB4aRtaBase, 0u);
+                            const uint32_t kc = static_cast<uint32_t>(x) +
+                                                static_cast<uint32_t>(y) * static_cast<uint32_t>(ctx.grid.x);
+                            if (!tile_assign_b4a_args(kc, m0)) m0.resize(kB4aRtaBase + 42u, 0u);
+                        }
                         SetRuntimeArgs(*fz_program, ctx.fz_brisc, core, m0);
                         SetRuntimeArgs(*fz_program, ctx.fz_compute, core, cp);
                         core_index++;
