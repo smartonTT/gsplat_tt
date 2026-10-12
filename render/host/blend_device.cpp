@@ -71,6 +71,7 @@ static std::function<void()> g_after_enqueue_hook;
 static constexpr uint32_t kB4aRtaBase = 48;
 using gsplat_tt::b4a_shadow_enabled;
 using gsplat_tt::tile_assign_b4a_args;
+using gsplat_tt::tile_assign_b4a_end_view;
 
 // Tasks #367/#374: one pinned output image. The caller's lease is the host
 // memory only; the pin (NoC mapping) belongs to the ring slot, so a frame the
@@ -988,6 +989,8 @@ static double process_frame_mb_devcull_resident(
     } else {
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     }
+    // Task #548: this view's B4a K2 args are used up (logs the core count).
+    if (b4a_shadow_enabled()) tile_assign_b4a_end_view();
     // Per-stage attribution (stage_timers.h): the D2H readback and the host
     // assemble are separate buckets; the caller derives the pure device blend
     // window as (returned ms - d2h). The writer already packed the final u8

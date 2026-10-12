@@ -87,9 +87,13 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
 
 // Task #542 (B4a shadow, GSPLAT_TT_B4A_SHADOW=1): appends the last fused K2's
 // args for logical core index `core` (x + y * grid x), mover 0 then mover 1,
-// 21 each, outputs moved to scratch. False when off or no K2 ran.
+// 21 each, outputs moved to scratch. False when off or no unread fused K2.
 bool b4a_shadow_enabled();
 bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out);
+// Task #548: the blend enqueued with those args; clears them, logs how many
+// cores got K2 work. GSPLAT_TT_B4A_VERIFY=<n> checks the first n views' scratch
+// outputs against the real K2's at the next fused K2.
+void tile_assign_b4a_end_view();
 
 bool tile_assign_device_ready();
 

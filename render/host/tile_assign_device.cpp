@@ -129,6 +129,16 @@ struct TileAssignDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> b4a_gids, b4a_tids, b4a_pp, b4a_mp, b4a_rows;
     std::size_t b4a_cap_p = 0, b4a_cap_rows = 0;
     std::vector<uint32_t> b4a_args;
+    // Task #548: b4a_args belong to the last fused K2 and no blend has read
+    // them yet (set by tile_assign_fused_k2, cleared by tile_assign_b4a_end_view;
+    // fused_ready is cleared by tile_assign_tt before the blend, so not that).
+    bool b4a_valid = false;
+    uint32_t b4a_view_cores = 0, b4a_views = 0;
+    // GSPLAT_TT_B4A_VERIFY=<n>: host copies of the real K2 outputs of the last
+    // fused K2, compared with the shadow's b4a_* outputs at the next K2.
+    std::vector<uint32_t> b4a_ref_gids, b4a_ref_tids, b4a_ref_pp, b4a_ref_mp, b4a_ref_rows;
+    uint32_t b4a_ref_P = 0, b4a_ref_rows_words = 0, b4a_verified = 0, b4a_verify_bad = 0;
+    bool b4a_verify_pending = false;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
 
@@ -221,6 +231,14 @@ bool b4a_shadow_enabled() {
     return on;
 }
 namespace {
+
+uint32_t b4a_verify_views() {
+    static const uint32_t n = [] {
+        const char* e = std::getenv("GSPLAT_TT_B4A_VERIFY");
+        return e != nullptr ? static_cast<uint32_t>(std::atoi(e)) : 0u;
+    }();
+    return n;
+}
 
 static bool k2_diet_enabled() {
     static const bool v = [] {
@@ -744,18 +762,74 @@ static void vis_check_legacy(
 
 bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out) {
     auto* ctx = ensure_context();
-    if (ctx == nullptr || !b4a_shadow_enabled() || !ctx->fused_ready) return false;
+    if (ctx == nullptr || !b4a_shadow_enabled() || !ctx->b4a_valid) return false;
     const std::size_t n = ctx->b4a_args.size() / 42u;
     if (core >= n) return false;
-    out.insert(out.end(), ctx->b4a_args.begin() + core * 42u, ctx->b4a_args.begin() + (core + 1u) * 42u);
+    const auto first = ctx->b4a_args.begin() + core * 42u;
+    out.insert(out.end(), first, first + 42u);
+    if (first[7] != 0 || first[21 + 7] != 0) ctx->b4a_view_cores++;  // nseg of mover 0 / 1
     return true;
 }
+
+void tile_assign_b4a_end_view() {
+    auto* ctx = ensure_context();
+    if (ctx == nullptr || !b4a_shadow_enabled()) return;
+    const bool ran = ctx->b4a_valid && ctx->b4a_view_cores != 0;
+    ctx->b4a_views++;
+    if (ctx->b4a_views <= 2 || ctx->b4a_views % 30 == 0 || !ran)
+        std::fprintf(stderr, "[B4A] view %u: cores_with_k2_args=%u/%zu\n", ctx->b4a_views,
+                     ctx->b4a_view_cores, ctx->b4a_args.size() / 42u);
+    if (ran && ctx->b4a_verified < b4a_verify_views() && !ctx->b4a_ref_gids.empty())
+        ctx->b4a_verify_pending = true;
+    ctx->b4a_valid = false;
+    ctx->b4a_view_cores = 0;
+}
+
+namespace {
+// Task #548: the blend that read b4a_args has been enqueued; drain it and
+// compare its scratch outputs byte for byte with the real K2's.
+void b4a_verify(TileAssignDeviceContext& ctx) {
+    ctx.b4a_verify_pending = false;
+    distributed::Finish(*ctx.cq);
+    auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+        std::vector<uint32_t> v(b->size() / 4);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
+        return v;
+    };
+    auto cmp = [&](const char* name, const std::vector<uint32_t>& got,
+                   const std::vector<uint32_t>& ref, std::size_t n) {
+        n = std::min({n, got.size(), ref.size()});
+        std::size_t bad = 0, first = 0;
+        for (std::size_t i = 0; i < n; i++)
+            if (got[i] != ref[i] && bad++ == 0) first = i;
+        if (bad == 0) {
+            std::fprintf(stderr, "[B4A] verify %s: %zu words equal\n", name, n);
+        } else {
+            std::fprintf(stderr, "[B4A] verify %s: MISMATCH %zu/%zu words, first %zu (got %u ref %u)\n",
+                         name, bad, n, first, got[first], ref[first]);
+        }
+        return bad == 0 && n != 0;
+    };
+    bool ok = cmp("gids", rd(ctx.b4a_gids), ctx.b4a_ref_gids, ctx.b4a_ref_P);
+    ok = cmp("tids", rd(ctx.b4a_tids), ctx.b4a_ref_tids, ctx.b4a_ref_P) && ok;
+    ok = cmp("pairs_P", rd(ctx.b4a_pp), ctx.b4a_ref_pp, ctx.b4a_ref_pp.size()) && ok;
+    ok = cmp("proj_M", rd(ctx.b4a_mp), ctx.b4a_ref_mp, ctx.b4a_ref_mp.size()) && ok;
+    if (ctx.b4a_ref_rows_words != 0)
+        ok = cmp("k2_rows", rd(ctx.b4a_rows), ctx.b4a_ref_rows, ctx.b4a_ref_rows_words) && ok;
+    ctx.b4a_verified++;
+    if (!ok) ctx.b4a_verify_bad++;
+    std::fprintf(stderr, "[B4A] verify view %u: P_pub=%u %s (%u/%u views bad)\n", ctx.b4a_verified,
+                 ctx.b4a_ref_P, ok ? "OK" : "MISMATCH", ctx.b4a_verify_bad, ctx.b4a_verified);
+}
+}  // namespace
 
 bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                           uint32_t screen_tiles, uint32_t* M, uint32_t* P) {
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->fused_ready = false;
+    if (ctx->b4a_verify_pending) b4a_verify(*ctx);
+    ctx->b4a_valid = false;
     device_state::clear_k2_count_rows("fused_k2");
     try {
         if (nseg == 0 || nseg > pfwc_fuse::MAX_SEG)
@@ -852,6 +926,12 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             Program& prog = ctx->wl_k2seg.get_programs().begin()->second;
             const bool b4a = b4a_shadow_enabled();
             if (b4a) {
+                // An earlier fused blend may still run its shadow K2 into the
+                // b4a_* buffers: drain it before any of them is reallocated.
+                const bool grow_rows = fold && ctx->cap_k2_rows_bytes != 0 &&
+                                       ctx->b4a_cap_rows < ctx->cap_k2_rows_bytes;
+                if (!ctx->b4a_gids || ctx->b4a_cap_p < ctx->cap_p_bytes || grow_rows)
+                    distributed::Finish(*ctx->cq);
                 if (!ctx->b4a_gids || ctx->b4a_cap_p < ctx->cap_p_bytes) {
                     ctx->b4a_gids = make_dram(ctx->mesh_device.get(), ctx->cap_p_bytes);
                     ctx->b4a_tids = make_dram(ctx->mesh_device.get(), ctx->cap_p_bytes);
@@ -861,7 +941,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                     ctx->b4a_pp = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
                     ctx->b4a_mp = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
                 }
-                if (fold && ctx->b4a_cap_rows < ctx->cap_k2_rows_bytes) {
+                if (grow_rows) {
                     ctx->b4a_rows = make_dram(ctx->mesh_device.get(), ctx->cap_k2_rows_bytes);
                     ctx->b4a_cap_rows = ctx->cap_k2_rows_bytes;
                 }
@@ -895,12 +975,30 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                         a[4] = static_cast<uint32_t>(ctx->b4a_tids->address());
                         a[5] = static_cast<uint32_t>(ctx->b4a_pp->address());
                         a[6] = static_cast<uint32_t>(ctx->b4a_mp->address());
-                        a[16] = fold ? static_cast<uint32_t>(ctx->b4a_rows->address()) : 0u;
+                        // rows_addr 0 (no count rows) unless real and scratch rows exist
+                        a[16] = (a[16] != 0 && ctx->b4a_rows) ? static_cast<uint32_t>(ctx->b4a_rows->address()) : 0u;
                         std::copy(a.begin(), a.end(), ctx->b4a_args.begin() + (2u * c + mover) * 21u);
                     }
                 }
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
+            if (b4a && ctx->b4a_verified < b4a_verify_views()) {
+                // Verify mode only: copy the real outputs before the sort runs.
+                distributed::Finish(*ctx->cq);
+                auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+                    std::vector<uint32_t> v(b->size() / 4);
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, v, b, true);
+                    return v;
+                };
+                ctx->b4a_ref_mp = rd(projM);
+                ctx->b4a_ref_pp = rd(ctx->buf_pairs_P);
+                ctx->b4a_ref_gids = rd(ctx->buf_gids);
+                ctx->b4a_ref_tids = rd(ctx->buf_tids);
+                ctx->b4a_ref_P = ctx->b4a_ref_pp.empty() ? 0u : ctx->b4a_ref_pp[0];
+                ctx->b4a_ref_rows_words = rows_addr != 0 && ctx->b4a_rows
+                    ? 2u * num_cores * row_pages * (PAGE_BYTES / 4u) : 0u;
+                if (ctx->b4a_ref_rows_words != 0) ctx->b4a_ref_rows = rd(ctx->buf_k2_rows);
+            }
             if (pass == 0 && want_early) {
                 auto enqueue_sort = [&]() {
                     return sort_onelaunch_enqueue_early(
@@ -947,6 +1045,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
         *P = mread[1];
         ctx->fused_P = mread[1];
         ctx->fused_ready = true;
+        ctx->b4a_valid = b4a_shadow_enabled() && !ctx->b4a_args.empty();
         if (fold) {
             device_state::K2CountRows rows;
             rows.buf = ctx->buf_k2_rows;
