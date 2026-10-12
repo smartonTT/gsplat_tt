@@ -235,10 +235,11 @@ bool b4a_shadow_enabled() {
     }();
     return on;
 }
+// Task #554: default on (iter 226); GSPLAT_TT_B4A_FOLD=0 is the kill switch.
 bool b4a_fold_enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_B4A_FOLD");
-        return e != nullptr && std::atoi(e) != 0;
+        return !(e != nullptr && std::atoi(e) == 0);
     }();
     return on;
 }

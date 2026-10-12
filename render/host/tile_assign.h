@@ -95,7 +95,7 @@ bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out);
 // outputs against the real K2's at the next fused K2.
 void tile_assign_b4a_end_view();
 
-// Task #552 (B4a fold, GSPLAT_TT_B4A_FOLD=1, default off): the next view's K2
+// Task #552 (B4a fold; default on since #554, GSPLAT_TT_B4A_FOLD=0 disables): the next view's K2
 // runs on BRISC inside this view's fused mat+blend. b4a_k2_in_blend() is true
 // with the shadow or the fold (BRISC K2 compiled into the fused program).
 // tile_assign_fold_prepare sets the next view's K2 args (real outputs) for the
