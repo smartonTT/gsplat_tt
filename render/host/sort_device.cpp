@@ -603,7 +603,9 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
         CircularBufferConfig c((2u * m0_cap + 256u) * 4u,
                                {{21u, DataFormat::UInt32}, {mf::kB4aCb, DataFormat::UInt32}});
         c.set_page_size(21u, (2u * m0_cap + 256u) * 4u);
-        c.set_page_size(mf::kB4aCb, mf::kB4aBytes);
+        // One page spanning the whole CB: tt-metal requires the total size to be
+        // divisible by every index's page size; the kernel only uses get_write_ptr.
+        c.set_page_size(mf::kB4aCb, (2u * m0_cap + 256u) * 4u);
         CreateCircularBuffer(program, cores, c);
     } else {
         page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
