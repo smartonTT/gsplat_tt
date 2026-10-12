@@ -190,6 +190,13 @@ inline bool blend_late_claim() {
     static const bool v = env_uint("GSPLAT_TT_BLEND_LATE_CLAIM", 1u) != 0u;
     return v;
 }
+// Task #544 (B4' step 1): in the fused mat+blend program, shrink the blend rings that share
+// a mat CB's storage to their own sizes on device, so the rest of the mat region is free
+// during blend. Default on; 0 = they wrap through the whole mat CB (the #289 layout).
+inline bool blend_alias_cut() {
+    static const bool v = env_uint("GSPLAT_TT_BLEND_ALIAS_CUT", 1u) != 0u;
+    return v;
+}
 // Blend per-core lists dealt round-robin in record-count-descending order (core c
 // gets ranks c, c+n, ...), so the reader's rank interleave claims tiles in
 // global descending order. Default on; 0 = LPT lists (build_lpt).

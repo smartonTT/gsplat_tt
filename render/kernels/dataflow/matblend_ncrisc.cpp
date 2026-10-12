@@ -13,6 +13,7 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
+#include "../blend_alias_fifo.h"
 
 #ifndef BLEND_RTA_BASE
 #define BLEND_RTA_BASE 32
@@ -33,5 +34,8 @@ inline T get_arg_val(int arg_idx) {
 void kernel_main() {
     matk::kernel_main();
     noc_async_write_barrier();
+#ifdef BLEND_ALIAS_CUT
+    blend_fifo_shrink(BLEND_CB_BASE + 3, BLEND_MB_COUNTS_BYTES, BLEND_MB_COUNTS_PAGE);  // reader pushes
+#endif
     blendk::kernel_main();
 }

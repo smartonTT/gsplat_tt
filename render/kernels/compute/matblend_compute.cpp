@@ -15,6 +15,7 @@
 #include "api/compute/eltwise_unary/fill.h"
 #include "../dataflow/dm_fp32.h"
 #include "blend_t_live.h"
+#include "../blend_alias_fifo.h"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -46,5 +47,10 @@ inline T get_arg_val(int arg_idx) {
 
 void kernel_main() {
     matk::kernel_main();
+#ifdef BLEND_ALIAS_CUT
+    // Every TRISC keeps its own copy: unpack pops CB_MB_COUNTS, pack fills CB_OUT.
+    blend_fifo_shrink(BLEND_CB_BASE + 3, BLEND_MB_COUNTS_BYTES, BLEND_MB_COUNTS_PAGE);
+    blend_fifo_shrink(BLEND_CB_BASE + 16, BLEND_OUT_BYTES, BLEND_OUT_PAGE);
+#endif
     blendk::kernel_main();
 }

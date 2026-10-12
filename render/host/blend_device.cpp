@@ -177,6 +177,8 @@ static uint32_t image_pitch_bytes(uint32_t tiles_x) {
 // never raises the whole-tile saturation early-out.)
 
 constexpr uint32_t COUNTS_PAGE_BYTES = 128;
+constexpr uint32_t MB_COUNTS_DEPTH = 64;  // pages
+constexpr uint32_t OUT_DEPTH = 6;         // bf16 tiles (2 screen tiles of R/G/B)
 // 10 real fp32 lanes (A,B,C,mx,my,f,op,r,g,b) padded to a 64B DRAM-aligned page.
 // MUST be a multiple of the DRAM alignment (64B on Blackhole): an unaligned page
 // size (e.g. 48B) makes the interleaved per-bank page stride diverge between the
@@ -227,8 +229,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     // Depth must cover max subchunks per tile (overflow tiles can be >>2);
     // reader bulk path can push counts faster than compute pops.
-    cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
-    cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, MB_COUNTS_DEPTH, DataFormat::UInt32);
+    cb_cfg(CB_OUT, TILE_BYTES_BF16, OUT_DEPTH, DataFormat::Float16_b);
     // Writer-private staging for the on-device u8 image pack (task #61):
     // one screen tile as 32 rows x 96 B RGB.
     cb_cfg(CB_IMG_U8, IMG_ROW_BYTES * TILE_H, 1, DataFormat::UInt8);
@@ -331,6 +333,16 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             {"BLEND_CB_BASE", std::to_string(mbf::kBlendCbBase)},
             {"BLEND_CTA_BASE", std::to_string(mat.ct.size())},
         };
+        // Task #544: cut the blend rings that share a mat CB (CB_MB_COUNTS, CB_OUT,
+        // CB_IMG_U8) to their own sizes on every RISC (kernels/blend_alias_fifo.h).
+        if (gsplat_tt::env_config::blend_alias_cut()) {
+            fz_common["BLEND_ALIAS_CUT"] = "1";
+            fz_common["BLEND_MB_COUNTS_BYTES"] = std::to_string(COUNTS_PAGE_BYTES * MB_COUNTS_DEPTH) + "u";
+            fz_common["BLEND_MB_COUNTS_PAGE"] = std::to_string(COUNTS_PAGE_BYTES) + "u";
+            fz_common["BLEND_OUT_BYTES"] = std::to_string(TILE_BYTES_BF16 * OUT_DEPTH) + "u";
+            fz_common["BLEND_OUT_PAGE"] = std::to_string(TILE_BYTES_BF16) + "u";
+            fz_common["BLEND_IMG_U8_BYTES"] = std::to_string(IMG_ROW_BYTES * TILE_H) + "u";
+        }
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
         std::vector<uint32_t> ct = mat.ct;
         ct.insert(ct.end(), reader_ct.begin(), reader_ct.end());
@@ -441,6 +453,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (fused) {
         compute_defines["BLEND_CB_BASE"] = std::to_string(mbf::kBlendCbBase);
         compute_defines["BLEND_RTA_BASE"] = std::to_string(mbf::kCpRtaBase);
+        for (const auto& kv : fz_common) {
+            if (kv.first.rfind("BLEND_ALIAS_CUT", 0) == 0 || kv.first.rfind("BLEND_MB_COUNTS_", 0) == 0 ||
+                kv.first.rfind("BLEND_OUT_", 0) == 0) {
+                compute_defines[kv.first] = kv.second;
+            }
+        }
     }
     (fused ? ctx.fz_compute : ctx.compute) = CreateKernel(
         program,
