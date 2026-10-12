@@ -417,6 +417,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         compute_defines["BLEND_ABL"] = env_or("GSPLAT_TT_BLEND_ABL", "0");
         // Task #111: SFPU-side bound of an FPU quadratic form (timing only).
         compute_defines["BLEND_FPU_QF_ABL"] = env_or("GSPLAT_TT_BLEND_FPU_QF_ABL", "0");
+        // Task #511: SCHED=2 timing probes for an FPU quadratic form (1 = front twice,
+        // bit-identical; 2 = front skipped, output wrong) and N NOPs per live record.
+        compute_defines["BLEND_QF_PROBE"] = env_or("GSPLAT_TT_BLEND_QF_PROBE", "0");
+        compute_defines["BLEND_QF_PAD"] = env_or("GSPLAT_TT_BLEND_QF_PAD", "0");
         // Task #80: visit only the set mask pairs via a body table (0 = old walk).
         compute_defines["BLEND_JUMP_WALK"] = env_or("GSPLAT_TT_BLEND_JUMP_WALK", "1");
         // Task #219 (#205 model): hand-scheduled jump-walk bodies, bit-identical

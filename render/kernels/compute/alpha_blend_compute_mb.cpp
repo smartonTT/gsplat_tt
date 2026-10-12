@@ -822,10 +822,27 @@ template <uint32_t N>
         bs_incr_d<(N > 14u ? N - 14u : 0u)>();
     }
 }
+// Task #511 (host env GSPLAT_TT_BLEND_QF_PROBE, default 0): SFPU-side timing
+// probes for an FPU quadratic-form power. 1 = x/y + front run twice (the second
+// writes the same LREGs: bit-identical; the delta is what an FPU power removes).
+// 2 = x/y + front replaced by one SFPLOAD of the x ramp as power (the SFPU side
+// of a free FPU form; output wrong, run with BLEND_T_PERIOD=0 against a period-0
+// baseline as in task #111).
+#ifndef BLEND_QF_PROBE
+#define BLEND_QF_PROBE 0
+#endif
 template <uint32_t IX>
 [[gnu::always_inline]] inline void sched_single_a2() {
+#if BLEND_QF_PROBE == 2
+    BS_LD(0, BS_V(DR_X, IX), 0, 7);
+#else
+#if BLEND_QF_PROBE == 1
+    bs_xy<IX>();
+    lltt::replay(0, 13);  // bs_front (probe copy)
+#endif
     bs_xy<IX>();
     lltt::replay(0, 13);  // bs_front
+#endif
     bs_middle();
     bs_incr_d<BS_V(0u, IX)>();
     lltt::replay(13, 19);  // bs_tail relative to D, then D = 0
@@ -1126,6 +1143,18 @@ inline void da_put_mark(uint32_t kind) {
 #endif  // TRISC_UNPACK
 
 #ifdef TRISC_MATH
+// Task #511 (host env GSPLAT_TT_BLEND_QF_PAD, default 0): N SFPNOPs per live
+// record on the math thread, to price per-record FPU-path work in ms/view.
+#ifndef BLEND_QF_PAD
+#define BLEND_QF_PAD 0
+#endif
+template <uint32_t N>
+[[gnu::always_inline]] inline void blend_qf_pad() {
+    if constexpr (N > 0u) {
+        TTI_SFPNOP;
+        blend_qf_pad<N - 1u>();
+    }
+}
 inline const volatile uint32_t* da_wait_slot() {
     if (g_da_idx == g_da_seen) {
         for (;;) {
@@ -1468,6 +1497,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         TC_LIVE(mask);
         da_stage(s);
         da_consumed();
+        blend_qf_pad<BLEND_QF_PAD>();
         dispatch_blend_jump(mask);
     }
 #else  // TRISC_PACK: only the readbacks, at the same record positions
