@@ -2,11 +2,11 @@
 # t511 driver (Mac): sync + build <rev> into /localdev/smarton/t511 on bh-33 (existing measurement
 # reservation only; no IRD reserve/extend/release), then run bench511.sh there and copy results back.
 # Every ssh keeps StrictHostKeyChecking=yes, off the ~/.ssh/config mux.
-#   ttp detach t511 -- ttp lock p100 -- docs/blend-qf-t511/drive511.sh <rev>
+#   [HOST=<measurement box>] ttp detach t511 -- ttp lock p100 -- docs/blend-qf-t511/drive511.sh <rev>
 set -eo pipefail
 cd "$(git rev-parse --show-toplevel)"
 D=docs/blend-qf-t511; REV=$(git rev-parse "${1:?rev}")
-H=bh-33; T=/localdev/smarton/t511; O=/localdev/smarton/t511-out
+H=${HOST:-bh-33}; T=/localdev/smarton/t511; O=/localdev/smarton/t511-out
 mkdir -p tmp
 MARK=${TTP_RUN_DIR:-tmp}/drive511.done; rm -f "$MARK"
 trap 'rc=$?; echo "drive511 exit $rc $(date -u +%FT%TZ)"; echo $rc > "$MARK"' EXIT
