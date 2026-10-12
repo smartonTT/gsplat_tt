@@ -163,6 +163,17 @@ int check_frame(const Frame& f, uint32_t tile_cap, const char* tag) {
     // Slots: unique, inside the tile's bucket, in legacy order, excess dropped.
     const std::vector<uint32_t> slot =
         emit_slots(f.tids, f.keep, f.P, f.split, cnt, pfx, f.stride, tile_cap);
+    // Task #555 OL_SOLO: one stream per core (mid = hi, BRISC alone, cursor =
+    // base) gives every pair the same slot as the two-mover split.
+    {
+        std::vector<CoreSplit> solo = f.split;
+        for (auto& s : solo) s.mid = s.hi;
+        const Counts cs = count_pass(f.tids, f.keep, f.P, solo, f.stride);
+        if (emit_slots(f.tids, f.keep, f.P, solo, cs, pfx, f.stride, tile_cap) != slot) {
+            std::printf("%s: OL_SOLO slots differ from the two-mover split\n", tag);
+            bad++;
+        }
+    }
     std::map<uint32_t, uint32_t> by_slot;
     uint32_t dropped = 0, expect_dropped = 0;
     for (uint32_t i = 0; i < f.P; ++i) {

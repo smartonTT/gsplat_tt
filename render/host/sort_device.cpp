@@ -362,6 +362,20 @@ static uint32_t sort_mat_movers() {
 // and lets the materialize sort the tile buckets. Task #121: default on (v2,
 // 29.55 -> 24.60 ms/view on yyzo-bh-07); GSPLAT_TT_SORT_ONELAUNCH=0 is the kill
 // switch back to the legacy multi-launch sort. Read once.
+// Task #555: GSPLAT_TT_OL_SOLO=1 (one sort stream per core, BRISC) holds only
+// with the town on TRISC 2 alone (OL_TOWN_NT=1); else it is ignored, loudly.
+static bool ol_solo_active() {
+    static const bool v = [] {
+        if (!gsplat_tt::env_config::ol_solo()) return false;
+        if (gsplat_tt::env_config::ol_town_nt() != 1u || !gsplat_tt::env_config::ol_emit_town()) {
+            std::fprintf(stderr, "[SORT] GSPLAT_TT_OL_SOLO=1 needs GSPLAT_TT_OL_TOWN_NT=1 and the town; ignored\n");
+            return false;
+        }
+        return true;
+    }();
+    return v;
+}
+
 static bool sort_onelaunch_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_SORT_ONELAUNCH");
@@ -1088,6 +1102,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         if (gsplat_tt::env_config::ol_town_nt() == 1u) {
             defines["OL_TOWN_NT"] = "1u";
             tdef["OL_TOWN_NT"] = "1u";
+        }
+        // Task #555: GSPLAT_TT_OL_SOLO=1, one stream per core on BRISC.
+        if (ol_solo_active()) {
+            defines["OL_SOLO"] = "1";
+            tdef["OL_SOLO"] = "1";
         }
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         if (rec32) tdef["PFWC_REC32"] = "1";
@@ -2528,7 +2547,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 };
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
-                a[10] = mid;
+                a[10] = ol_solo_active() ? hi : mid;  // task #555 OL_SOLO: the whole core range
                 a[18] = 0u;
                 if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
                 SetRuntimeArgs(oprog, ctx->kol0, core, a);
@@ -3589,7 +3608,8 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
         SetRuntimeArgs(oprog, ctx->kol, core, a);
         a[10] = static_cast<uint32_t>(acc[2u * c]);
         a[18] = 0u;
-        a[28] = static_cast<uint32_t>(acc[2u * c + 1u]);
+        // Task #555 OL_SOLO: BRISC takes the core's whole range [lo, hi).
+        a[28] = static_cast<uint32_t>(acc[2u * c + (ol_solo_active() ? 2u : 1u)]);
         if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
         SetRuntimeArgs(oprog, ctx->kol0, core, a);
     }

@@ -210,7 +210,11 @@ void kernel_main() {
 #else
     PACK(({
         a0 = cb_base(get_local_cb_interface(CB_TWN + 16u));
+#if defined(OL_SOLO) && OL_SOLO
+        a1 = 0u;  // task #555: one stream (BRISC's), NCRISC sorts nothing
+#else
         a1 = cb_base(get_local_cb_interface(CB_TWN));
+#endif
     }));
 #endif
 #else

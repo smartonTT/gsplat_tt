@@ -78,6 +78,19 @@
 #ifndef EMIT_PUBOC
 #define EMIT_PUBOC 0u
 #endif
+// Task #555 (B4' step 3b, host GSPLAT_TT_OL_SOLO=1): one stream per core. BRISC
+// gets the whole core range as mover 0 and NCRISC returns at once; mover 0
+// then signals no mover 1 (sem_based). Needs the fold and the town (NT = 1).
+#ifndef OL_SOLO
+#define OL_SOLO 0
+#endif
+// OL_YIELD(): called in every wait of this kernel (barrier releases, town
+// slots and acknowledgements), so a host program can run other non-blocking
+// work on this RISC while the sort waits (the fused mat+blend program serves
+// the blend writer there). Empty by default.
+#ifndef OL_YIELD
+#define OL_YIELD() ((void)0)
+#endif
 // v2 emit (task #124; host knobs GSPLAT_TT_OL_PB / _RING / _WIN_PAGES). The
 // defaults here are the v1 emit's batching and write pattern.
 #ifndef OL_PB
@@ -243,6 +256,9 @@ void kernel_main() {
     const auto base_acc = TensorAccessor(base_args, bases_addr, PAGE_BYTES);
     const auto tot_acc = TensorAccessor(tot_args, totals_addr, PAGE_BYTES);
 
+#if OL_SOLO
+    if (mover != 0u) return;
+#endif
     const uint32_t cbo = (mover == 0) ? MOVER0_CB_OFFSET : 0u;
     auto hp = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + cbo));
     auto curp = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CUR + cbo));
@@ -423,11 +439,13 @@ void kernel_main() {
         noc_semaphore_set(sem_based, 0u);  // re-arm for the next launch
         invalidate_l1_cache();
     } else {
+#if !OL_SOLO
         if (!fold) {
             noc_semaphore_wait(sem_counted, 1u);
             noc_semaphore_set(sem_counted, 0u);
             invalidate_l1_cache();
         }
+#endif
         const uint32_t row_span = row_pages * ELEMS_PER_PAGE;
         const bool coordinator = (core_id == 0u);
         // fill: fill_window() while waiting (the coordinator after releasing).
@@ -447,7 +465,10 @@ void kernel_main() {
             noc_async_write_barrier();  // this core's DRAM writes are visible first
             if (coordinator) {
                 auto arrive = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(arrive_id));
-                noc_semaphore_wait(arrive, num_cores - 1u);
+                while (*arrive != num_cores - 1u) {
+                    invalidate_l1_cache();
+                    OL_YIELD();
+                }
                 noc_semaphore_set(arrive, 0u);
                 for (uint32_t r = 1; r < num_cores; r++) {
                     const uint32_t xy = get_arg_val<uint32_t>(30 + r);
@@ -460,7 +481,10 @@ void kernel_main() {
                 noc_async_atomic_barrier();
                 if (fill) fill_b();
                 auto release = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(release_id));
-                noc_semaphore_wait(release, 1u);
+                while (*release != 1u) {
+                    invalidate_l1_cache();
+                    OL_YIELD();
+                }
                 noc_semaphore_set(release, 0u);
             }
             invalidate_l1_cache();
@@ -469,7 +493,7 @@ void kernel_main() {
         // ── 1b. the core's count row (both movers) to DRAM ─────────────────
         // (fold: the K2 wrote both movers' rows before this launch)
         if (!fold) {
-            for (uint32_t t = 0; t < row_span; t++) rowp[t] = (t < num_tiles) ? h0p[t] + h1p[t] : 0u;
+            for (uint32_t t = 0; t < row_span; t++) rowp[t] = (t < num_tiles) ? h0p[t] + (OL_SOLO ? 0u : h1p[t]) : 0u;
             asm volatile("fence" ::: "memory");
             for (uint32_t q = 0; q < row_pages; q++) {
                 noc_async_write(row_l1 + q * PAGE_BYTES,
@@ -533,7 +557,9 @@ void kernel_main() {
         }
         noc_async_read_barrier();
         asm volatile("fence" ::: "memory");
+#if !OL_SOLO
         noc_semaphore_set(sem_based, 1u);
+#endif
     }
     // Cursors: BRISC's records first, then NCRISC's, inside the core's chunk
     // (fold: NCRISC read BRISC's count row into its own CB_H).
@@ -906,6 +932,7 @@ void kernel_main() {
     twh[tw::H_GO] = tw::MAGIC;
     auto tw_spin = [&]() {
         for (uint32_t i = 0; i < 8u; i++) asm volatile("nop");
+        OL_YIELD();
     };
     if (town) {
         uint32_t q_rd[tw::NT] = {};

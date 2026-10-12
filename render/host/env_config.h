@@ -186,6 +186,15 @@ inline unsigned int ol_town_nt() {
     static const unsigned int v = env_uint("GSPLAT_TT_OL_TOWN_NT", 3u) == 1u ? 1u : 3u;
     return v;
 }
+// Task #555 (B4' step 3b): one sort stream per core. BRISC sorts the whole core
+// range [lo, hi) as mover 0 and NCRISC returns at once (the shape the fused
+// mat+blend program hosts, where BRISC runs it after the B4a K2). Needs the
+// K2 fold, the town and OL_TOWN_NT=1. Same output (the cursors of one stream
+// over [lo, mid) then [mid, hi) run exactly as the two movers' did).
+inline bool ol_solo() {
+    static const bool v = env_uint("GSPLAT_TT_OL_SOLO", 0u) != 0u;
+    return v;
+}
 
 
 // Task #188 blend claim knobs (docs/blend-tail-t183). Late claim: the blend
