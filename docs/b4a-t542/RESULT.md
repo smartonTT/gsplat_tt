@@ -1,5 +1,11 @@
 # t542 B4a step 0: shadow K2 on the fused mat+blend BRISC (bh-33, 2026-10-12)
 
+> **Correction (t548, review #547):** these numbers measured a no-op. The fused BRISC K2 args
+> were gated on ctx->fused_ready, which is cleared every view before blend, so the shadow K2 never
+> ran. Re-measured with the fix and on-device proof in docs/b4a-t548/RESULT.md: off 8.989 vs on
+> 8.992 ms/view, shadow verified on 110/110 cores. The verdict below is superseded there.
+
+
 Commit ae794619 (base best-iter-225 b612d4ed + t540 77d8fc3c). Flag GSPLAT_TT_B4A_SHADOW=1 (default off).
 Step 0 only measures the cost of hosting K2: BRISC reruns this view's K2 mover parts (diet path)
 after its mat body, into scratch DRAM outputs, yielding to the blend writer once per pair page.
