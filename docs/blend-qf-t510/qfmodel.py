@@ -20,6 +20,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import multiprocessing as mp
+import os
 import sys
 import time
 from pathlib import Path
@@ -27,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-ROOT = Path("/Users/smarton/dev/gsplat_tt")  # gsplat package (read only)
+ROOT = Path(os.environ.get("QF_ROOT", "/Users/smarton/dev/gsplat_tt"))  # gsplat package + scenes (read only)
 WT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -176,78 +178,20 @@ def power_qf(u, v, mu, mv, A, B, C, fmt, origin, hilo, mb_origin=False):
     return p
 
 
-def blend(self, *a):
-        self.args = a
-        return np.zeros((1, 1, 3), np.float32), {}
+_CTX = None
 
 
-def conic(covs):
-    a, b, c = covs[:, 0, 0], covs[:, 0, 1], covs[:, 1, 1]
-    det = a * c - b * b
-    inv = 1.0 / det
-    return -0.5 * c * inv, b * inv, -0.5 * a * inv  # A, B, C (-0.5 folded)
-
-
-def power_base(u, v, mu, mv, A, B, C):
-    dx = u[None, :] - mu[:, None]
-    dy = v[None, :] - mv[:, None]
-    p = A[:, None] * (dx * dx)
-    p = p + B[:, None] * (dx * dy)
-    return p + C[:, None] * (dy * dy)
-
-
-def power_qf(u, v, mu, mv, A, B, C, fmt, origin, hilo, mb_origin=False):
-    """u, v: (1024,) tile-local pixel centres; mu, mv: tile-local means."""
-    m = FMT[fmt]
-    if mb_origin:  # per-microblock (4 rows x 8 cols) centre
-        ou = (torch.floor(u / 8.0) * 8.0 + 4.0)[None, :]
-        ov = (torch.floor(v / 4.0) * 4.0 + 2.0)[None, :]
-    else:
-        ou = torch.full((1, u.numel()), float(origin))
-        ov = ou
-    uu = u[None, :] - ou  # exact (half-integers)
-    vv = v[None, :] - ov
-    mu_ = mu[:, None] - ou  # (P, N) fp32 per-origin
-    mv_ = mv[:, None] - ov
-    A_, B_, C_ = A[:, None], B[:, None], C[:, None]
-    D = -(2.0 * A_ * mu_ + B_ * mv_)
-    E = -(B_ * mu_ + 2.0 * C_ * mv_)
-    F = A_ * (mu_ * mu_) + B_ * (mu_ * mv_) + C_ * (mv_ * mv_)
-    feats = [uu * uu, uu * vv, vv * vv, uu, vv, torch.ones_like(uu)]
-    coefs = [A_.expand_as(D), B_.expand_as(D), C_.expand_as(D), D, E, F]
-    feats = [rnd(f.expand_as(D).contiguous(), m) for f in feats]
-    p = torch.zeros_like(D)
-    for f, c in zip(feats, coefs):
-        hi = rnd(c.contiguous(), m)
-        p = p + rnd(f, m) * hi
-        if hilo:
-            lo = rnd((c - hi).contiguous(), m)
-            p = p + f * lo
-    return p
-
-
-def blend(args, H, W, pfn):
-    means2d, covs2d, colors, opac, sids, tile_ranges = args[:6]
-    A, B, C = conic(covs2d.float())
-    means2d = means2d.float()
-    colors = colors.float()
-    opac = opac.float().reshape(-1)
-    tx = (W + 31) // 32
-    ty = (H + 31) // 32
-    img = torch.zeros(ty * 32, tx * 32, 3)
-    r = torch.arange(32, dtype=torch.float32)
-    u = (r[None, :].expand(32, 32) + 0.5).reshape(-1)  # col
-    v = (r[:, None].expand(32, 32) + 0.5).reshape(-1)  # row
-    tr = tile_ranges.reshape(-1, 2) if tile_ranges.dim() > 1 else tile_ranges
-    for t in range(tx * ty):
+def _tiles(ts):
+    """Blend a list of tiles from the fork-inherited _CTX; returns [(t, (1024, 3) array)]."""
+    tx, tr, sids, means2d, A, B, C, opac, colors, u, v, pfn = _CTX
+    outl = []
+    for t in ts:
         s, e = int(tr[t, 0]), int(tr[t, 1])
         if e <= s:
             continue
         g = sids[s:e].long()
-        x0 = (t % tx) * 32.0
-        y0 = (t // tx) * 32.0
-        mu = means2d[g, 0] - x0
-        mv = means2d[g, 1] - y0
+        mu = means2d[g, 0] - (t % tx) * 32.0
+        mv = means2d[g, 1] - (t // tx) * 32.0
         p = pfn(u, v, mu, mv, A[g], B[g], C[g])
         w = torch.exp(torch.clamp(p, max=0.0))
         al = torch.clamp(opac[g][:, None] * w, max=0.99)
@@ -255,10 +199,39 @@ def blend(args, H, W, pfn):
         tafter = torch.cumprod(1.0 - al, dim=0)
         tbefore = torch.cat([torch.ones(1, al.shape[1]), tafter[:-1]], 0)
         wgt = al * tbefore * (tafter >= 1e-4)
-        col = wgt.T @ colors[g]
-        ty_, tx_ = t // tx, t % tx
-        img[ty_ * 32:(ty_ + 1) * 32, tx_ * 32:(tx_ + 1) * 32] = col.reshape(32, 32, 3)
-    return img[:H, :W].clamp(0, 1).numpy()
+        outl.append((t, (wgt.T @ colors[g]).numpy()))
+    return outl
+
+
+def _init_worker():
+    torch.set_num_threads(1)
+
+
+def blend(args, H, W, pfn, procs=1):
+    """Per-tile Python loop over small tensors is GIL/serial-bound, so tiles go to `procs`
+    forked workers (one BLAS/intra-op thread each)."""
+    global _CTX
+    means2d, covs2d, colors, opac, sids, tile_ranges = args[:6]
+    A, B, C = conic(covs2d.float())
+    tx = (W + 31) // 32
+    ty = (H + 31) // 32
+    r = torch.arange(32, dtype=torch.float32)
+    u = (r[None, :].expand(32, 32) + 0.5).reshape(-1)  # col
+    v = (r[:, None].expand(32, 32) + 0.5).reshape(-1)  # row
+    tr = tile_ranges.reshape(-1, 2) if tile_ranges.dim() > 1 else tile_ranges
+    _CTX = (tx, tr, sids, means2d.float(), A, B, C, opac.float().reshape(-1), colors.float(), u, v, pfn)
+    chunks = [list(range(i, min(i + 8, tx * ty))) for i in range(0, tx * ty, 8)]
+    if procs > 1:
+        with mp.get_context("fork").Pool(procs, initializer=_init_worker) as pool:
+            parts = pool.map(_tiles, chunks, chunksize=1)
+    else:
+        parts = [_tiles(c) for c in chunks]
+    img = np.zeros((ty * 32, tx * 32, 3), np.float32)
+    for part in parts:
+        for t, col in part:
+            ty_, tx_ = t // tx, t % tx
+            img[ty_ * 32:(ty_ + 1) * 32, tx_ * 32:(tx_ + 1) * 32] = col.reshape(32, 32, 3)
+    return np.clip(img[:H, :W], 0, 1)
 
 
 def u8(img):
@@ -287,6 +260,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants", default=",".join(VARIANTS))
     ap.add_argument("--threads", type=int, default=0)
+    ap.add_argument("--procs", type=int, default=1, help="forked blend workers (1 thread each)")
     args = ap.parse_args()
     if args.threads:
         torch.set_num_threads(args.threads)
@@ -325,7 +299,7 @@ def main():
             else:
                 pfn = (lambda s: lambda u, v, mu, mv, A, B, C: power_qf(u, v, mu, mv, A, B, C, **s))(spec)
             t1 = time.time()
-            imgs[vn] = u8(blend(be.args, H, W, pfn))
+            imgs[vn] = u8(blend(be.args, H, W, pfn, args.procs))
             row = dict(view=name, variant=vn, s=round(time.time() - t1, 1),
                        pairs=int(be.args[4].numel()))
             if vn != "base" and "base" in imgs:
@@ -342,3 +316,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    sys.stdout.flush()
+    os._exit(0)  # skip interpreter teardown: it hung after a forked pool on bh-33
