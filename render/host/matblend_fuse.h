@@ -27,6 +27,7 @@
 
 namespace gsplat_tt {
 bool b4a_shadow_enabled();  // tile_assign_device.cpp (task #542)
+bool b4a_k2_in_blend();     // tile_assign_device.cpp (task #552)
 }
 
 namespace gsplat_tt::matblend_fuse {
