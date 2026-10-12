@@ -19,6 +19,46 @@ namespace matk {
 #include "sort_subchunk_materialize.cpp"
 }  // namespace matk
 
+#if defined(B4A_K2) && B4A_K2
+// Task #542 (B4a): after its mat part, BRISC also runs a segment K2
+// (tile_assign_scatter_seg.cpp, mover-only diet path, both movers' ranges in
+// turn: runtime args at K2_RTA_BASE and K2_RTA_BASE + K2_NARGS) while it
+// serves the blend writer once per pair page. Its scratch is CB TA_CB_OFFSET.
+#ifndef K2_RTA_BASE
+#define K2_RTA_BASE 48
+#endif
+#define K2_NARGS 21
+#define K2_DIET 1
+void b4a_yield();
+#define K2_YIELD() b4a_yield()
+#include "pfwc_fuse.h"
+namespace k2k {
+uint32_t g_rta = K2_RTA_BASE;
+template <typename T>
+inline T get_arg_val(int arg_idx) {
+    return ::get_arg_val<T>(arg_idx + g_rta);
+}
+#include "tile_assign_scatter_seg.cpp"
+}  // namespace k2k
+
+void (*g_b4a_fn)(void*) = nullptr;
+void* g_b4a_ctx = nullptr;
+void b4a_yield() {
+    if (g_b4a_fn != nullptr) g_b4a_fn(g_b4a_ctx);
+}
+template <class F>
+void b4a_run_k2(F& poll) {
+    g_b4a_ctx = &poll;
+    g_b4a_fn = [](void* p) { (*static_cast<F*>(p))(); };
+    for (uint32_t m = 0; m < 2u; m++) {
+        k2k::g_rta = K2_RTA_BASE + m * K2_NARGS;
+        if (::get_arg_val<uint32_t>(k2k::g_rta + 7) != 0) k2k::kernel_main();  // nseg != 0
+    }
+    g_b4a_fn = nullptr;
+}
+#define BLEND_WRITER_PRE(poll) b4a_run_k2(poll)
+#endif
+
 namespace blendk {
 template <typename T>
 inline T get_arg_val(int arg_idx) {

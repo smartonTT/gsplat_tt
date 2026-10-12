@@ -124,6 +124,10 @@ bool gather_visible_last_pairs(uint32_t* P);
 // (num_cores 64 B pages) resident and registered. Returns false on failure.
 bool gather_visible_fuse_prepare(std::size_t N, uint32_t num_cores);
 
+// Task #552 (B4a fold): swap proj_m_blendrec to its other parity copy (made
+// on first use) and re-register it. False when there is no blendrec.
+bool gather_fold_swap_blendrec();
+
 bool gather_visible_device_ready();
 void gather_visible_device_shutdown();
 

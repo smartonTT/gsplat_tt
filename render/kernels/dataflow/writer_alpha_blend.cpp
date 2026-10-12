@@ -96,14 +96,9 @@ void kernel_main() {
     using img_pack_u8::ROW_BYTES;
     const uint32_t stage_addr = get_write_ptr(CB_IMG_U8);
     auto stage = reinterpret_cast<volatile uint8_t*>(stage_addr);
-    for (;;) {
-        MV_WRAP(MV_WCB, cb_wait_front(CB_TILE_Q, 1));
-        const uint32_t screen_tile =
-            reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
-        cb_pop_front(CB_TILE_Q, 1);
-        if (screen_tile == 0xFFFFFFFFu) {
-            break;
-        }
+    // One screen tile: pack the 3 R/G/B tiles compute pushed for it into u8
+    // image rows and write them to the image buffer.
+    auto write_tile = [&](uint32_t screen_tile) {
         const uint32_t ty = screen_tile / tiles_x;
         const uint32_t tx = screen_tile - ty * tiles_x;
 
@@ -128,6 +123,10 @@ void kernel_main() {
         const uint32_t row0 = ty * 32u;
         const uint32_t col_off = tx * ROW_BYTES;
 #if defined(OUT_PINNED) && OUT_PINNED
+#if defined(BLEND_WRITER_PRE)
+        // Task #542: the pre-phase's other NoC writes reuse write_cmd_buf.
+        noc_write_init_state<write_cmd_buf>(noc_index, NOC_UNICAST_WRITE_VC);
+#endif
         uint64_t dst = pin_base + static_cast<uint64_t>(row0) * pitch + col_off;
         for (uint32_t i = 0; i < 32u; i++) {
             noc_wwrite_with_state<noc_mode, write_cmd_buf, CQ_NOC_SNDL, CQ_NOC_SEND, CQ_NOC_WAIT, true, false>(
@@ -140,6 +139,36 @@ void kernel_main() {
                             out.get_noc_addr(row0 + i, col_off), ROW_BYTES);
         }
 #endif
+    };
+    bool ended = false;
+#if defined(BLEND_WRITER_PRE)
+    // Task #542 (B4a): BLEND_WRITER_PRE(poll) runs other work on this RISC
+    // first and calls poll() often; poll writes a tile only when its id and
+    // all 3 colour tiles are already there, so it never blocks.
+    auto poll = [&]() {
+        if (ended || !cb_pages_available_at_front(CB_TILE_Q, 1)) return;
+        const uint32_t screen_tile =
+            reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
+        if (screen_tile == 0xFFFFFFFFu) {
+            cb_pop_front(CB_TILE_Q, 1);
+            ended = true;
+            return;
+        }
+        if (!cb_pages_available_at_front(CB_COLOR_OUT, 3)) return;
+        cb_pop_front(CB_TILE_Q, 1);
+        write_tile(screen_tile);
+    };
+    BLEND_WRITER_PRE(poll);
+#endif
+    while (!ended) {
+        MV_WRAP(MV_WCB, cb_wait_front(CB_TILE_Q, 1));
+        const uint32_t screen_tile =
+            reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
+        cb_pop_front(CB_TILE_Q, 1);
+        if (screen_tile == 0xFFFFFFFFu) {
+            break;
+        }
+        write_tile(screen_tile);
     }
     MV_WRAP(MV_WNOC, noc_async_write_barrier());
 }

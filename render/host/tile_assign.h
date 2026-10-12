@@ -26,6 +26,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "gsplat_cpu/tile_assign.h"
 
@@ -83,6 +84,30 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 // tiles_y, the size of the task #170 count rows (0: no rows).
 bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                           uint32_t screen_tiles, uint32_t* M, uint32_t* P);
+
+// Task #542 (B4a shadow, GSPLAT_TT_B4A_SHADOW=1): appends the last fused K2's
+// args for logical core index `core` (x + y * grid x), mover 0 then mover 1,
+// 21 each, outputs moved to scratch. False when off or no unread fused K2.
+bool b4a_shadow_enabled();
+bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out);
+// Task #548: the blend enqueued with those args; clears them, logs how many
+// cores got K2 work. GSPLAT_TT_B4A_VERIFY=<n> checks the first n views' scratch
+// outputs against the real K2's at the next fused K2.
+void tile_assign_b4a_end_view();
+
+// Task #552 (B4a fold; default on since #554, GSPLAT_TT_B4A_FOLD=0 disables): the next view's K2
+// runs on BRISC inside this view's fused mat+blend. b4a_k2_in_blend() is true
+// with the shadow or the fold (BRISC K2 compiled into the fused program).
+// tile_assign_fold_prepare sets the next view's K2 args (real outputs) for the
+// blend about to be enqueued, right behind that view's pfwc; if that blend
+// gave every K2 core its args, the next tile_assign_fused_k2 skips its K2.
+// tile_assign_fold_cancel drops a prepared or run fold (the next view's pfwc
+// was not the one the fold read).
+bool b4a_fold_enabled();
+bool b4a_k2_in_blend();
+bool tile_assign_fold_prepare(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
+                              uint32_t screen_tiles);
+void tile_assign_fold_cancel();
 
 bool tile_assign_device_ready();
 

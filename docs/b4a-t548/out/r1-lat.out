@@ -1,0 +1,26 @@
+================ BUILD ID ================
+  cpp : #124 sha=3c9bcd13 bin=960af56b87454e70 t548 3c9bcd13 B4a shadow K2 (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t548-r1-lat  timeout=300s  worry=600s  ts=2026-10-12T14:30:24-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t548/remote_ab.sh 1 lat off on
+-----------------------------------------
+=== r1-lat-off 3c9bcd1 B4A_SHADOW=unset 21:30:26 load=3.30
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.5 max_ms=10.3 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t548-r1-lat-off
+TTW_TIMING ms_view=8.865
+STAGES n=30 head=0.004 project=1.990 tile_assign=0.006 sort=0.981 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.721 d2h=0.009 assemble=0.000 tail=0.005 xview=0.099 | sum=8.813 view_total=8.815 resid_in_view=+0.002 avg_frame_ms=8.865 resid_vs_frame=+0.052 xview_hits=29 xview_misses=0
+=== r1-lat-on 3c9bcd1 B4A_SHADOW=1 21:30:31 load=4.79
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.5 max_ms=10.3 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t548-r1-lat-on
+TTW_TIMING ms_view=8.889
+STAGES n=30 head=0.004 project=1.991 tile_assign=0.006 sort=1.016 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.708 d2h=0.009 assemble=0.000 tail=0.005 xview=0.098 | sum=8.836 view_total=8.838 resid_in_view=+0.002 avg_frame_ms=8.889 resid_vs_frame=+0.053 xview_hits=29 xview_misses=0
+[B4A] view 1: cores_with_k2_args=110/110
+[B4A] view 2: cores_with_k2_args=110/110
+[B4A] view 30: cores_with_k2_args=110/110
+=== done 1 lat 21:30:35
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t548/tmp/ttw-state/logs/t548-r1-lat-20261012-143024.log

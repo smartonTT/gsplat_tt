@@ -1,0 +1,28 @@
+================ BUILD ID ================
+  cpp : #124 sha=4b54d12b bin=537c0b54a7e4de70 t552 4b54d12b B4a fold K2(N+1) in blend(N) (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t552-r1-lat  timeout=300s  worry=600s  ts=2026-10-12T15:53:15-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t552/remote_ab.sh 1 lat off on
+-----------------------------------------
+=== r1-lat-off 4b54d12 B4A_FOLD=unset 22:53:15 load=14.57
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.5 max_ms=10.3 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t552-r1-lat-off
+TTW_TIMING ms_view=8.901
+STAGES n=30 head=0.004 project=1.978 tile_assign=0.006 sort=1.164 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.570 d2h=0.010 assemble=0.000 tail=0.005 xview=0.109 | sum=8.846 view_total=8.848 resid_in_view=+0.003 avg_frame_ms=8.901 resid_vs_frame=+0.056 xview_hits=29 xview_misses=0
+=== r1-lat-on 4b54d12 B4A_FOLD=1 22:53:20 load=15.89
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.7 p50_ms=8.8 min_ms=6.0 max_ms=11.3 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t552-r1-lat-on
+TTW_TIMING ms_view=8.671
+STAGES n=30 head=0.004 project=0.312 tile_assign=0.006 sort=0.975 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.128 d2h=0.010 assemble=0.000 tail=0.005 xview=0.177 | sum=8.616 view_total=8.618 resid_in_view=+0.003 avg_frame_ms=8.671 resid_vs_frame=+0.055 xview_hits=29 xview_misses=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[B4A] fold: view K2 from the previous blend (2 views)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+=== done 1 lat 22:53:25
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t552/tmp/ttw-state/logs/t552-r1-lat-20261012-155314.log

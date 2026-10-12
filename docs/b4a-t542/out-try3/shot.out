@@ -1,0 +1,9 @@
+================ BUILD ID ================
+=========================================
+=== shot ttw-t542-hero sha=31caa50 env: GSPLAT_TT_B4A_SHADOW=1 20:33:06
+run rc=1
+      1 [gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/buffers/circular_buffer_config.cpp:145: tt::exception
+      1 Traceback (most recent call last):
+      1 2026-10-12 20:33:12.487 | critical |          Always | TT_THROW: Failed allocation attempt on buffer index 62. Total circular buffer size 50176 B must be divisible by page size 16832 B (assert.hpp:103)
+/usr/bin/scp: /localdev/smarton/gstt2-t513/tmp/shot/hero-ttw-t542-hero.png: No such file or directory
+SHOT_FAIL no hero (rc=1)

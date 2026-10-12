@@ -1,0 +1,37 @@
+================ BUILD ID ================
+  cpp : #124 sha=3c9bcd13 bin=960af56b87454e70 t548 3c9bcd13 B4a shadow K2 (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t548-verify-lat  timeout=300s  worry=600s  ts=2026-10-12T14:27:57-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t548/remote_ab.sh 0 vlat on
+-----------------------------------------
+=== r0-vlat-on 3c9bcd1 B4A_SHADOW=1 21:27:58 load=6.71
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.1 p50_ms=9.1 min_ms=7.5 max_ms=60.8 n_views=30 warmup_s=5.1 out=/localdev/smarton/gstt2-t513/tmp/t548-r0-vlat-on
+TTW_TIMING ms_view=13.109
+STAGES n=30 head=0.004 project=6.204 tile_assign=0.006 sort=1.017 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.701 d2h=0.009 assemble=0.000 tail=0.006 xview=0.102 | sum=13.049 view_total=13.051 resid_in_view=+0.003 avg_frame_ms=13.109 resid_vs_frame=+0.061 xview_hits=29 xview_misses=0
+[B4A] view 1: cores_with_k2_args=110/110
+[B4A] verify gids: 2895629 words equal
+[B4A] verify tids: 2895629 words equal
+[B4A] verify pairs_P: 16 words equal
+[B4A] verify proj_M: 16 words equal
+[B4A] verify k2_rows: 225280 words equal
+[B4A] verify view 1: P_pub=2895629 OK (0/1 views bad)
+[B4A] view 2: cores_with_k2_args=110/110
+[B4A] verify gids: 2895629 words equal
+[B4A] verify tids: 2895629 words equal
+[B4A] verify pairs_P: 16 words equal
+[B4A] verify proj_M: 16 words equal
+[B4A] verify k2_rows: 225280 words equal
+[B4A] verify view 2: P_pub=2895629 OK (0/2 views bad)
+[B4A] verify gids: 2090575 words equal
+[B4A] verify tids: 2090575 words equal
+[B4A] verify pairs_P: 16 words equal
+[B4A] verify proj_M: 16 words equal
+[B4A] verify k2_rows: 225280 words equal
+[B4A] verify view 3: P_pub=2090575 OK (0/3 views bad)
+[B4A] view 30: cores_with_k2_args=110/110
+=== done 0 vlat 21:28:07
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t548/tmp/ttw-state/logs/t548-verify-lat-20261012-142757.log

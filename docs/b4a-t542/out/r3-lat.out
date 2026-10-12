@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #126 sha=ae794619 bin=b52549531cf7a742 t542 ae794619 B4a shadow K2 (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t542-r3-lat  timeout=300s  worry=600s  ts=2026-10-12T13:45:02-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t542/remote_ab.sh 3 lat off on
+-----------------------------------------
+=== r3-lat-off ae79461 B4A_SHADOW=unset 20:45:03 load=3.19
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.4 max_ms=10.3 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t542-r3-lat-off
+TTW_TIMING ms_view=8.857
+STAGES n=30 head=0.004 project=1.977 tile_assign=0.006 sort=0.900 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.804 d2h=0.009 assemble=0.000 tail=0.005 xview=0.098 | sum=8.804 view_total=8.806 resid_in_view=+0.002 avg_frame_ms=8.857 resid_vs_frame=+0.053 xview_hits=29 xview_misses=0
+=== r3-lat-on ae79461 B4A_SHADOW=1 20:45:08 load=3.01
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.5 max_ms=10.3 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t542-r3-lat-on
+TTW_TIMING ms_view=8.871
+STAGES n=30 head=0.003 project=1.990 tile_assign=0.006 sort=1.038 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.670 d2h=0.009 assemble=0.000 tail=0.005 xview=0.098 | sum=8.819 view_total=8.821 resid_in_view=+0.002 avg_frame_ms=8.871 resid_vs_frame=+0.052 xview_hits=29 xview_misses=0
+=== done 3 lat 20:45:13
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t542/tmp/ttw-state/logs/t542-r3-lat-20261012-134501.log
