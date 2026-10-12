@@ -1,0 +1,98 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=cf0c1258166f2ad7c17b340bb319506a8a3a6585 so_md5=bdf530ab5f0ab1b3f5d0eb139c5c91dd 
+=== build ok
+=== host bh-33-special-smarton-for-reservation-138447 2026-10-12T16:52:49Z nproc=24 sha=cf0c1258166f2ad7c17b340bb319506a8a3a6585
+card=p100a aiclk=1350 load=2.52 1.92 5.44 1/2205 51068
+=== warm off b2b [] 16:52:49 load=2.52
+warm rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.365 fps=106.78 ms_frame_median=9.364 pass_ms_frame=9.365,9.355,9.363,9.361,9.365,9.370,9.369,9.363,9.357,9.363,9.372,9.373,9.370,9.363,9.371,9.364,9.364,9.366,9.370,9.362 check_pass_ms_frame=10
+=== r1-off off b2b [] 16:53:21 load=2.66
+r1-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.363 fps=106.80 ms_frame_median=9.365 pass_ms_frame=9.362,9.371,9.361,9.353,9.369,9.367,9.366,9.366,9.365,9.367,9.346,9.368,9.363,9.369,9.361,9.366,9.357,9.366,9.361,9.363 check_pass_ms_frame=9.
+=== r1-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:53:35 load=2.31
+r1-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.131 fps=109.52 ms_frame_median=9.130 pass_ms_frame=9.129,9.128,9.134,9.138,9.136,9.128,9.125,9.133,9.128,9.134,9.131,9.129,9.136,9.129,9.124,9.133,9.125,9.137,9.128,9.131 check_pass_ms_frame=10
+=== r1-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:53:51 load=2.17
+r1-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.042 fps=110.60 ms_frame_median=9.044 pass_ms_frame=9.028,9.030,9.044,9.053,9.049,9.049,9.047,9.044,9.041,9.046,9.045,9.034,9.033,9.042,9.032,9.051,9.048,9.036,9.044,9.040 check_pass_ms_frame=10
+=== r2-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:54:13 load=2.07
+r2-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.134 fps=109.48 ms_frame_median=9.133 pass_ms_frame=9.134,9.131,9.135,9.133,9.135,9.134,9.140,9.125,9.141,9.133,9.132,9.132,9.132,9.148,9.135,9.131,9.131,9.138,9.130,9.136 check_pass_ms_frame=10
+=== r2-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:54:27 load=1.91
+r2-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.049 fps=110.51 ms_frame_median=9.053 pass_ms_frame=9.074,9.053,9.061,9.027,9.071,9.058,9.041,9.061,9.054,9.037,9.047,9.054,9.038,9.038,9.038,9.018,9.054,9.057,9.054,9.037 check_pass_ms_frame=10
+=== r2-off off b2b [] 16:54:40 load=1.92
+r2-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.366 fps=106.76 ms_frame_median=9.366 pass_ms_frame=9.367,9.366,9.366,9.365,9.377,9.369,9.363,9.364,9.371,9.366,9.368,9.362,9.365,9.350,9.374,9.363,9.374,9.368,9.362,9.370 check_pass_ms_frame=9.
+=== r3-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:54:54 load=1.86
+r3-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.052 fps=110.47 ms_frame_median=9.048 pass_ms_frame=9.042,9.091,9.100,9.054,9.046,9.041,9.024,9.024,9.050,9.066,9.060,9.051,9.046,9.073,9.041,9.069,9.039,9.059,9.028,9.044 check_pass_ms_frame=10
+=== r3-off off b2b [] 16:55:08 load=1.95
+r3-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.365 fps=106.78 ms_frame_median=9.365 pass_ms_frame=9.365,9.367,9.358,9.368,9.362,9.365,9.367,9.360,9.365,9.370,9.370,9.354,9.370,9.367,9.359,9.362,9.359,9.374,9.363,9.369 check_pass_ms_frame=10
+=== r3-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:55:22 load=1.87
+r3-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.132 fps=109.51 ms_frame_median=9.132 pass_ms_frame=9.133,9.131,9.129,9.135,9.135,9.125,9.135,9.130,9.133,9.128,9.129,9.132,9.132,9.132,9.123,9.132,9.147,9.126,9.132,9.131 check_pass_ms_frame=9.
+=== r4-off off b2b [] 16:55:36 load=1.76
+r4-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.366 fps=106.77 ms_frame_median=9.366 pass_ms_frame=9.356,9.373,9.383,9.370,9.364,9.367,9.365,9.366,9.366,9.360,9.362,9.372,9.372,9.372,9.366,9.360,9.348,9.367,9.366,9.364 check_pass_ms_frame=10
+=== r4-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:55:50 load=3.22
+r4-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.137 fps=109.45 ms_frame_median=9.134 pass_ms_frame=9.140,9.138,9.133,9.151,9.132,9.134,9.133,9.128,9.137,9.133,9.149,9.157,9.139,9.142,9.135,9.126,9.138,9.130,9.133,9.128 check_pass_ms_frame=10
+=== r4-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:56:04 load=2.87
+r4-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.020 fps=110.86 ms_frame_median=9.021 pass_ms_frame=9.015,9.020,9.021,9.009,9.032,9.029,9.022,9.016,9.022,9.011,9.024,9.018,9.021,9.023,9.017,9.022,9.022,9.019,9.024,9.019 check_pass_ms_frame=10
+=== r5-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:56:18 load=2.66
+r5-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.135 fps=109.47 ms_frame_median=9.133 pass_ms_frame=9.129,9.132,9.133,9.140,9.137,9.137,9.133,9.141,9.132,9.137,9.134,9.133,9.133,9.133,9.137,9.138,9.134,9.129,9.133,9.134 check_pass_ms_frame=10
+=== r5-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:56:32 load=3.92
+r5-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.055 fps=110.43 ms_frame_median=9.055 pass_ms_frame=9.066,9.059,9.060,9.040,9.046,9.045,9.041,9.041,9.064,9.070,9.053,9.037,9.058,9.063,9.051,9.057,9.039,9.086,9.037,9.098 check_pass_ms_frame=10
+=== r5-off off b2b [] 16:56:46 load=3.42
+r5-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.366 fps=106.77 ms_frame_median=9.366 pass_ms_frame=9.377,9.350,9.376,9.367,9.368,9.367,9.363,9.369,9.363,9.371,9.362,9.365,9.369,9.365,9.368,9.359,9.361,9.361,9.367,9.365 check_pass_ms_frame=10
+=== r6-st st b2b [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:57:00 load=3.18
+r6-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.028 fps=110.76 ms_frame_median=9.027 pass_ms_frame=9.031,9.024,9.023,9.037,9.021,9.036,9.022,9.029,9.027,9.026,9.027,9.033,9.027,9.032,9.027,9.033,9.034,9.019,9.026,9.032 check_pass_ms_frame=9.
+=== r6-off off b2b [] 16:57:14 load=2.77
+r6-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.368 fps=106.74 ms_frame_median=9.369 pass_ms_frame=9.367,9.367,9.370,9.371,9.367,9.359,9.370,9.372,9.375,9.371,9.373,9.374,9.361,9.360,9.367,9.368,9.369,9.365,9.369,9.371 check_pass_ms_frame=10
+=== r6-ec ec b2b [GSPLAT_TT_MAT_EARLY_CULL=1] 16:57:28 load=2.65
+r6-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.133 fps=109.49 ms_frame_median=9.133 pass_ms_frame=9.130,9.135,9.130,9.130,9.133,9.136,9.138,9.131,9.124,9.132,9.133,9.138,9.138,9.139,9.132,9.128,9.139,9.133,9.130,9.134 check_pass_ms_frame=10
+=== dump-off off dump [] 16:57:42 load=2.95
+dump-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== dump-ec ec dump [GSPLAT_TT_MAT_EARLY_CULL=1] 16:57:57 load=4.23
+dump-ec rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== dump-st st dump [GSPLAT_TT_MAT_EARLY_CULL=1 GSPLAT_TT_PFWC_VIS_FAST=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8 GSPLAT_TT_GAP_CUT=1 GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t523/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:58:13 load=3.45
+dump-st rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_FAIL grid 11x10: list 0a790b06 != golden 906e0435 (30 views)
+=== summary
+18
+=== bench end rc=0 2026-10-12T16:58:29Z
