@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=9c326126 bin=d3e38eb93c2744e1 t554 69ee8b28 B4a fold K2(N+1) in blend(N) (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t554-r3-b2b  timeout=300s  worry=600s  ts=2026-10-12T16:14:13-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t554/remote_ab.sh 3 b2b off on
