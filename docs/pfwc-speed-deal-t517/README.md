@@ -1,4 +1,4 @@
-# t517: per-core speed-weighted pfwc deal → order-keeping range deal (built, A/B not run yet)
+# t517: per-core speed-weighted pfwc deal → order-keeping range deal (built, A/B null: shelved)
 
 Task #517, 2026-10-12 (PDT). Tree: this branch (from t512 c720c864 = best-iter-223 + off-by-default
 levers). Env-gated, default off.
@@ -38,10 +38,26 @@ locality is kept (unlike t439's LPT, which reordered gids and changed 280 hero p
 - Caveat: the factors were measured on the same 30-view orbit that is benchmarked (in-sample),
   and the weights are a static, scene-specific file.
 
-## A/B (step 3): not run
+## A/B (step 3): null, shelved
 
-`drive517.sh` / `bench517.sh` (bh-33, 5 alternating b2b rounds off/rg + one --dump-views run per arm
-for md5 and the device hero). At about 03:45 PDT `ssh-preflight bh-33` returned auth_failed (publickey
-denied); t514's driver on bh-33 had its connection closed by the remote host at 02:10 PDT
-(09:10Z), so the measurement reservation looks expired/released.
-Run: `ttp detach t517 -- ttp lock p100 -- docs/pfwc-speed-deal-t517/drive517.sh <rev>`.
+bh-33 (IRD 138447), 2026-10-12 09:30 PDT, tree 228fd0e1, `render/run.py --back-to-back` over the 30
+bicycle views, 1 warm-up + 5 alternating rounds (20 passes each), `drive517.sh` under `ttp lock p100`.
+The box reports **card=p100a, grid 11x10 (110 cores)**, not the p150 12x10 the factors came from.
+
+| arm | per-round ms/view (b2b) | median |
+|---|---|---|
+| off | 9.375 9.369 9.380 9.362 9.368 | **9.368** |
+| range | 9.372 9.373 9.366 9.367 9.361 | **9.366** |
+
+- Gain 0.002 ms/view (noise; spread 0.02). Below the 0.04 stack line → **shelved**, stays default off.
+- Stage medians (100 passes/arm): project 2.169 → 2.232, sort 1.072 → 1.011, blend 5.860 → 5.917,
+  period 9.365 → 9.366. pfwc overlaps the previous view's blend in b2b; moving its tail does not
+  move the period.
+- md5 906e0435 = golden 30/30 in both arms; the 30 dumped views are byte-identical between arms
+  (order-keeping deal, as designed). Device hero `out/hero-rg.png` PSNR 42.51 dB vs
+  `benchmarks/reference_v2/hero.png`; diff `out/diff-rg.png` (x8). Looked at both: no tile artifacts,
+  diff is the usual spoke/edge residue.
+- Caveat: on the 110-core p100 the per-core factors (measured on 120 p150 cores) do not map to the same
+  tile sets. Since the factors are 92% tile-set content, the weights reduce to the per-tile hero model,
+  which is grid independent, so the deal still equalized modelled load. A p100-specific factor file is
+  not worth a run: the b2b period did not move at all, so pfwc per-core balance is off the critical path.
