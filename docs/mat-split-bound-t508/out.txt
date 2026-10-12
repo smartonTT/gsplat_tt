@@ -1,0 +1,6 @@
+views 33, pure-big cores/view 9.7
+mat makespan  base 2.112  ideal(big free) 2.054  split2 2.094  no-waits+big-free 1.460  no-waits 1.788  (ms)
+ideal   gain 0.059 model ms -> frame x0.28 0.016, x0.40 0.023
+split2  gain 0.019 model ms -> frame x0.28 0.005, x0.40 0.007
+comb    gain 0.652 model ms -> frame x0.28 0.182, x0.40 0.261
+nowait  gain 0.324 model ms -> frame x0.28 0.091, x0.40 0.130
