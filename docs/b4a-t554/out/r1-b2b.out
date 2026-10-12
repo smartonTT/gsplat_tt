@@ -1,0 +1,93 @@
+================ BUILD ID ================
+  cpp : #124 sha=9c326126 bin=d3e38eb93c2744e1 t554 69ee8b28 B4a fold K2(N+1) in blend(N) (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t554-r1-b2b  timeout=300s  worry=600s  ts=2026-10-12T16:12:50-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t554/remote_ab.sh 1 b2b off on
+-----------------------------------------
+=== r1-b2b-off 69ee8b2 B4A_FOLD=0 23:12:50 load=14.95
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.162 render=10.162 py_resid=0.063 project=2.148 sort=2.485 blend=5.334 d2h=0.011 tail=0.005 xview=0.104 view_total=10.099 project_pfwc_rtargs=0.085 project_pfwc_enqueue=0.021 project_gather_wait=2.139 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.816 sort_publish_host=0.347 sort_publish_wait=0.000 sort_mat=0.075 s
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=9.059 render=9.059 py_resid=0.063 project=2.101 sort=1.096 blend=5.670 d2h=0.009 tail=0.005 xview=0.105 view_total=8.996 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.020 project_gather_wait=2.098 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.425 sort_publish_host=0.349 sort_publish_wait=0.000 sort_mat=0.079 sort
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=8.984 render=8.984 py_resid=0.062 project=2.103 sort=1.013 blend=5.677 d2h=0.010 tail=0.005 xview=0.105 view_total=8.922 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.019 project_gather_wait=2.099 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.406 sort_publish_host=0.343 sort_publish_wait=0.000 sort_mat=0.078 sort
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=8.989 render=8.989 py_resid=0.062 project=2.101 sort=1.019 blend=5.677 d2h=0.009 tail=0.005 xview=0.106 view_total=8.927 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.020 project_gather_wait=2.098 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.410 sort_publish_host=0.347 sort_publish_wait=0.000 sort_mat=0.077 sort
+B2B_STAGES pass=4 views=30 gap_ms=0.00 period=8.980 render=8.980 py_resid=0.063 project=2.099 sort=1.016 blend=5.672 d2h=0.010 tail=0.005 xview=0.105 view_total=8.917 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.020 project_gather_wait=2.096 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.409 sort_publish_host=0.344 sort_publish_wait=0.000 sort_mat=0.077 sort
+B2B_STAGES pass=5 views=30 gap_ms=0.00 period=8.982 render=8.982 py_resid=0.062 project=2.102 sort=1.012 blend=5.674 d2h=0.010 tail=0.005 xview=0.107 view_total=8.919 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.021 project_gather_wait=2.100 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.405 sort_publish_host=0.342 sort_publish_wait=0.000 sort_mat=0.080 sort
+B2B_STAGES pass=6 views=30 gap_ms=0.00 period=8.997 render=8.997 py_resid=0.063 project=2.105 sort=1.017 blend=5.686 d2h=0.010 tail=0.005 xview=0.102 view_total=8.935 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.019 project_gather_wait=2.102 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.407 sort_publish_host=0.346 sort_publish_wait=0.000 sort_mat=0.077 sort
+B2B_STAGES pass=7 views=30 gap_ms=0.00 period=8.988 render=8.988 py_resid=0.063 project=2.103 sort=1.010 blend=5.685 d2h=0.010 tail=0.005 xview=0.104 view_total=8.925 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.020 project_gather_wait=2.100 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.405 sort_publish_host=0.341 sort_publish_wait=0.000 sort_mat=0.078 sort
+B2B_STAGES pass=8 views=30 gap_ms=0.00 period=8.990 render=8.990 py_resid=0.059 project=2.106 sort=1.000 blend=5.700 d2h=0.009 tail=0.004 xview=0.103 view_total=8.930 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.019 project_gather_wait=2.103 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.405 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.079 sort
+B2B_STAGES pass=9 views=30 gap_ms=0.00 period=8.991 render=8.991 py_resid=0.058 project=2.102 sort=0.989 blend=5.716 d2h=0.009 tail=0.004 xview=0.103 view_total=8.932 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.019 project_gather_wait=2.100 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.401 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.077 sort
+B2B_STAGES pass=10 views=30 gap_ms=0.00 period=8.998 render=8.998 py_resid=0.059 project=2.105 sort=0.993 blend=5.718 d2h=0.009 tail=0.004 xview=0.102 view_total=8.940 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.020 project_gather_wait=2.102 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.400 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.077 sor
+B2B_STAGES pass=11 views=30 gap_ms=0.00 period=8.980 render=8.980 py_resid=0.061 project=2.101 sort=0.998 blend=5.694 d2h=0.009 tail=0.005 xview=0.102 view_total=8.919 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.019 project_gather_wait=2.098 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.400 sort_publish_host=0.339 sort_publish_wait=0.000 sort_mat=0.076 sor
+B2B_STAGES pass=12 views=30 gap_ms=0.00 period=8.988 render=8.988 py_resid=0.062 project=2.100 sort=1.018 blend=5.674 d2h=0.010 tail=0.005 xview=0.110 view_total=8.926 project_pfwc_rtargs=0.084 project_pfwc_enqueue=0.021 project_gather_wait=2.098 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.407 sort_publish_host=0.345 sort_publish_wait=0.000 sort_mat=0.080 sor
+B2B_STAGES pass=13 views=30 gap_ms=0.00 period=8.993 render=8.993 py_resid=0.063 project=2.100 sort=1.019 blend=5.683 d2h=0.009 tail=0.005 xview=0.106 view_total=8.931 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.020 project_gather_wait=2.096 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.408 sort_publish_host=0.349 sort_publish_wait=0.000 sort_mat=0.078 sor
+B2B_STAGES pass=14 views=30 gap_ms=0.00 period=8.992 render=8.992 py_resid=0.064 project=2.100 sort=1.014 blend=5.683 d2h=0.010 tail=0.005 xview=0.107 view_total=8.929 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.021 project_gather_wait=2.097 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.080 sort_bin_emit=0.408 sort_publish_host=0.343 sort_publish_wait=0.000 sort_mat=0.077 sor
+B2B_STAGES pass=15 views=30 gap_ms=0.00 period=8.996 render=8.996 py_resid=0.063 project=2.100 sort=1.022 blend=5.683 d2h=0.009 tail=0.005 xview=0.105 view_total=8.933 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.019 project_gather_wait=2.097 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.408 sort_publish_host=0.352 sort_publish_wait=0.000 sort_mat=0.078 sor
+B2B_STAGES pass=16 views=30 gap_ms=0.00 period=8.979 render=8.979 py_resid=0.065 project=2.099 sort=1.047 blend=5.630 d2h=0.010 tail=0.005 xview=0.112 view_total=8.913 project_pfwc_rtargs=0.086 project_pfwc_enqueue=0.022 project_gather_wait=2.096 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.414 sort_publish_host=0.358 sort_publish_wait=0.000 sort_mat=0.082 sor
+B2B_STAGES pass=17 views=30 gap_ms=0.00 period=8.991 render=8.991 py_resid=0.064 project=2.099 sort=1.018 blend=5.682 d2h=0.009 tail=0.005 xview=0.105 view_total=8.927 project_pfwc_rtargs=0.081 project_pfwc_enqueue=0.019 project_gather_wait=2.096 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.408 sort_publish_host=0.345 sort_publish_wait=0.000 sort_mat=0.080 sor
+=== r1-b2b-on 69ee8b2 B4A_FOLD=unset(default on) 23:13:05 load=13.70
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=9.908 render=9.908 py_resid=0.063 project=0.275 sort=2.313 blend=7.042 d2h=0.011 tail=0.005 xview=0.188 view_total=9.844 project_pfwc_rtargs=0.084 project_pfwc_enqueue=0.034 project_gather_wait=0.265 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.818 sort_publish_host=0.341 sort_publish_wait=0.000 sort_mat=0.078 sort
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=8.674 render=8.674 py_resid=0.060 project=0.209 sort=0.921 blend=7.282 d2h=0.009 tail=0.004 xview=0.180 view_total=8.614 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.206 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.429 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.084 sort
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=8.595 render=8.595 py_resid=0.059 project=0.224 sort=0.880 blend=7.232 d2h=0.009 tail=0.004 xview=0.177 view_total=8.536 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.029 project_gather_wait=0.222 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.432 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.096 sort
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=8.595 render=8.595 py_resid=0.060 project=0.226 sort=0.880 blend=7.229 d2h=0.009 tail=0.005 xview=0.176 view_total=8.535 project_pfwc_rtargs=0.077 project_pfwc_enqueue=0.028 project_gather_wait=0.224 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.433 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.097 sort
+B2B_STAGES pass=4 views=30 gap_ms=0.00 period=8.598 render=8.598 py_resid=0.059 project=0.227 sort=0.879 blend=7.234 d2h=0.009 tail=0.004 xview=0.178 view_total=8.539 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.028 project_gather_wait=0.224 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.430 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.098 sort
+B2B_STAGES pass=5 views=30 gap_ms=0.00 period=8.591 render=8.591 py_resid=0.060 project=0.223 sort=0.879 blend=7.230 d2h=0.009 tail=0.004 xview=0.177 view_total=8.531 project_pfwc_rtargs=0.077 project_pfwc_enqueue=0.028 project_gather_wait=0.221 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.431 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.096 sort
+B2B_STAGES pass=6 views=30 gap_ms=0.00 period=8.587 render=8.587 py_resid=0.059 project=0.224 sort=0.868 blend=7.230 d2h=0.009 tail=0.005 xview=0.183 view_total=8.528 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.029 project_gather_wait=0.221 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.427 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.099 sort
+B2B_STAGES pass=7 views=30 gap_ms=0.00 period=8.596 render=8.596 py_resid=0.059 project=0.221 sort=0.882 blend=7.233 d2h=0.009 tail=0.004 xview=0.179 view_total=8.538 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.029 project_gather_wait=0.219 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.434 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.099 sort
+B2B_STAGES pass=8 views=30 gap_ms=0.00 period=8.626 render=8.626 py_resid=0.060 project=0.249 sort=0.883 blend=7.233 d2h=0.009 tail=0.004 xview=0.180 view_total=8.566 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.029 project_gather_wait=0.246 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.432 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.099 sort
+B2B_STAGES pass=9 views=30 gap_ms=0.00 period=8.596 render=8.596 py_resid=0.059 project=0.195 sort=0.821 blend=7.321 d2h=0.009 tail=0.004 xview=0.179 view_total=8.538 project_pfwc_rtargs=0.077 project_pfwc_enqueue=0.029 project_gather_wait=0.192 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.396 sort_publish_host=0.335 sort_publish_wait=0.000 sort_mat=0.074 sort
+B2B_STAGES pass=10 views=30 gap_ms=0.00 period=8.636 render=8.636 py_resid=0.064 project=0.209 sort=0.841 blend=7.319 d2h=0.009 tail=0.005 xview=0.179 view_total=8.571 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.207 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.411 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.074 sor
+B2B_STAGES pass=11 views=30 gap_ms=0.00 period=8.618 render=8.618 py_resid=0.064 project=0.210 sort=0.844 blend=7.289 d2h=0.009 tail=0.005 xview=0.186 view_total=8.553 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.032 project_gather_wait=0.207 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.415 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.077 sor
+B2B_STAGES pass=12 views=30 gap_ms=0.00 period=8.632 render=8.632 py_resid=0.063 project=0.243 sort=0.907 blend=7.211 d2h=0.009 tail=0.005 xview=0.185 view_total=8.569 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.031 project_gather_wait=0.240 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.449 sort_publish_host=0.342 sort_publish_wait=0.000 sort_mat=0.100 sor
+B2B_STAGES pass=13 views=30 gap_ms=0.00 period=8.626 render=8.626 py_resid=0.066 project=0.234 sort=0.937 blend=7.149 d2h=0.010 tail=0.005 xview=0.216 view_total=8.561 project_pfwc_rtargs=0.098 project_pfwc_enqueue=0.032 project_gather_wait=0.231 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.084 sort_bin_emit=0.439 sort_publish_host=0.390 sort_publish_wait=0.000 sort_mat=0.094 sor
+B2B_STAGES pass=14 views=30 gap_ms=0.00 period=8.608 render=8.608 py_resid=0.059 project=0.233 sort=0.911 blend=7.205 d2h=0.009 tail=0.004 xview=0.178 view_total=8.549 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.029 project_gather_wait=0.231 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.455 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.101 sor
+B2B_STAGES pass=15 views=30 gap_ms=0.00 period=8.605 render=8.605 py_resid=0.058 project=0.230 sort=0.895 blend=7.220 d2h=0.009 tail=0.004 xview=0.180 view_total=8.547 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.029 project_gather_wait=0.227 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.445 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.100 sor
+B2B_STAGES pass=16 views=30 gap_ms=0.00 period=8.608 render=8.608 py_resid=0.059 project=0.230 sort=0.893 blend=7.228 d2h=0.009 tail=0.004 xview=0.176 view_total=8.549 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.028 project_gather_wait=0.227 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.441 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.096 sor
+B2B_STAGES pass=17 views=30 gap_ms=0.00 period=8.596 render=8.596 py_resid=0.059 project=0.227 sort=0.898 blend=7.212 d2h=0.009 tail=0.004 xview=0.178 view_total=8.537 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.028 project_gather_wait=0.224 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.450 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.100 sor
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[B4A] fold: view K2 from the previous blend (2 views)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (30 views)
+[B4A] fold view 60: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (60 views)
+[B4A] fold view 90: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (90 views)
+[B4A] fold view 120: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (120 views)
+[B4A] fold view 150: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (150 views)
+[B4A] fold view 180: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (180 views)
+[B4A] fold view 210: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (210 views)
+[B4A] fold view 240: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (240 views)
+[B4A] fold view 270: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (270 views)
+[B4A] fold view 300: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (300 views)
+[B4A] fold view 330: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (330 views)
+[B4A] fold view 360: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (360 views)
+[B4A] fold view 390: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (390 views)
+[B4A] fold view 420: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (420 views)
+[B4A] fold view 450: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (450 views)
+[B4A] fold view 480: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (480 views)
+[B4A] fold view 510: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (510 views)
+[B4A] fold view 540: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (540 views)
+=== done 1 b2b 23:13:19
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t554/tmp/ttw-state/logs/t554-r1-b2b-20261012-161250.log

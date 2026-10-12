@@ -1,0 +1,71 @@
+================ BUILD ID ================
+  cpp : #124 sha=9c326126 bin=d3e38eb93c2744e1 t554 69ee8b28 B4a fold K2(N+1) in blend(N) (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t554-verify-b2b  timeout=300s  worry=600s  ts=2026-10-12T16:11:28-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t554/remote_ab.sh 0 vb2b on
+-----------------------------------------
+=== r0-vb2b-on 69ee8b2 B4A_FOLD=unset(default on) 23:11:28 load=15.83
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=14.153 render=14.153 py_resid=0.069 project=5.698 sort=1.026 blend=7.146 d2h=0.010 tail=0.006 xview=0.187 view_total=14.084 project_pfwc_rtargs=0.085 project_pfwc_enqueue=0.032 project_gather_wait=5.690 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.441 sort_publish_host=0.343 sort_publish_wait=0.000 sort_mat=0.076 s
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=8.606 render=8.606 py_resid=0.058 project=0.195 sort=0.844 blend=7.308 d2h=0.009 tail=0.004 xview=0.179 view_total=8.548 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.192 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.399 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.074 sort
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=8.595 render=8.595 py_resid=0.058 project=0.193 sort=0.822 blend=7.320 d2h=0.009 tail=0.005 xview=0.179 view_total=8.537 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.028 project_gather_wait=0.190 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.398 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.073 sort
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=8.596 render=8.596 py_resid=0.058 project=0.195 sort=0.825 blend=7.314 d2h=0.009 tail=0.005 xview=0.180 view_total=8.538 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.193 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.399 sort_publish_host=0.335 sort_publish_wait=0.000 sort_mat=0.075 sort
+B2B_STAGES pass=4 views=30 gap_ms=0.00 period=8.599 render=8.599 py_resid=0.058 project=0.197 sort=0.824 blend=7.321 d2h=0.009 tail=0.004 xview=0.178 view_total=8.542 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.028 project_gather_wait=0.194 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.398 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.074 sort
+B2B_STAGES pass=5 views=30 gap_ms=0.00 period=8.597 render=8.597 py_resid=0.059 project=0.197 sort=0.821 blend=7.318 d2h=0.009 tail=0.004 xview=0.181 view_total=8.538 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.194 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.397 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.074 sort
+B2B_STAGES pass=6 views=30 gap_ms=0.00 period=8.591 render=8.591 py_resid=0.057 project=0.196 sort=0.821 blend=7.316 d2h=0.009 tail=0.004 xview=0.179 view_total=8.534 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.193 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.397 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.075 sort
+B2B_STAGES pass=7 views=30 gap_ms=0.00 period=8.597 render=8.597 py_resid=0.058 project=0.199 sort=0.833 blend=7.305 d2h=0.009 tail=0.004 xview=0.179 view_total=8.539 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.028 project_gather_wait=0.197 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.400 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.076 sort
+B2B_STAGES pass=8 views=30 gap_ms=0.00 period=8.595 render=8.595 py_resid=0.058 project=0.203 sort=0.831 blend=7.301 d2h=0.009 tail=0.004 xview=0.180 view_total=8.537 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.029 project_gather_wait=0.201 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.398 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.080 sort
+B2B_STAGES pass=9 views=30 gap_ms=0.00 period=8.594 render=8.594 py_resid=0.058 project=0.198 sort=0.824 blend=7.310 d2h=0.009 tail=0.004 xview=0.181 view_total=8.535 project_pfwc_rtargs=0.080 project_pfwc_enqueue=0.029 project_gather_wait=0.195 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.398 sort_publish_host=0.335 sort_publish_wait=0.000 sort_mat=0.075 sort
+B2B_STAGES pass=10 views=30 gap_ms=0.00 period=8.595 render=8.595 py_resid=0.059 project=0.196 sort=0.826 blend=7.313 d2h=0.009 tail=0.004 xview=0.180 view_total=8.536 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.028 project_gather_wait=0.193 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.400 sort_publish_host=0.335 sort_publish_wait=0.000 sort_mat=0.073 sor
+B2B_STAGES pass=11 views=30 gap_ms=0.00 period=8.589 render=8.589 py_resid=0.058 project=0.196 sort=0.828 blend=7.305 d2h=0.009 tail=0.004 xview=0.181 view_total=8.531 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.193 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.400 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.075 sor
+B2B_STAGES pass=12 views=30 gap_ms=0.00 period=8.591 render=8.591 py_resid=0.059 project=0.196 sort=0.822 blend=7.313 d2h=0.009 tail=0.004 xview=0.179 view_total=8.533 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.029 project_gather_wait=0.194 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.399 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.073 sor
+B2B_STAGES pass=13 views=30 gap_ms=0.00 period=8.591 render=8.591 py_resid=0.058 project=0.197 sort=0.827 blend=7.305 d2h=0.009 tail=0.005 xview=0.181 view_total=8.533 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.028 project_gather_wait=0.195 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.400 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.074 sor
+B2B_STAGES pass=14 views=30 gap_ms=0.00 period=8.598 render=8.598 py_resid=0.060 project=0.199 sort=0.832 blend=7.305 d2h=0.009 tail=0.004 xview=0.181 view_total=8.539 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.030 project_gather_wait=0.196 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.404 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.074 sor
+B2B_STAGES pass=15 views=30 gap_ms=0.00 period=8.592 render=8.592 py_resid=0.059 project=0.200 sort=0.817 blend=7.310 d2h=0.009 tail=0.005 xview=0.184 view_total=8.533 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.033 project_gather_wait=0.197 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.395 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.075 sor
+B2B_STAGES pass=16 views=30 gap_ms=0.00 period=8.597 render=8.597 py_resid=0.058 project=0.193 sort=0.826 blend=7.319 d2h=0.009 tail=0.004 xview=0.179 view_total=8.539 project_pfwc_rtargs=0.078 project_pfwc_enqueue=0.028 project_gather_wait=0.190 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.400 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.072 sor
+B2B_STAGES pass=17 views=30 gap_ms=0.00 period=8.600 render=8.600 py_resid=0.058 project=0.196 sort=0.820 blend=7.327 d2h=0.009 tail=0.004 xview=0.178 view_total=8.542 project_pfwc_rtargs=0.079 project_pfwc_enqueue=0.028 project_gather_wait=0.193 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.396 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.073 sor
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2090575 words equal
+[B4A] fold verify tids: 2090575 words equal
+[B4A] fold verify k2_rows: 225280 words equal
+[B4A] fold verify view 1: P_pub=2090575 OK (0/1 views bad)
+[B4A] fold: view K2 from the previous blend (2 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2164042 words equal
+[B4A] fold verify tids: 2164042 words equal
+[B4A] fold verify k2_rows: 225280 words equal
+[B4A] fold verify view 2: P_pub=2164042 OK (0/2 views bad)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2255766 words equal
+[B4A] fold verify tids: 2255766 words equal
+[B4A] fold verify k2_rows: 225280 words equal
+[B4A] fold verify view 3: P_pub=2255766 OK (0/3 views bad)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (30 views)
+[B4A] fold view 60: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (60 views)
+[B4A] fold view 90: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (90 views)
+[B4A] fold view 120: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (120 views)
+[B4A] fold view 150: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (150 views)
+[B4A] fold view 180: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (180 views)
+[B4A] fold view 210: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (210 views)
+[B4A] fold view 240: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (240 views)
+[B4A] fold view 270: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (270 views)
+=== done 0 vb2b 23:11:45
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t554/tmp/ttw-state/logs/t554-verify-b2b-20261012-161128.log
