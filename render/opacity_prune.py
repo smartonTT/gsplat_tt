@@ -17,6 +17,8 @@ order (tile sequence of the strided deal over the new tile count) lists them in
 exactly the old sequence order: the storage ids map monotonically, so pairs,
 ties and records are the old ones.
 """
+import re
+
 import numpy as np
 
 TILE = 1024
@@ -40,8 +42,28 @@ def prune_layout(opacities, min_opacity, num_cores):
     op = np.asarray(opacities, dtype=np.float32).reshape(-1)
     n = op.shape[0]
     old_seq = seq_positions(n, num_cores)
-    kept_seq = old_seq[op[old_seq] >= np.float32(min_opacity)]
+    # ~(op < thr), not op >= thr: a NaN opacity passes pfwc's predicate, so
+    # it must stay here too.
+    kept_seq = old_seq[~(op[old_seq] < np.float32(min_opacity))]
     m = kept_seq.shape[0]
     src = np.empty(m, dtype=np.int64)
     src[seq_positions(m, num_cores)] = kept_seq
     return src
+
+
+def prune_blocker(env):
+    """Why the prune must stay off under env, or None. The layout assumes the
+    default strided pfwc deal; the weighted deal (GSPLAT_TT_PFWC_DEAL=lpt),
+    the chunk cull's tile list (GSPLAT_TT_CHUNK_CULL) and the unfused pfwc
+    (GSPLAT_TT_PFWC_FUSE=0) order the gaussians differently. Reads the flags
+    the way render/host does."""
+    if env.get("GSPLAT_TT_PFWC_DEAL") == "lpt":
+        return "GSPLAT_TT_PFWC_DEAL=lpt"
+    m = re.match(r"\s*[+-]?\d+", env.get("GSPLAT_TT_CHUNK_CULL", ""))
+    if m is not None and int(m.group()) != 0:
+        return "GSPLAT_TT_CHUNK_CULL=" + env["GSPLAT_TT_CHUNK_CULL"]
+    fuse = env.get("GSPLAT_TT_PFWC_FUSE", "")
+    m = re.match(r"\s*[+-]?\d+", fuse)
+    if fuse != "" and (m is None or int(m.group()) == 0):
+        return "GSPLAT_TT_PFWC_FUSE=" + fuse
+    return None

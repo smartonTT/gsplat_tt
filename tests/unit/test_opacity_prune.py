@@ -61,3 +61,21 @@ if __name__ == "__main__":
     test_prune_keeps_sequence_order()
     test_no_prune_is_identity()
     print("ok")
+
+
+def test_nan_opacity_kept_like_device():
+    # pfwc drops only op < thr, so NaN survives; the prune must keep it.
+    op = np.array([0.5, np.nan, 0.0, 1.0 / 255.0, np.nan], dtype=np.float32)
+    src = prune_layout(op, np.float32(1.0 / 255.0), 1)
+    np.testing.assert_array_equal(src, [0, 1, 3, 4])
+
+
+def test_prune_blocker():
+    from opacity_prune import prune_blocker
+    for env in ({}, {"GSPLAT_TT_PFWC_DEAL": ""}, {"GSPLAT_TT_PFWC_DEAL": "off"},
+                {"GSPLAT_TT_CHUNK_CULL": "0"}, {"GSPLAT_TT_CHUNK_CULL": ""},
+                {"GSPLAT_TT_PFWC_FUSE": "1"}, {"GSPLAT_TT_PFWC_FUSE": ""}):
+        assert prune_blocker(env) is None, env
+    for env in ({"GSPLAT_TT_PFWC_DEAL": "lpt"}, {"GSPLAT_TT_CHUNK_CULL": "1"},
+                {"GSPLAT_TT_CHUNK_CULL": "2"}, {"GSPLAT_TT_PFWC_FUSE": "0"}):
+        assert prune_blocker(env) is not None, env

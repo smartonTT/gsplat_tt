@@ -134,6 +134,12 @@ class CleanBackend(CpuCppBackend):
         # (render/opacity_prune.py); keyed by the cached arrays so the C++ side
         # sees the same pointers every view.
         self._prune = _env_flag_on(os.environ, "GSPLAT_TT_OPACITY_PRUNE")
+        if self._prune:
+            from opacity_prune import prune_blocker
+            why = prune_blocker(os.environ)
+            if why is not None:
+                print(f"[run] opacity prune off: {why} uses another pfwc order", flush=True)
+                self._prune = False
         self._pruned = None
         # Next view's w2c (torch 4x4) for the cross-view overlap; set by the
         # loops before a render, used by that render only.
@@ -171,15 +177,16 @@ class CleanBackend(CpuCppBackend):
         return np.asarray(image), dict(stats)
 
     def _pruned_scene(self, means, cov3d, opac, colors):
-        key = (id(means), id(cov3d), id(opac), id(colors))
-        if self._pruned is None or self._pruned[0] != key:
+        # Holds the source arrays, so an id() cannot be reused by new arrays.
+        src_arrs = (means, cov3d, opac, colors)
+        if self._pruned is None or any(a is not b for a, b in zip(self._pruned[0], src_arrs)):
             from opacity_prune import prune_layout
             ncores = int(self._clean.pfwc_num_cores())
             src = prune_layout(opac, self.min_opacity, ncores)
             arrs = tuple(np.ascontiguousarray(a[src]) for a in (means, cov3d, opac, colors))
             print(f"[run] opacity prune: kept {src.shape[0]} of {opac.shape[0]} gaussians "
                   f"(pfwc cores {ncores})", flush=True)
-            self._pruned = (key, arrs)
+            self._pruned = (src_arrs, arrs)
         return self._pruned[1]
 
     def close(self):
