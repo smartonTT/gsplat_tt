@@ -1,0 +1,75 @@
+default+MV_PROF arm: 30 views; nt1 arm: 30 views (warmup frames dropped)
+
+BRISC in fused mat+blend: 3300 (view, core) launches, 110 cores. ms per core per view:
+  tot    n= 3300 min 4.191 p10 4.401 med 5.281 mean 5.219 p90 6.028 max 6.274
+  pre    n= 3300 min 0.807 p10 1.043 med 1.366 mean 1.349 p90 1.635 max 1.828
+  blend  n= 3300 min 3.103 p10 3.290 med 3.899 mean 3.870 p90 4.399 max 4.908
+  busy   n= 3300 min 0.283 p10 0.580 med 0.645 mean 0.658 p90 0.782 max 0.978
+  wcb    n= 3300 min 2.253 p10 2.617 med 3.229 mean 3.207 p90 3.782 max 4.220
+  wnoc   n= 3300 min 0.000 p10 0.000 med 0.003 mean 0.005 p90 0.010 max 0.118
+  wbulk  n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  wrdy   n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  l1k    n= 3300 min 2.253 p10 2.617 med 3.229 mean 3.207 p90 3.782 max 4.220
+  l4k    n= 3300 min 2.253 p10 2.617 med 3.229 mean 3.207 p90 3.781 max 4.220
+  l16k   n= 3300 min 2.247 p10 2.613 med 3.225 mean 3.204 p90 3.778 max 4.220
+  tail   n= 3300 min 0.000 p10 0.042 med 0.141 mean 0.143 p90 0.251 max 0.360
+  nw     n= 3300 min 14.000 p10 26.000 med 29.000 mean 29.927 p90 32.000 max 38.000  (count)
+
+NCRISC in fused mat+blend: 3300 (view, core) launches, 110 cores. ms per core per view:
+  tot    n= 3300 min 4.057 p10 4.144 med 5.101 mean 5.019 p90 5.860 max 6.063
+  pre    n= 3300 min 0.876 p10 1.027 med 1.357 mean 1.359 p90 1.601 max 2.161
+  blend  n= 3300 min 1.965 p10 3.091 med 3.728 mean 3.661 p90 4.277 max 4.943
+  busy   n= 3300 min 0.025 p10 0.031 med 0.038 mean 0.040 p90 0.050 max 0.123
+  wcb    n= 3300 min 1.917 p10 2.889 med 3.602 mean 3.524 p90 4.172 max 4.519
+  wnoc   n= 3300 min 0.006 p10 0.013 med 0.017 mean 0.019 p90 0.027 max 0.096
+  wbulk  n= 3300 min 0.003 p10 0.005 med 0.013 mean 0.014 p90 0.027 max 0.094
+  wrdy   n= 3300 min 0.002 p10 0.003 med 0.005 mean 0.063 p90 0.187 max 1.209
+  l1k    n= 3300 min 1.916 p10 2.888 med 3.601 mean 3.523 p90 4.171 max 4.518
+  l4k    n= 3300 min 1.916 p10 2.888 med 3.601 mean 3.523 p90 4.171 max 4.518
+  l16k   n= 3300 min 1.916 p10 2.888 med 3.601 mean 3.523 p90 4.171 max 4.518
+  tail   n= 3300 min 0.171 p10 0.269 med 0.340 mean 0.343 p90 0.425 max 0.494
+  nw     n= 3300 min 58.000 p10 97.000 med 109.000 mean 109.992 p90 120.000 max 140.000  (count)
+
+BRISC NT=1 sort mover work: 3300 (view, core), ms per core per view:
+  gross   n= 3300 min 1.853 p10 2.677 med 3.439 mean 3.331 p90 4.043 max 4.267
+  net     n= 3300 min 0.418 p10 0.521 med 0.648 mean 0.641 p90 0.748 max 0.818
+  count   n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  fill    n= 3300 min 0.034 p10 0.054 med 0.074 mean 0.073 p90 0.093 max 0.115
+  prefix  n= 3300 min 0.000 p10 0.000 med 0.061 mean 0.042 p90 0.080 max 0.089
+  emit    n= 3300 min 1.741 p10 2.584 med 3.319 mean 3.216 p90 3.909 max 4.152
+  barrier n= 3300 min 0.035 p10 0.054 med 0.081 mean 0.077 p90 0.093 max 0.116
+  wfl     n= 3300 min 1.311 p10 2.018 med 2.658 mean 2.569 p90 3.165 max 3.375
+  proc    n= 3300 min 0.052 p10 0.103 med 0.124 mean 0.120 p90 0.132 max 0.137
+  rdw     n= 3300 min 0.001 p10 0.001 med 0.001 mean 0.001 p90 0.001 max 0.022
+  wbar    n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.016
+
+NCRISC NT=1 sort mover work: 3300 (view, core), ms per core per view:
+  gross   n= 3300 min 2.210 p10 2.688 med 3.448 mean 3.359 p90 4.004 max 4.260
+  net     n= 3300 min 0.469 p10 0.510 med 0.636 mean 0.625 p90 0.726 max 0.822
+  count   n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  fill    n= 3300 min 0.055 p10 0.066 med 0.085 mean 0.084 p90 0.101 max 0.156
+  prefix  n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  emit    n= 3300 min 2.151 p10 2.621 med 3.362 mean 3.275 p90 3.905 max 4.154
+  barrier n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  wfl     n= 3300 min 1.651 p10 2.070 med 2.705 mean 2.632 p90 3.175 max 3.385
+  proc    n= 3300 min 0.040 p10 0.057 med 0.113 mean 0.103 p90 0.130 max 0.137
+  rdw     n= 3300 min 0.001 p10 0.001 med 0.001 mean 0.001 p90 0.001 max 0.002
+  wbar    n= 3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.005
+
+projection: sort(N+1) mover work inside mat+blend(N) mover idle, per (view, core, RISC):
+  hide = wcb     +tail: extension ms/view n=   30 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000; hidden fraction median 1.00, p10 1.00; late (view, core, RISC) 0/6600
+  hide = l1k     +tail: extension ms/view n=   30 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000; hidden fraction median 1.00, p10 1.00; late (view, core, RISC) 0/6600
+  hide = l4k     +tail: extension ms/view n=   30 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000; hidden fraction median 1.00, p10 1.00; late (view, core, RISC) 0/6600
+  hide = l16k    +tail: extension ms/view n=   30 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000; hidden fraction median 1.00, p10 1.00; late (view, core, RISC) 0/6600
+  hide = wcb+wnoc+tail: extension ms/view n=   30 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000; hidden fraction median 1.00, p10 1.00; late (view, core, RISC) 0/6600
+  hide = none    +tail: extension ms/view n=   30 min 0.586 p10 0.611 med 0.707 mean 0.702 p90 0.793 max 0.822; hidden fraction median 0.00, p10 0.00; late (view, core, RISC) 6600/6600
+
+per (core, RISC) medians over views: sort net vs blend wcb+tail (ms), 8 tightest:
+  core (11, 3) BRISC  sort 0.681 idle 3.114 margin +2.433
+  core (12, 3) BRISC  sort 0.677 idle 3.115 margin +2.437
+  core (2, 3) BRISC  sort 0.603 idle 3.075 margin +2.472
+  core (4, 4) BRISC  sort 0.690 idle 3.192 margin +2.502
+  core (13, 3) BRISC  sort 0.620 idle 3.132 margin +2.511
+  core (14, 2) BRISC  sort 0.580 idle 3.096 margin +2.516
+  core (2, 4) BRISC  sort 0.680 idle 3.206 margin +2.526
+  core (3, 4) BRISC  sort 0.676 idle 3.215 margin +2.539

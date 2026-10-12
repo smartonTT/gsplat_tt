@@ -1,0 +1,27 @@
+[ttw 2026-10-12T15:58:58-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T15:58:58-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T15:58:58-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T15:58:58-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T15:58:58-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T15:58:59-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T15:58:59-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T15:58:59-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T15:58:59-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T15:58:59-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T15:58:59-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T15:58:59-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=62afab8a bin=79b80bc6b741739b t553 e71bdf29 MV_PROF counters (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t553-def-c20  timeout=590s  worry=600s  ts=2026-10-12T15:58:59-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t553/remote_tracy.sh def 20
+-----------------------------------------
+=== tracy def c20 e71bdf29  22:58:59
+tracy wrapper deps missing: device profiler only
+tracy def c20 rc=0 22:59:07
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=240.4 p50_ms=8.6 min_ms=7.4 max_ms=2328.3 n_views=10 warmup_s=2.1 out=/localdev/smarton/gstt2-t513/tmp/t553-def-T20
+STAGES n=10 head=0.004 project=1.911 tile_assign=0.003 sort=1.093 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.156 d2h=0.009 assemble=0.000 tail=232.069 xview=0.093 | sum=240.338 view_total=240.340 resid_in_view=+0.002 avg_frame_ms=240.399 resid_vs_frame=+0.061 xview_hits=9 xview_misses=0
+SORT_STAGES n=10 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.077 upload=0.000 bin_emit=0.441 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.327 publish_wait=0.000 mat=0.079 pre=0.001 log=0.007 cont_prep=0.075 cont_rtargs=0.079 cont_other=0.002 | sum=1.091 sort=1.093 resid=+0.002
+device csv def c20 rows 265034 mv_pc 24200 town_pc 0
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t553/tmp/ttw-state/logs/t553-def-c20-20261012-155859.log
