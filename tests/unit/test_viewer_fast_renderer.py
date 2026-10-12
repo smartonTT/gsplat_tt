@@ -355,6 +355,96 @@ def test_camera_burst_renders_only_the_moving_client():
     assert tasks[0] == [], tasks
 
 
+def test_motion_quality_steps_down_on_backlog_and_recovers():
+    """Moving-frame JPEG quality drops 5 per backlogged frame down to the floor and climbs
+    back after ``recover`` clean frames; off, it stays at q40 (task #532)."""
+    from gsplat.nerfview_viewer import MotionQuality
+    mq = MotionQuality(lo=20, step=5, recover=3)
+    assert mq.update(False) == 40
+    assert [mq.update(True) for _ in range(6)] == [35, 30, 25, 20, 20, 20]
+    assert [mq.update(False) for _ in range(6)] == [20, 20, 25, 25, 25, 30]
+    off = MotionQuality(enabled=False)
+    assert all(off.update(True) == 40 for _ in range(5))
+
+
+class _PendingBuf:
+    """viser AsyncMessageBuffer stand-in: queued messages stay unsent until popped."""
+
+    def __init__(self):
+        self.id_from_redundancy_key, self.message_from_id, self.n = {}, {}, 0
+
+    def push(self, msg):
+        old = self.id_from_redundancy_key.pop(msg.redundancy_key(), None)
+        self.message_from_id.pop(old, None)
+        self.id_from_redundancy_key[msg.redundancy_key()] = self.n
+        self.message_from_id[self.n] = msg
+        self.n += 1
+
+
+class _PacedWs(_Ws):
+    def __init__(self):
+        super().__init__()
+        self.buf = _PendingBuf()
+
+    def get_message_buffer(self):
+        return self.buf
+
+    def queue_message(self, msg):
+        super().queue_message(msg)
+        self.buf.push(msg)
+
+
+def test_backlog_paces_sends_lowers_motion_quality_and_keeps_still_q70():
+    """A frame ready while the previous one is still unsent in viser's buffer (the link is
+    the limit) waits for it, sends the newest frame instead, and steps the moving-frame
+    quality down; a still frame is always q70, byte-identical to an unpaced send (#532)."""
+    from nerfview._renderer import RenderTask
+    from gsplat.nerfview_viewer import FastRenderer, make_jpeg_encoder
+    import nerfview
+
+    base = _test_image()
+    imgs = {k: np.clip(base.astype(np.int32) + 40 * k, 0, 255).astype(np.uint8) for k in range(4)}
+    cur = {"k": 0}
+    cs = nerfview.CameraState(fov=1.0, aspect=320 / 256, c2w=np.eye(4))
+    sent = []
+    client = _Client()
+    client.scene._websock_interface = _PacedWs()
+    fr = FastRenderer(viewer=_Viewer(lambda c, t: imgs[cur["k"]]), client=client,
+                      lock=threading.Lock(), on_frame_sent=lambda *a: sent.append(a))
+    if fr.jpeg_encoder_name == "viser":
+        fr.running = False
+        return  # the viser encoder path queues through viser itself: no pacing hook
+    ws = client.scene._websock_interface
+
+    def frame(k, action):
+        cur["k"] = k
+        fr.render_once(RenderTask(action, cs))
+
+    def wait_sent(n):
+        t = time.time() + 5.0
+        while len(sent) < n and time.time() < t:
+            time.sleep(0.005)
+        assert len(sent) >= n, (len(sent), n)
+
+    frame(0, "move")
+    wait_sent(1)
+    assert fr.motion_quality.q == 40  # nothing was pending
+    frame(1, "move")  # previous still pending: the sender waits for it ...
+    time.sleep(0.01)
+    frame(2, "move")  # ... and sends this newer frame instead of frame 1
+    wait_sent(2)
+    assert len(ws.messages) == 2
+    assert fr.motion_quality.q == 35
+    m = _decode(ws.messages[1].rgb_data)
+    assert _psnr(m, imgs[2]) > _psnr(m, imgs[1]) + 3.0
+    ws.buf.message_from_id.clear()  # viser took every frame: no backlog
+    ws.buf.id_from_redundancy_key.clear()
+    frame(3, "static")
+    wait_sent(3)
+    fr.running = False
+    assert ws.messages[2].rgb_data == make_jpeg_encoder(fr.jpeg_encoder_name)(imgs[3], 70)
+
+
 if __name__ == "__main__":
     if not HAVE_VIEWER:
         print("skip: needs viser + nerfview")

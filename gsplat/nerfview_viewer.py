@@ -19,11 +19,45 @@ from nerfview.render_panel import RenderTabState, populate_general_render_tab
 # Keep rendering for 1 s after any UI action so the FPS readout settles.
 _UI_BURST_SEC = 1.0
 _UI_BURST_POLL_SEC = 0.016
+# Longest the sender waits for viser to take the previous frame before sending anyway.
+_PACE_MAX_WAIT_SEC = 0.05
 
 # JPEG encoders for the sender thread, in auto order. All but "viser" release the GIL for the
 # whole encode, so the render thread keeps running. "viser" is viser's own encode (cv2 with a
 # numpy channel swap, ~10 ms for 1024^2 on bh-35; task #271).
 JPEG_ENCODERS = ("simplejpeg", "turbojpeg", "cv2", "viser")
+
+
+class MotionQuality:
+    """JPEG quality for moving frames, sized from the send backlog (task #532).
+
+    A frame that is ready while the previous one still sits unsent in viser's buffer means
+    the link (the ssh tunnel to the page) is slower than the device: step the quality down
+    so the frames get smaller. After ``recover`` clean frames step back up. Still frames
+    (static/update) always use ``STILL`` so the still image never changes.
+    """
+    STILL = 70
+    MAX = 40
+
+    def __init__(self, enabled: bool = True, lo: int = 20, step: int = 5, recover: int = 60):
+        self.enabled, self.lo, self.step, self.recover = enabled, lo, step, recover
+        self.q, self._clean = self.MAX, 0
+
+    def update(self, backlogged: bool) -> int:
+        if not self.enabled:
+            return self.MAX
+        if backlogged:
+            self.q, self._clean = max(self.lo, self.q - self.step), 0
+        else:
+            self._clean += 1
+            if self._clean >= self.recover and self.q < self.MAX:
+                self.q, self._clean = min(self.MAX, self.q + self.step), 0
+        return self.q
+
+
+def adaptive_quality_from_env() -> bool:
+    """GSPLAT_VIEWER_ADAPTIVE (default on; "0" keeps moving frames at q40, task #532)."""
+    return os.environ.get("GSPLAT_VIEWER_ADAPTIVE", "1").strip() not in ("0", "off", "false")
 
 
 def pipeline_frames_from_env() -> bool:
@@ -129,6 +163,11 @@ class FastRenderer(Renderer):
       (render/host/xview.h). The next frame renders exactly that latched pose,
       so the device prefetch always hits; the cost is one frame of pose
       latency. Off with GSPLAT_VIEWER_PIPELINE=0.
+    * Sends are paced to the link (task #532): if the last frame is still unsent in
+      viser's buffer when the next one is ready (the ssh tunnel is slower than the
+      device), the sender waits for it, sends the newest frame, and lowers the
+      moving-frame JPEG quality (``MotionQuality``) until the backlog clears. Still
+      frames stay q70. Off with GSPLAT_VIEWER_ADAPTIVE=0 (pacing stays on).
     * ``viewer.frame_post_fn(img, camera_state)`` (if set) runs on the sender
       thread before the encode (the letterbox), off the render thread.
 
@@ -143,6 +182,8 @@ class FastRenderer(Renderer):
         self.on_frame_sent = on_frame_sent
         self.jpeg_encoder_name, self._encode_jpeg = pick_jpeg_encoder()
         self.pipeline_frames = pipeline_frames_from_env()
+        self.motion_quality = MotionQuality(adaptive_quality_from_env())
+        self._last_msg = None  # last frame message handed to viser (pacing, task #532)
         self._latched = None  # pose hinted to the device with the last frame
         self._out = None
         self._out_cv = threading.Condition()
@@ -211,10 +252,22 @@ class FastRenderer(Renderer):
             self.viewer.render_tab_state.num_view_rays_per_sec = (W * H) / max(t1 - t0, 1e-10)
         self._latched = nxt
         img, depth = rendered if isinstance(rendered, tuple) else (rendered, None)
-        quality = 70 if task.action in ("static", "update") else 40
+        quality = MotionQuality.STILL if task.action in ("static", "update") else MotionQuality.MAX
         with self._out_cv:
             self._out = (img, depth, quality, t0, t1, cs)
             self._out_cv.notify()
+
+    def _frame_pending(self) -> bool:
+        """True while the last frame handed to viser still sits unsent in its buffer."""
+        msg = self._last_msg
+        if msg is None:
+            return False
+        try:
+            buf = self.client.scene._websock_interface.get_message_buffer()
+            mid = buf.id_from_redundancy_key.get(msg.redundancy_key())
+            return mid is not None and buf.message_from_id.get(mid) is msg
+        except AttributeError:
+            return False
 
     def _send_loop(self) -> None:
         while self.running:
@@ -225,6 +278,19 @@ class FastRenderer(Renderer):
                     break
                 img, depth, quality, t0, t1, cs = self._out
                 self._out = None
+            backlogged = self._frame_pending()
+            if backlogged:
+                # The link is slower than the device: wait (bounded) until viser takes the
+                # last frame, then send the newest one instead of having viser drop it.
+                t_end = time.perf_counter() + _PACE_MAX_WAIT_SEC
+                while self._frame_pending() and self.running and time.perf_counter() < t_end:
+                    time.sleep(0.001)
+                with self._out_cv:
+                    if self._out is not None:
+                        img, depth, quality, t0, t1, cs = self._out
+                        self._out = None
+            if quality != MotionQuality.STILL:
+                quality = self.motion_quality.update(backlogged)
             te = time.perf_counter()
             try:
                 post = getattr(self.viewer, "frame_post_fn", None)
@@ -233,8 +299,9 @@ class FastRenderer(Renderer):
                 if depth is None and img.dtype == np.uint8 and self.jpeg_encoder_name != "viser":
                     # set_background_image minus viser's encode: same message.
                     data = self._encode_jpeg(np.ascontiguousarray(img), quality)
-                    self.client.scene._websock_interface.queue_message(
-                        BackgroundImageMessage(format="jpeg", rgb_data=data, depth_data=None))
+                    msg = BackgroundImageMessage(format="jpeg", rgb_data=data, depth_data=None)
+                    self.client.scene._websock_interface.queue_message(msg)
+                    self._last_msg = msg
                 else:
                     self.client.scene.set_background_image(
                         img, format="jpeg", jpeg_quality=quality, depth=depth)
