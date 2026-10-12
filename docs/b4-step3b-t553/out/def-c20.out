@@ -12,7 +12,7 @@
 [ttw 2026-10-12T15:58:59-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=62afab8a bin=79b80bc6b741739b t553 e71bdf29 MV_PROF counters (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t553-def-c20  timeout=590s  worry=600s  ts=2026-10-12T15:58:59-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t553/remote_tracy.sh def 20
