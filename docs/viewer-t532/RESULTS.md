@@ -41,3 +41,30 @@ moving-frame JPEG quality down 5 (floor q20); after 60 clean frames it steps bac
 Still frames (static/update) stay q70, byte-identical. `GSPLAT_VIEWER_ADAPTIVE=0` keeps q40.
 With no backlog nothing changes, so steady-state frames are the same q40 as before.
 Tests: `tests/unit/test_viewer_fast_renderer.py` (2 new; all 11 pass on bh-30's viewer venv).
+
+### c3c4e55a measured (deployed 11:13 PDT), Mac via 8091, 23 s runs (`out/c3c4e55a-r*.out`)
+
+| Run | Page FPS | Interval p50/p99 ms | JPEG KB | Viewer sent FPS | Device ms |
+|---|---|---|---|---|---|
+| 1 | 116.21 | 8.4 / 27.4 | 103 | 115.0 | 8.22 |
+| 2 | 116.61 | 8.1 / 28.6 | 104 | 117.2 | 8.21 |
+| 3 | 116.29 | 8.2 / 26.4 | 103 | 115.7 | 8.19 |
+| 4 | 95.73 | 4.4 / 90.0 | 94 | 116.7 | 8.09 |
+| 5 | 64.26 | 2.5 / 194.6 | 78 | 120.6 | 7.84 |
+| **median** | **116.29** | | | | |
+
+Runs 4-5 hit link dips (5-9 MB/s, bursty arrival: p50 2-4 ms, p99 90-195 ms stalls). The
+quality steps engaged (median JPEG fell to 78 KB) but cannot shrink frames enough.
+
+Controlled slow link: `ws_sweep.py --max-mbs N` caps the Mac client's read rate (2-frame
+receive queue), so TCP backpressure through the tunnel reaches the viewer like a slow link:
+
+| Cap | Page FPS | JPEG KB |
+|---|---|---|
+| 6 MB/s | 88.43 | 68 |
+| 9 MB/s | 108.58 | 83 |
+
+JPEG bytes vs quality and scale, hero frame as received (re-encoded from the q70 frame, so
+slightly under the live sizes): full 1024x1024 q40 97 KB, q30 86, q20 65; 0.75x (768x768,
+bilinear) q40 59, q30 50, q20 38 KB. At 0.75x even q40 is smaller than full-size q20 and
+looks better, so the ladder should drop scale before it drops quality far.
