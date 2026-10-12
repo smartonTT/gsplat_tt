@@ -9,20 +9,33 @@ Jaccard, and depth-order coherence inside each tile (fraction of adjacent depth-
 the previous view, among pairs kept by both views, that stay in order in this view).
   venv/bin/python docs/profile-t224/xview.py [scene.ply]
 """
-import json, math, sys, time
+import json, math, re, sys, time
 from pathlib import Path
 import numpy as np
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-from gsplat.loading_gaussians import load_ply  # noqa: E402
+
+
+def load_ply(path):
+    """numpy-only reader for the standard 3DGS binary PLY (all float32 properties)."""
+    with open(path, "rb") as fh:
+        hdr = b""
+        while not hdr.endswith(b"end_header\n"):
+            hdr += fh.readline()
+        props = [l.split()[-1].decode() for l in hdr.splitlines() if l.startswith(b"property float")]
+        n = int(re.search(rb"element vertex (\d+)", hdr).group(1))
+        a = np.fromfile(fh, dtype="<f4", count=n * len(props)).reshape(n, len(props))
+    c = {k: i for i, k in enumerate(props)}
+    means = a[:, [c["x"], c["y"], c["z"]]]
+    scales = np.exp(a[:, [c["scale_0"], c["scale_1"], c["scale_2"]]])
+    op = 1.0 / (1.0 + np.exp(-a[:, c["opacity"]]))
+    return means, scales, op
 
 cam = json.load(open(REPO / "benchmarks/cameras_v2.json"))["bicycle"]
 ply = sys.argv[1] if len(sys.argv) > 1 else str(REPO / cam["ply"])
 W, H = cam["image_size"]; fov = float(cam["fov_deg"]); floor = float(cam["contrib_floor"])
 f = 0.5 * max(W, H) / math.tan(0.5 * math.radians(fov)); cx, cy = W / 2, H / 2
-t0 = time.time(); g = load_ply(ply)
-mu = g.means.numpy().astype(np.float64); N = len(mu)
-smax = g.scales.numpy().max(1).astype(np.float64); op = g.opacities.numpy()
+t0 = time.time(); mu, sc, op = load_ply(ply)
+mu = mu.astype(np.float64); N = len(mu); smax = sc.max(1).astype(np.float64)
 keep_op = op >= floor
 print(f"scene N={N} opacity>=floor {keep_op.sum()} load {time.time()-t0:.1f}s", flush=True)
 TS = 32; TX, TY = W // TS, H // TS
