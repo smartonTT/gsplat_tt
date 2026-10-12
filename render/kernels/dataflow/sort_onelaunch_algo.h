@@ -140,6 +140,20 @@ inline uint32_t select_collect(const uint32_t* k, uint32_t n, const Select& s, u
     return m;
 }
 
+// Task #519 (MAT_EARLY_CULL): the candidates' indices in index order, in
+// place over k (cv[m] is written at m <= i, after k[i] was read); returns
+// their count (== s.m). The kernel gathers those records, sorts the gathered
+// keys stably and takes ranks [lo, hi) at candidate positions [lo - s.base,
+// hi - s.base): the same records as the whole tile's stable order.
+inline uint32_t select_compact_ids(uint32_t* k, uint32_t n, const Select& s) {
+    const uint32_t span = s.khi - s.klo;
+    uint32_t m = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (k[i] - s.klo <= span) k[m++] = i;  // unsigned: k[i] in [klo, khi]
+    }
+    return m;
+}
+
 // Indices of the stable ranks [lo, hi) of k[0..n) into out[0..hi-lo). ck, cv,
 // ck2, cv2 need s.m entries each (<= n). out may alias k: k is not read after
 // the collect.
