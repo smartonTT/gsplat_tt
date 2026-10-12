@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CSV = ROOT / "opt/profiler/t319-fz/percore.csv"
+CSV = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "opt/profiler/t319-fz/percore.csv"
 CLK_MHZ = 1350.0
 CHUNK = 512          # records per fill job in variant (1)
 JOB_OVH_CYC = 300    # extra mover cost per extra job (post + done poll), cycles
@@ -161,7 +161,8 @@ def main():
     p(f"gate: best realistic combined frame gain {best * CONV:.3f} ms (x{CONV}) vs 0.30 ms -> {verdict}")
     txt = "\n".join(out)
     print(txt)
-    (Path(__file__).parent / "out.txt").write_text(txt + "\n")
+    if len(sys.argv) == 1:  # t506: a percore.csv argument prints only, out.txt stays t319's
+        (Path(__file__).parent / "out.txt").write_text(txt + "\n")
 
 
 if __name__ == "__main__":

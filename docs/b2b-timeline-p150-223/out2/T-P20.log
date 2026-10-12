@@ -1,0 +1,159 @@
+2026-10-12 05:58:19.549 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/p150bench/prof506/P20
+2026-10-12 05:58:19.550 | INFO     | __main__:main:336 - Using port 8086
+2026-10-12 05:58:19.550 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-10-12 05:58:19.554 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/viewer/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/p150bench/prof506/P20/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-10-12 05:58:19.571 | INFO     | __main__:main:400 - Test process started
+2026-10-12 05:58:20.841 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/p150bench/prof506/P20
+[eth] card unknown: worker dispatch (ETH default is p150 only)
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=7
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-12 05:58:23.339 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 05:58:23.339 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 05:58:23.342 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 05:58:23.343 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-12 05:58:23.343 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 05:58:23.344 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 05:58:23.345 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-12 05:58:23.345 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-12 05:58:23.345 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 05:58:23.345 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 05:58:23.348 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 05:58:23.349 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-12 05:58:23.349 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 05:58:23.350 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 05:58:23.350 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-12 05:58:23.350 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-12 05:58:23.350 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-12 05:58:23.420 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-10-12 05:58:23.420 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-12 05:58:23.420 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-12 05:58:23.420 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-12 05:58:23.421 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-12 05:58:23.422 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-12 05:58:23.423 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-12 05:58:23.734 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-12 05:58:23.734 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-12 05:58:23.734 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 05:58:23.734 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 05:58:23.736 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 05:58:23.737 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-12 05:58:23.737 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 05:58:23.737 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 05:58:23.739 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-12 05:58:23.739 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-12 05:58:23.739 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 05:58:23.739 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 05:58:23.739 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-12 05:58:23.739 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 05:58:23.739 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 05:58:23.739 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-12 05:58:23.739 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-12 05:58:23.739 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-12 05:58:23.739 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-12 05:58:23.739 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-12 05:58:23.739 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-12 05:58:25.039 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-10-12 05:58:29.806 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349990 GHz, device_time_at_sync=27702563635087 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 6497.2 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.57 layout=0.12 pub_host=0.36 total=1.13ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[run] timing 5 views (warmup excluded)
+[SUBCHUNK] tiles_split=78 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=43149
+[SORT] stage=ONELAUNCH P=2729054 P_kept=2729054 num_tiles=1024 max_tile_n=18629 onelaunch=0.50 layout=0.08 pub_host=0.33 total=0.91ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[SUBCHUNK] tiles_split=85 total_subchunks=1112 max_subchunks_per_tile=3 payload_pages=42920
+[SORT] stage=ONELAUNCH P=2713776 P_kept=2713776 num_tiles=1024 max_tile_n=18369 onelaunch=0.49 layout=0.08 pub_host=0.36 total=0.93ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[SUBCHUNK] tiles_split=82 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=42444
+[SORT] stage=ONELAUNCH P=2684908 P_kept=2684908 num_tiles=1024 max_tile_n=22330 onelaunch=0.49 layout=0.08 pub_host=0.32 total=0.89ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[SUBCHUNK] tiles_split=84 total_subchunks=1111 max_subchunks_per_tile=3 payload_pages=41219
+[SORT] stage=ONELAUNCH P=2605190 P_kept=2605190 num_tiles=1024 max_tile_n=18553 onelaunch=0.48 layout=0.08 pub_host=0.35 total=0.91ms
+OUT_RING new pinned slot (slots=5 grows=4 replaced=0)
+[SUBCHUNK] tiles_split=79 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=39602
+[SORT] stage=ONELAUNCH P=2502433 P_kept=2502433 num_tiles=1024 max_tile_n=20113 onelaunch=0.46 layout=0.08 pub_host=0.33 total=0.87ms
+OUT_RING new pinned slot (slots=6 grows=5 replaced=0)
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.402 render=9.402 py_resid=0.063 project=2.321 sort=1.217 blend=5.674 d2h=0.010 tail=0.004 xview=0.103 view_total=9.339 project_pfwc_rtargs=0.096 project_pfwc_enqueue=0.032 project_gather_wait=2.286 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.485 sort_publish_host=0.338 sort_publish_wait=0.000 sort_mat=0.088 sort_pre=0.001 sort_log=0.011 sort_cont_prep=0.132 sort_cont_rtargs=0.078 sort_cont_other=0.002
+[run] B2B pass 0 (check): 47.0 ms for 5 views = 9.402 ms/frame
+[SUBCHUNK] tiles_split=78 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=43149
+[SORT] stage=ONELAUNCH P=2729054 P_kept=2729054 num_tiles=1024 max_tile_n=18629 onelaunch=0.46 layout=0.08 pub_host=0.37 total=0.92ms
+[SUBCHUNK] tiles_split=85 total_subchunks=1112 max_subchunks_per_tile=3 payload_pages=42920
+[SORT] stage=ONELAUNCH P=2713776 P_kept=2713776 num_tiles=1024 max_tile_n=18369 onelaunch=0.42 layout=0.08 pub_host=0.34 total=0.84ms
+[SUBCHUNK] tiles_split=82 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=42444
+[SORT] stage=ONELAUNCH P=2684908 P_kept=2684908 num_tiles=1024 max_tile_n=22330 onelaunch=0.39 layout=0.07 pub_host=0.33 total=0.79ms
+[SUBCHUNK] tiles_split=84 total_subchunks=1111 max_subchunks_per_tile=3 payload_pages=41219
+[SORT] stage=ONELAUNCH P=2605190 P_kept=2605190 num_tiles=1024 max_tile_n=18553 onelaunch=0.40 layout=0.07 pub_host=0.32 total=0.79ms
+[SUBCHUNK] tiles_split=79 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=39602
+[SORT] stage=ONELAUNCH P=2502433 P_kept=2502433 num_tiles=1024 max_tile_n=20113 onelaunch=0.42 layout=0.07 pub_host=0.33 total=0.83ms
+OUT_RING new pinned slot (slots=7 grows=6 replaced=0)
+2026-10-12 05:58:44.940 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.940 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.941 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.941 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.941 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.942 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.942 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:44.942 | warning  |           Metal | Unable to bind worker thread to CPU Core. May see performance degradation. Error Code: 22 (thread_pool.cpp:89)
+2026-10-12 05:58:45.344 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=8580525990ns, avg=8580525990.0ns, max=8580525990ns (profiler_analysis.cpp:645)
+2026-10-12 05:58:45.344 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[8580525900..8580526900), underflow(<8580525900ns)=0, overflow(>=8580526900ns)=0) (profiler_analysis.cpp:682)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580525900 ..   8580526000) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526000 ..   8580526100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526100 ..   8580526200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526200 ..   8580526300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526300 ..   8580526400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526400 ..   8580526500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526500 ..   8580526600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526600 ..   8580526700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526700 ..   8580526800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-12 05:58:45.344 | info     |           Metal |   [  8580526800 ..   8580526900) |                                        |        0 (profiler_analysis.cpp:700)
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=151.137 render=151.137 py_resid=0.076 project=1.988 sort=1.051 blend=5.878 d2h=0.007 tail=142.036 xview=0.089 view_total=151.061 project_pfwc_rtargs=0.066 project_pfwc_enqueue=0.019 project_gather_wait=1.985 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.418 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.083 sort_pre=0.001 sort_log=0.011 sort_cont_prep=0.040 sort_cont_rtargs=0.077 sort_cont_other=0.002
+[run] B2B pass 1: 755.7 ms for 5 views = 151.137 ms/frame
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=151.137 fps=6.62 ms_frame_median=151.137 pass_ms_frame=151.137 check_pass_ms_frame=9.402 raw_md5=dfbeca6b gap_ms=0.00 render_ms_frame=151.137 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493/tmp/t506-P20
+TTW_TIMING b2b_ms_frame=151.137
+TTW_TIMING b2b_ms_frame_median=151.137
+
+Queue delay: 34 ns
+Timer resolution: 9 ns
+
+Frames: 2
+Time span: 30.9 s
+Zones: 246,091
+Elapsed time: 23.42 s
+Saving trace... done!
+Trace size 3529.54 KB (29.07% ratio)
+2026-10-12 05:58:47.257 | INFO     | tracy:generate_report:154 - Host side ops time report generated at /localdev/smarton/p150bench/prof506/P20/.logs/tracy_ops_times.csv
+2026-10-12 05:58:47.281 | INFO     | tracy:generate_report:165 - Host side ops data report generated at /localdev/smarton/p150bench/prof506/P20/.logs/tracy_ops_data.csv
+2026-10-12 05:58:47.281 | INFO     | tracy.process_ops_logs:import_tracy_op_logs:255 - Importing ops logs
+/localdev/smarton/viewer/tt-metal/tools/tracy/process_ops_logs.py:360: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
+  df = pd.read_csv(tracyOpTimesLog)
+2026-10-12 05:58:48.033 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1014 - Copying runtime artifacts
+2026-10-12 05:58:48.053 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1020 - Getting device only ops data
+2026-10-12 05:58:49.802 | INFO     | tracy.process_device_log:core_to_device_timeseries:416 - Importing Data For Device Number : 0
+2026-10-12 05:58:52.498 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1032 - Generating device op report ...
+2026-10-12 05:58:52.513 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1210 - Device only OPs csv generated at: /localdev/smarton/p150bench/prof506/P20/reports/2026_10_12_05_58_48/ops_perf_results_2026_10_12_05_58_48.csv
+2026-10-12 05:58:52.515 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1219 - Device only per core op to op times csv generated at: /localdev/smarton/p150bench/prof506/P20/reports/2026_10_12_05_58_48/per_core_op_to_op_times_2026_10_12_05_58_48.csv

@@ -1,0 +1,28 @@
+t319 percore.csv: 120 cores, clock 1350 MHz, one 512-record fill = 23.0 us mean
+baseline mat makespan (max of per-core means) 2.056 ms; mean core end 1.560
+pure-big cores (NCRISC holds only the >8192-record item): 1-2, 2-2, 3-2, 4-2, 5-2, 6-2
+mover work without done-wait: NCRISC mean 1.182 max 1.753; BRISC mean 1.040 max 1.116; mean of both 1.111
+LPT imbalance seen on BRISC slots (no big items): max-mean 0.077 ms
+
+(0) bound from t319: every done-wait removed, nothing else
+  zero done-wait                                           mat 1.753  gain +0.303  frame x0.4: +0.121  x0.28: +0.085
+
+(1) finer fill jobs (512 recs), per-mover queues, streamed emit
+  resid 1 chunk(s), opt [crit 2-2]                         mat 2.059  gain -0.003  frame x0.4: -0.001  x0.28: -0.001
+  resid 2 chunk(s), real [crit 2-2]                        mat 2.059  gain -0.003  frame x0.4: -0.001  x0.28: -0.001
+  resid 1 chunk(s), opt+rank-ordered big gather [crit 2-2] mat 1.779  gain +0.277  frame x0.4: +0.111  x0.28: +0.077
+  resid 2 chunk(s), real+rank-ordered big gather [crit 2-2] mat 1.802  gain +0.253  frame x0.4: +0.101  x0.28: +0.071
+
+(2) big-tile item split over both movers of its core + host LPT rebalance (fills as today)
+  ideal split: dup 0.00, LPT imb 0.077, waits as today [floor 14-2 1.212] mat 1.587  gain +0.469  frame x0.4: +0.187  x0.28: +0.131
+  real split: dup 0.15, LPT imb 0.100, waits as today [floor 2-2 1.310] mat 1.620  gain +0.435  frame x0.4: +0.174  x0.28: +0.122
+
+(1)+(2) combined
+  ceiling: 1 chunk, ideal split, rank-ordered gather [floor 2-2 0.899] mat 1.212  gain +0.844  frame x0.4: +0.338  x0.28: +0.236
+  real: 2 chunks, dup 0.15, rank-ordered gather [floor 2-2 1.054] mat 1.269  gain +0.787  frame x0.4: +0.315  x0.28: +0.220
+  real: 2 chunks, dup 0.15, gather as today [floor 2-2 1.310] mat 1.310  gain +0.746  frame x0.4: +0.298  x0.28: +0.209
+
+(C) absolute ceiling: perfect balance, zero waits, zero split cost
+  mean mover work                                          mat 1.111  gain +0.945  frame x0.4: +0.378  x0.28: +0.265
+
+gate: best realistic combined frame gain 0.315 ms (x0.4) vs 0.30 ms -> BUILD

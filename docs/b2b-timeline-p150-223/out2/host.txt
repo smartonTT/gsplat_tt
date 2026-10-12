@@ -1,0 +1,2 @@
+=== host bh-30-special-smarton-for-reservation-138278 2026-10-12T05:56:57Z nproc=24 sha=1753cace0857631d436546907f4169070a08a87e
+card=p150b aiclk_idle=800 load=2.00 2.47 2.17 3/1612 28591

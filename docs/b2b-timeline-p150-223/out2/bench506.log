@@ -1,0 +1,115 @@
+=== host bh-30-special-smarton-for-reservation-138278 2026-10-12T05:56:57Z nproc=24 sha=1753cace0857631d436546907f4169070a08a87e
+card=p150b aiclk_idle=800 load=2.00 2.47 2.17 3/1612 28591
+=== tracy P0 0:5 [] 05:56:57
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P0 rc=0 05:57:29
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=8.663 render=8.663 py_resid=0.069 project=2.133 sort=1.545 blend=4.767 d2h=0.011 tail=0.004 xview=0.121 view_total=8.594 project_pfwc_rtargs=0.118 project_pfwc_enqueue=0.051 project_gather_wait=2.074 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=174.921 render=174.921 py_resid=0.078 project=1.772 sort=1.201 blend=4.848 d2h=0.008 tail=166.901 xview=0.104 view_total=174.843 project_pfwc_rtargs=0.070 project_pfwc_enqueue=0.029 project_gather_wait=1.769 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=174.921 fps=5.72 ms_frame_median=174.921 pass_ms_frame=174.921 check_pass_ms_frame=8.663 raw_md5=fd80778f gap_ms=0.00 render_ms_frame=174.921 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P0 rows 260412
+=== tracy P5 5:10 [] 05:57:30
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P5 rc=0 05:57:45
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.451 render=9.451 py_resid=0.070 project=2.356 sort=1.362 blend=5.514 d2h=0.010 tail=0.005 xview=0.116 view_total=9.381 project_pfwc_rtargs=0.115 project_pfwc_enqueue=0.038 project_gather_wait=2.308 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=181.804 render=181.804 py_resid=0.073 project=2.029 sort=1.125 blend=5.741 d2h=0.008 tail=172.715 xview=0.104 view_total=181.731 project_pfwc_rtargs=0.077 project_pfwc_enqueue=0.022 project_gather_wait=2.026 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=181.804 fps=5.50 ms_frame_median=181.804 pass_ms_frame=181.804 check_pass_ms_frame=9.451 raw_md5=15c87342 gap_ms=0.00 render_ms_frame=181.804 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P5 rows 260588
+=== tracy P10 10:15 [] 05:57:46
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P10 rc=0 05:58:01
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.851 render=9.851 py_resid=0.084 project=2.432 sort=1.262 blend=5.925 d2h=0.009 tail=0.006 xview=0.118 view_total=9.767 project_pfwc_rtargs=0.109 project_pfwc_enqueue=0.038 project_gather_wait=2.392 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=202.374 render=202.374 py_resid=0.106 project=2.085 sort=1.011 blend=6.201 d2h=0.008 tail=192.850 xview=0.100 view_total=202.267 project_pfwc_rtargs=0.072 project_pfwc_enqueue=0.023 project_gather_wait=2.082 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=202.374 fps=4.94 ms_frame_median=202.374 pass_ms_frame=202.374 check_pass_ms_frame=9.851 raw_md5=580dc40e gap_ms=0.00 render_ms_frame=202.374 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P10 rows 260696
+=== tracy P15 15:20 [] 05:58:02
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P15 rc=0 05:58:17
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.137 render=9.137 py_resid=0.058 project=2.350 sort=1.346 blend=5.212 d2h=0.011 tail=0.004 xview=0.147 view_total=9.079 project_pfwc_rtargs=0.107 project_pfwc_enqueue=0.072 project_gather_wait=2.310 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=201.877 render=201.877 py_resid=0.074 project=2.025 sort=1.115 blend=5.471 d2h=0.008 tail=193.068 xview=0.106 view_total=201.803 project_pfwc_rtargs=0.076 project_pfwc_enqueue=0.026 project_gather_wait=2.021 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=201.877 fps=4.95 ms_frame_median=201.877 pass_ms_frame=201.877 check_pass_ms_frame=9.137 raw_md5=77e58300 gap_ms=0.00 render_ms_frame=201.877 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P15 rows 260600
+=== tracy P20 20:25 [] 05:58:18
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P20 rc=0 05:58:52
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.402 render=9.402 py_resid=0.063 project=2.321 sort=1.217 blend=5.674 d2h=0.010 tail=0.004 xview=0.103 view_total=9.339 project_pfwc_rtargs=0.096 project_pfwc_enqueue=0.032 project_gather_wait=2.286 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=151.137 render=151.137 py_resid=0.076 project=1.988 sort=1.051 blend=5.878 d2h=0.007 tail=142.036 xview=0.089 view_total=151.061 project_pfwc_rtargs=0.066 project_pfwc_enqueue=0.019 project_gather_wait=1.985 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=151.137 fps=6.62 ms_frame_median=151.137 pass_ms_frame=151.137 check_pass_ms_frame=9.402 raw_md5=dfbeca6b gap_ms=0.00 render_ms_frame=151.137 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+T-P20 NOT_ETH12
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P20 rows 240986
+=== tracy P25 25:30 [] 05:58:53
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy P25 rc=0 05:59:08
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=8.116 render=8.116 py_resid=0.061 project=2.041 sort=1.340 blend=4.541 d2h=0.009 tail=0.004 xview=0.112 view_total=8.055 project_pfwc_rtargs=0.105 project_pfwc_enqueue=0.036 project_gather_wait=2.003 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=185.168 render=185.168 py_resid=0.075 project=1.724 sort=1.138 blend=4.549 d2h=0.008 tail=177.569 xview=0.094 view_total=185.092 project_pfwc_rtargs=0.070 project_pfwc_enqueue=0.020 project_gather_wait=1.721 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=185.168 fps=5.40 ms_frame_median=185.168 pass_ms_frame=185.168 check_pass_ms_frame=8.116 raw_md5=ac86c2be gap_ms=0.00 render_ms_frame=185.168 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P25 rows 260372
+=== tracy M0 0:5 [GSPLAT_TT_MATCULL_PROF=1] 05:59:09
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36mcp/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy M0 rc=0 05:59:50
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=8.641 render=8.641 py_resid=0.062 project=2.120 sort=1.544 blend=4.768 d2h=0.010 tail=0.004 xview=0.123 view_total=8.579 project_pfwc_rtargs=0.109 project_pfwc_enqueue=0.041 project_gather_wait=2.082 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=324.552 render=324.552 py_resid=0.078 project=1.767 sort=1.263 blend=4.829 d2h=0.008 tail=316.498 xview=0.100 view_total=324.475 project_pfwc_rtargs=0.070 project_pfwc_enqueue=0.026 project_gather_wait=1.764 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=324.552 fps=3.08 ms_frame_median=324.552 pass_ms_frame=324.552 check_pass_ms_frame=8.641 raw_md5=fd80778f gap_ms=0.00 render_ms_frame=324.552 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv M0 rows 598802
+=== tracy M10 10:15 [GSPLAT_TT_MATCULL_PROF=1] 05:59:52
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36mcp/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy M10 rc=0 06:00:15
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.852 render=9.852 py_resid=0.059 project=2.464 sort=1.319 blend=5.873 d2h=0.009 tail=0.004 xview=0.111 view_total=9.793 project_pfwc_rtargs=0.105 project_pfwc_enqueue=0.035 project_gather_wait=2.426 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=288.428 render=288.428 py_resid=0.074 project=2.111 sort=1.124 blend=6.100 d2h=0.007 tail=278.902 xview=0.101 view_total=288.355 project_pfwc_rtargs=0.071 project_pfwc_enqueue=0.026 project_gather_wait=2.108 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=288.428 fps=3.47 ms_frame_median=288.428 pass_ms_frame=288.428 check_pass_ms_frame=9.852 raw_md5=580dc40e gap_ms=0.00 render_ms_frame=288.428 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv M10 rows 601842
+=== tracy M20 20:25 [GSPLAT_TT_MATCULL_PROF=1] 06:00:18
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache506-p36mcp/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36 
+tracy M20 rc=0 06:00:41
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.064 render=9.064 py_resid=0.060 project=2.342 sort=1.343 blend=5.185 d2h=0.010 tail=0.004 xview=0.111 view_total=9.004 project_pfwc_rtargs=0.105 project_pfwc_enqueue=0.034 project_gather_wait=2.305 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=293.185 render=293.185 py_resid=0.076 project=1.997 sort=1.105 blend=5.374 d2h=0.008 tail=284.515 xview=0.100 view_total=293.109 project_pfwc_rtargs=0.072 project_pfwc_enqueue=0.024 project_gather_wait=1.994 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 so
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=293.185 fps=3.41 ms_frame_median=293.185 pass_ms_frame=293.185 check_pass_ms_frame=9.064 raw_md5=e148258e gap_ms=0.00 render_ms_frame=293.185 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree493
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv M20 rows 601402
+=== u2 b2b 06:00:43 load=4.33
+u2 rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.800 fps=113.63 ms_frame_median=8.789 pass_ms_frame=8.783,8.802,8.784,8.792,8.781,8.789,8.972,8.777,8.790,8.782,8.789,8.787,8.798,8.792,8.786,8.807,8.824,8.798,8.788,8.786 check_pass_ms_frame=8.903 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=8.800 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150b
+
+arton    4096 Oct 12 06:00 .
+arton    4096 Oct 12 05:59 ..
+arton   18248 Oct 12 05:59 T-M0.log
+arton   18191 Oct 12 06:00 T-M10.log
+arton   18191 Oct 12 06:00 T-M20.log
+arton   18247 Oct 12 05:57 T-P0.log
+arton   18191 Oct 12 05:58 T-P10.log
+arton   18191 Oct 12 05:58 T-P15.log
+arton   18384 Oct 12 05:58 T-P20.log
+arton   18189 Oct 12 05:59 T-P25.log
+arton   18182 Oct 12 05:57 T-P5.log
+arton   41682 Oct 12 06:00 aiclk.txt
+arton 4670650 Oct 12 05:59 dev-M0.csv.gz
+arton 4707844 Oct 12 06:00 dev-M10.csv.gz
+arton 4691574 Oct 12 06:00 dev-M20.csv.gz
+arton 2247413 Oct 12 05:57 dev-P0.csv.gz
+arton 2255045 Oct 12 05:58 dev-P10.csv.gz
+arton 2250346 Oct 12 05:58 dev-P15.csv.gz
+arton 2076740 Oct 12 05:58 dev-P20.csv.gz
+arton 2240464 Oct 12 05:59 dev-P25.csv.gz
+arton 2252009 Oct 12 05:57 dev-P5.csv.gz
+arton 1703259 Oct 12 06:00 hero-u2.png
+arton     188 Oct 12 05:56 host.txt
+arton     472 Oct 12 06:00 marks.txt
+arton  171518 Oct 12 06:00 run-u2.log
+arton 5304940 Oct 12 05:59 tracy-u-M0.csv.gz
+arton 5356133 Oct 12 06:00 tracy-u-M10.csv.gz
+arton 5344256 Oct 12 06:00 tracy-u-M20.csv.gz
+arton 2241577 Oct 12 05:57 tracy-u-P0.csv.gz
+arton 2245806 Oct 12 05:58 tracy-u-P10.csv.gz
+arton 2234645 Oct 12 05:58 tracy-u-P15.csv.gz
+arton 2047585 Oct 12 05:58 tracy-u-P20.csv.gz
+arton 2229648 Oct 12 05:59 tracy-u-P25.csv.gz
+arton 2200579 Oct 12 05:57 tracy-u-P5.csv.gz
+=== bench end rc=0 2026-10-12T06:00:57Z
+[viewer] started pid 49978 supervisor 49971 sha feb0875bbf75324caf860c80211981875bdaf42b port 8080 (log /localdev/smarton/viewer/viewer.log)

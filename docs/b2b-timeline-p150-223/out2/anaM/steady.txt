@@ -1,0 +1,28 @@
+# steady506: tmp/m506.csv.gz  views=15 cores=120  ms at 1350 MHz
+steady periods (pfwc N -> pfwc N+1, same chunk, N not first of chunk): 9
+
+## Programs (mean over views; window = first core start -> last core end)
+
+prog        window core mean core max start spr  end spr idle/core
+pfwc         1.649     1.466    1.649     0.000    0.183     0.184
+k2           0.626     0.513    0.626     0.000    0.112     0.113
+sort         1.351     1.274    1.351     0.000    0.077     0.077
+mat+blend    5.305     5.156    5.305     0.000    0.149     0.149
+
+## Boundaries (steady views; ms)
+
+boundary                   all-core    max per-core  pc max   n
+pfwc -> k2                    0.008  0.008    0.179   0.272  12
+k2 -> sort                    0.013  0.015    0.126   0.256  15
+sort -> mat+blend             0.059  0.348    0.136   0.265  15
+mat+blend -> pfwc N+1         0.015  0.017    0.164   0.276  12
+sum                           0.096           0.605
+
+## Steady period: mean 8.914 median 9.058 min 7.674 max 10.049 ms (n=9)
+  windows: pfwc 1.636  k2 0.617  sort 1.332  mat+blend 5.245  all-core gaps 0.084
+  mean core busy: pfwc 1.461  k2 0.506  sort 1.257  mat+blend 5.088  sum 8.312  -> per-core idle per period 0.602
+
+## Bounds (ms/view, upper)
+
+(a) pfwc N+1 into the mat+blend N tail: mean end spread 0.149 + all-core gap 0.015 = 0.164  (per-core idle at that boundary 0.164)
+(b) summed all-core inter-program idle: 0.096; summed per-core boundary idle (spread, needs program overlap to reclaim): 0.605

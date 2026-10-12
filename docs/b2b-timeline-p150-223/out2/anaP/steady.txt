@@ -1,0 +1,30 @@
+# steady506: tmp/p506.csv.gz  views=25 cores=120  ms at 1350 MHz
+steady periods (pfwc N -> pfwc N+1, same chunk, N not first of chunk): 15
+
+## Programs (mean over views; window = first core start -> last core end)
+
+prog        window core mean core max start spr  end spr idle/core
+pfwc         1.614     1.452    1.614     0.000    0.162     0.162
+k2           0.617     0.503    0.617     0.000    0.113     0.114
+sort         1.327     1.252    1.327     0.000    0.075     0.075
+mat+blend    5.223     5.076    5.222     0.000    0.146     0.146
+
+## Boundaries (steady views; ms)
+
+boundary                   all-core    max per-core  pc max   n
+pfwc -> k2                    0.008  0.008    0.166   0.253  20
+k2 -> sort                    0.014  0.015    0.128   0.255  25
+sort -> mat+blend             0.045  0.332    0.121   0.246  25
+mat+blend -> pfwc N+1         0.015  0.018    0.163   0.271  20
+sum                           0.083           0.578
+
+## Steady period: mean 8.753 median 8.960 min 7.595 max 10.090 ms (n=15)
+  windows: pfwc 1.602  k2 0.608  sort 1.309  mat+blend 5.169  all-core gaps 0.066
+  mean core busy: pfwc 1.447  k2 0.497  sort 1.237  mat+blend 5.020  sum 8.200  -> per-core idle per period 0.554
+
+## Bounds (ms/view, upper)
+
+(a) pfwc N+1 into the mat+blend N tail: mean end spread 0.146 + all-core gap 0.015 = 0.162  (per-core idle at that boundary 0.163)
+(b) summed all-core inter-program idle: 0.083; summed per-core boundary idle (spread, needs program overlap to reclaim): 0.578
+
+gantt: docs/b2b-timeline-p150-223/gantt-v6-8.png
