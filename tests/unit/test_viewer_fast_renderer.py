@@ -166,7 +166,8 @@ def test_sender_threads_exit_on_disconnect():
         fr._sender.join(2.0)
         assert not fr._sender.is_alive()
     time.sleep(0.05)
-    assert senders() == base
+    # <=: an earlier test's sender may still be exiting when base is taken; a leak only adds.
+    assert senders() <= base
 
 
 def test_bad_jpeg_env_falls_back_to_auto(monkeypatch=None):
@@ -356,15 +357,28 @@ def test_camera_burst_renders_only_the_moving_client():
 
 
 def test_motion_quality_steps_down_on_backlog_and_recovers():
-    """Moving-frame JPEG quality drops 5 per backlogged frame down to the floor and climbs
-    back after ``recover`` clean frames; off, it stays at q40 (task #532)."""
+    """Moving frames step one rung down the (scale, quality) ladder per backlogged frame to
+    the floor and one rung back up after ``recover`` clean frames; off, they stay full
+    size at q40 (task #532)."""
     from gsplat.nerfview_viewer import MotionQuality
-    mq = MotionQuality(lo=20, step=5, recover=3)
-    assert mq.update(False) == 40
-    assert [mq.update(True) for _ in range(6)] == [35, 30, 25, 20, 20, 20]
-    assert [mq.update(False) for _ in range(6)] == [20, 20, 25, 25, 25, 30]
+    mq = MotionQuality(recover=3)
+    assert mq.update(False) == (1.0, 40)
+    assert [mq.update(True) for _ in range(6)] == [
+        (1.0, 30), (0.75, 40), (0.75, 30), (0.75, 20), (0.75, 20), (0.75, 20)]
+    assert [mq.update(False) for _ in range(6)] == [
+        (0.75, 20), (0.75, 20), (0.75, 30), (0.75, 30), (0.75, 30), (0.75, 40)]
     off = MotionQuality(enabled=False)
-    assert all(off.update(True) == 40 for _ in range(5))
+    assert all(off.update(True) == (1.0, 40) for _ in range(5))
+
+
+def test_downscale_sizes_and_keeps_full_frames():
+    """0.75x moving frames keep the aspect; scale 1.0 returns the frame itself (#532)."""
+    from gsplat.nerfview_viewer import downscale
+    img = _test_image()
+    assert downscale(img, 1.0) is img
+    small = downscale(img, 0.75)
+    assert small.shape == (round(img.shape[0] * 0.75), round(img.shape[1] * 0.75), 3)
+    assert small.dtype == np.uint8
 
 
 class _PendingBuf:
@@ -434,15 +448,20 @@ def test_backlog_paces_sends_lowers_motion_quality_and_keeps_still_q70():
     frame(2, "move")  # ... and sends this newer frame instead of frame 1
     wait_sent(2)
     assert len(ws.messages) == 2
-    assert fr.motion_quality.q == 35
+    assert (fr.motion_quality.scale, fr.motion_quality.q) == (1.0, 30)
     m = _decode(ws.messages[1].rgb_data)
     assert _psnr(m, imgs[2]) > _psnr(m, imgs[1]) + 3.0
+    fr.motion_quality.rung = 2  # deeper backlog: the next moving frame goes out at 0.75x
+    frame(0, "move")
+    wait_sent(3)
+    small = _decode(ws.messages[2].rgb_data)
+    assert small.shape[:2] == (round(base.shape[0] * 0.75), round(base.shape[1] * 0.75))
     ws.buf.message_from_id.clear()  # viser took every frame: no backlog
     ws.buf.id_from_redundancy_key.clear()
     frame(3, "static")
-    wait_sent(3)
+    wait_sent(4)
     fr.running = False
-    assert ws.messages[2].rgb_data == make_jpeg_encoder(fr.jpeg_encoder_name)(imgs[3], 70)
+    assert ws.messages[3].rgb_data == make_jpeg_encoder(fr.jpeg_encoder_name)(imgs[3], 70)
 
 
 if __name__ == "__main__":

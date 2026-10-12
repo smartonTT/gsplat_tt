@@ -103,8 +103,12 @@ async def sweep(args) -> dict:
     sizes: list[int] = []
     huds: list[str] = []
     sent = 0
+    nbytes = 0
+    # --max-mbs: read at most this many MB/s, so the server sees a slow link (TCP backpressure
+    # through the tunnel; a small receive queue keeps the client from buffering past it).
+    queue = dict(max_queue=2) if args.max_mbs > 0 else {}
     async with wsc.connect(args.url, subprotocols=[proto],
-                           max_size=64 * 1024 * 1024, compression=None) as ws:
+                           max_size=64 * 1024 * 1024, compression=None, **queue) as ws:
         t_start = time.perf_counter()
         t_end = t_start + args.secs
 
@@ -123,7 +127,7 @@ async def sweep(args) -> dict:
                 await asyncio.sleep(max(0.0, nxt - time.perf_counter()))
 
         async def receiver():
-            nonlocal last_jpg
+            nonlocal last_jpg, nbytes
             while time.perf_counter() < t_end:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=max(0.05, t_end - time.perf_counter()))
@@ -131,6 +135,10 @@ async def sweep(args) -> dict:
                     break
                 if not isinstance(raw, bytes):
                     continue
+                nbytes += len(raw)
+                if args.max_mbs > 0:
+                    await asyncio.sleep(max(0.0, t_start + nbytes / (args.max_mbs * 1e6)
+                                            - time.perf_counter()))
                 for jpg in parse_frame(raw, zd, huds):
                     last_jpg = jpg
                     t = time.perf_counter()
@@ -152,6 +160,7 @@ async def sweep(args) -> dict:
                 interval_ms_p50=round(float(np.percentile(iv, 50)), 2),
                 interval_ms_p90=round(float(np.percentile(iv, 90)), 2),
                 interval_ms_p99=round(float(np.percentile(iv, 99)), 2),
+                link_mbs=round(nbytes / 1e6 / max(time.perf_counter() - t_start, 1e-9), 2),
                 jpeg_kb_median=round(statistics.median(sizes) / 1024.0, 1) if sizes else 0.0,
                 decode_ms_median=round(statistics.median(dec_ms), 2) if dec_ms else 0.0,
                 hud=huds[-1].replace("**", "").replace("  \n", " | ") if huds else "",
@@ -171,6 +180,8 @@ def main() -> int:
     ap.add_argument("--no-decode", action="store_true",
                     help="count frames as they arrive, without decoding (a slow client CPU caps "
                          "decoded FPS; the page decodes off its socket thread)")
+    ap.add_argument("--max-mbs", type=float, default=0.0,
+                    help="cap the client's read rate (MB/s) to stand in for a slow link")
     ap.add_argument("--hero-out", default="", help="send only the hero pose; save the last JPEG here")
     args = ap.parse_args()
     if not args.width or not args.height:

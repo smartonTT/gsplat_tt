@@ -29,30 +29,52 @@ JPEG_ENCODERS = ("simplejpeg", "turbojpeg", "cv2", "viser")
 
 
 class MotionQuality:
-    """JPEG quality for moving frames, sized from the send backlog (task #532).
+    """JPEG quality and scale for moving frames, sized from the send backlog (task #532).
 
     A frame that is ready while the previous one still sits unsent in viser's buffer means
-    the link (the ssh tunnel to the page) is slower than the device: step the quality down
-    so the frames get smaller. After ``recover`` clean frames step back up. Still frames
-    (static/update) always use ``STILL`` so the still image never changes.
+    the link (the ssh tunnel to the page) is slower than the device: step one rung down
+    ``LADDER`` so the frames get smaller. After ``recover`` clean frames step one rung back
+    up. Quality alone saves little at 1024x1024 (hero: q40 97 KB, q30 86, q20 65), so the
+    lower rungs send 0.75x frames (q40 59 KB, q30 50, q20 38) that the page stretches to
+    the canvas. Still frames (static/update) are always full size at ``STILL``.
     """
     STILL = 70
     MAX = 40
+    LADDER = ((1.0, 40), (1.0, 30), (0.75, 40), (0.75, 30), (0.75, 20))
 
-    def __init__(self, enabled: bool = True, lo: int = 20, step: int = 5, recover: int = 60):
-        self.enabled, self.lo, self.step, self.recover = enabled, lo, step, recover
-        self.q, self._clean = self.MAX, 0
+    def __init__(self, enabled: bool = True, recover: int = 60):
+        self.enabled, self.recover = enabled, recover
+        self.rung, self._clean = 0, 0
 
-    def update(self, backlogged: bool) -> int:
+    @property
+    def scale(self) -> float:
+        return self.LADDER[self.rung][0]
+
+    @property
+    def q(self) -> int:
+        return self.LADDER[self.rung][1]
+
+    def update(self, backlogged: bool) -> tuple[float, int]:
+        """Return (scale, quality) for the next moving frame."""
         if not self.enabled:
-            return self.MAX
+            return self.LADDER[0]
         if backlogged:
-            self.q, self._clean = max(self.lo, self.q - self.step), 0
+            self.rung, self._clean = min(len(self.LADDER) - 1, self.rung + 1), 0
         else:
             self._clean += 1
-            if self._clean >= self.recover and self.q < self.MAX:
-                self.q, self._clean = min(self.MAX, self.q + self.step), 0
-        return self.q
+            if self._clean >= self.recover and self.rung > 0:
+                self.rung, self._clean = self.rung - 1, 0
+        return self.LADDER[self.rung]
+
+
+def downscale(img: np.ndarray, scale: float) -> np.ndarray:
+    """Resize an HxWx3 uint8 frame by ``scale`` (bilinear; cv2 releases the GIL)."""
+    if scale >= 1.0:
+        return img
+    import cv2
+    h, w = img.shape[:2]
+    return cv2.resize(img, (max(1, round(w * scale)), max(1, round(h * scale))),
+                      interpolation=cv2.INTER_LINEAR)
 
 
 def adaptive_quality_from_env() -> bool:
@@ -166,8 +188,8 @@ class FastRenderer(Renderer):
     * Sends are paced to the link (task #532): if the last frame is still unsent in
       viser's buffer when the next one is ready (the ssh tunnel is slower than the
       device), the sender waits for it, sends the newest frame, and lowers the
-      moving-frame JPEG quality (``MotionQuality``) until the backlog clears. Still
-      frames stay q70. Off with GSPLAT_VIEWER_ADAPTIVE=0 (pacing stays on).
+      moving-frame JPEG quality, then scale (``MotionQuality``), until the backlog
+      clears. Still frames stay full size at q70. Off with GSPLAT_VIEWER_ADAPTIVE=0 (pacing stays on).
     * ``viewer.frame_post_fn(img, camera_state)`` (if set) runs on the sender
       thread before the encode (the letterbox), off the render thread.
 
@@ -289,8 +311,9 @@ class FastRenderer(Renderer):
                     if self._out is not None:
                         img, depth, quality, t0, t1, cs = self._out
                         self._out = None
+            scale = 1.0
             if quality != MotionQuality.STILL:
-                quality = self.motion_quality.update(backlogged)
+                scale, quality = self.motion_quality.update(backlogged)
             te = time.perf_counter()
             try:
                 post = getattr(self.viewer, "frame_post_fn", None)
@@ -298,7 +321,7 @@ class FastRenderer(Renderer):
                     img = post(img, cs)
                 if depth is None and img.dtype == np.uint8 and self.jpeg_encoder_name != "viser":
                     # set_background_image minus viser's encode: same message.
-                    data = self._encode_jpeg(np.ascontiguousarray(img), quality)
+                    data = self._encode_jpeg(np.ascontiguousarray(downscale(img, scale)), quality)
                     msg = BackgroundImageMessage(format="jpeg", rgb_data=data, depth_data=None)
                     self.client.scene._websock_interface.queue_message(msg)
                     self._last_msg = msg
