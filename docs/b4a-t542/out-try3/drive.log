@@ -1,0 +1,17 @@
+ttp lock: waiting for p100 (held by task #544 (run 1493) since 13:14 PDT)
+ttp lock: waiting for p100 (held by task #544 (run 1493) since 13:14 PDT)
+ttp lock: waiting for p100 (held by task #544 (run 1493) since 13:14 PDT)
+ttp lock: waiting for p100 (held by task #544 (run 1493) since 13:14 PDT)
+ttp lock: got p100 after 6.7 min
+SSH_PREFLIGHT=ok
+=== drive t542 31caa508 on bh-33:/localdev/smarton/gstt2-t513 Mon Oct 12 13:26:30 PDT 2026
+[sync_remote] sha=31caa508e95212c1662309cc52dbc872d4dddda1 so_md5=f496bfc37d56296d4348c6d580cf2a8c 
+cpp#125 16fbb18a t542 31caa508 B4a shadow K2 (bh-33) bin=ae9db938977a1a0a
+=== shot 13:32:58
+================ BUILD ID ================
+=========================================
+=== shot ttw-t542-hero sha=31caa50 env: GSPLAT_TT_B4A_SHADOW=1 20:33:06
+run rc=1
+SHOT_FAIL no hero (rc=1)
+shot rc=4
+=== on-arm shot failed, stop
