@@ -50,12 +50,17 @@ grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot.out"; echo "shot rc=$
 [ $s = 0 ] || rc=5
 fi
 # Each devrun step stays under the 600 s reservation ceiling (3 arms ~ 60-90 s measured).
+if [ -n "${STEPS:-}" ]; then  # e.g. STEPS="w:0:base htl;r4:4:base g3 g7"
+  IFS=';' read -ra ST <<< "$STEPS"
+  for x in "${ST[@]}"; do IFS=: read -r n r a <<< "$x"; step "$n" 400 "$r" $a; done
+else
 step warm 400 0 base htl
 step r1a 400 1 base htl hs300
 step r1b 400 1 hs700 ds150 ds400
 step r2a 400 2 htl base ds400
 step r2b 400 2 ds150 hs700 hs300
 step r3 400 3 base htl f0 base
+fi
 scp -q -o BatchMode=yes "$H:$T/tmp/t614/*.*" "$O/" || rc=4
 echo "=== drive t614 done rc=$rc $(TZ=America/Los_Angeles date)"
 exit $rc
