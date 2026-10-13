@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=7b7ace57 bin=6a6df52870bfae39 t655 7b7ace57 BLEND_SWAP_FILL default on (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t655-r3  timeout=400s  worry=600s  ts=2026-10-13T15:35:07-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/swapfill-land-t655/remote.sh 3 base new
