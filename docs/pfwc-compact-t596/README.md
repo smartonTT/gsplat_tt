@@ -49,9 +49,9 @@ cycles at 1.35 GHz):
 
 The movers' measured rate on this exact kind of work (`rec`: survivor lane words out of compute
 tiles into staging) is ~8.6 cycles per word, i.e. ~95 cycles for an 11-word repack. That puts
-NCRISC on the worst core at +0.9 ms (window ~2.5 ms, a loss of ~0.7) and the split variant at
-+0.4 ms each (window ~2.05, a loss of ~0.2). Even a pure load/store loop (~2 cycles/word + ctz,
-~30 cycles/survivor) only reaches the split break-even. The 0.1 ms keep gate needs a repack 3-5x
+NCRISC on the worst core at +1.85M cycles, +1.37 ms (window ~3.0 ms, a loss of ~1.2) and the
+split variant at +0.78M cycles, +0.58 ms each (window ~2.2, a loss of ~0.4). Even a pure load/store loop (~2 cycles/word + ctz,
+~30 cycles/survivor) only reaches the split break-even (+0.04 ms, gain ~0.14 at best). The 0.1 ms keep gate needs a repack 3-5x
 faster than any measured mover loop in this kernel, and the realistic outcome is a slower pfwc.
 
 ## Verdict
