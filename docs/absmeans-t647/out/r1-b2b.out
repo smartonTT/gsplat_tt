@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #125 sha=b095d258 bin=4d4a6cda1d13f966 t647 b095d258 CULL_ABS_RAW gate (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t647-r1-b2b  timeout=300s  worry=600s  ts=2026-10-13T14:34:01-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/absmeans-t647/remote_ab.sh 1 b2b abl raw
+-----------------------------------------
+=== r1-b2b-abl b095d258 ABS_MEANS_ABL=1 CULL_ABS_RAW=0 cache=/localdev/smarton/.cache/ttmc-t647abl 21:34:03 load=1.63
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.431 fps=134.58 ms_frame_median=7.428 pass_ms_frame=7.436,7.471,7.445,7.431,7.428,7.427,7.439,7.427,7.409,7.430,7.466,7.424,7.402,7.425,7.439,7.525,7.424,7.429,7.427,7.312 check_pass_ms_frame=7.722 raw_md5=a7bdd047 gap_ms=0.00 render_ms_frame=7.431 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=7.431
+=== r1-b2b-raw b095d258 ABS_MEANS_ABL=1 CULL_ABS_RAW=1 cache=/localdev/smarton/.cache/ttmc-t647raw 21:34:15 load=1.57
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.331 fps=136.40 ms_frame_median=7.330 pass_ms_frame=7.329,7.325,7.334,7.330,7.346,7.332,7.322,7.330,7.331,7.392,7.322,7.324,7.328,7.342,7.318,7.417,7.341,7.346,7.327,7.193 check_pass_ms_frame=7.588 raw_md5=a7bdd047 gap_ms=0.00 render_ms_frame=7.331 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=7.331
+=== done 1 b2b 21:34:28
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t647/tmp/ttw-state/logs/t647-r1-b2b-20261013-143400.log
