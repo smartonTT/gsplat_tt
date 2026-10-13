@@ -341,4 +341,14 @@ void kernel_main() {
     const uint32_t pw_v[10] = {num_chunks, PW_NOW() - pw_w0, pw_wait, pw_bar, pw_cls, pw_rec, pw_tail, pw_iss, m, pr};
     for (uint32_t i = 0; i < 10; i++) DeviceTimestampedData("pfwc_pw", (uint64_t(i) << 32) | pw_v[i]);
 #endif
+#ifdef PFWC_SPIN_CYC
+    // Task #614 slack probe (GSPLAT_TT_PFWC_SPIN_US, profiling only): hold the
+    // program open PFWC_SPIN_CYC wall-clock cycles after the last write.
+    {
+        volatile tt_reg_ptr uint32_t* wc = reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L);
+        const uint32_t s0 = wc[0];
+        while (wc[0] - s0 < (uint32_t)(PFWC_SPIN_CYC)) {
+        }
+    }
+#endif
 }

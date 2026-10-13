@@ -542,6 +542,13 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
         if (tile_list_on()) writer_defines["PFWC_TILE_LIST"] = "1";
     }
+    // Task #614 slack probe (profiling only): GSPLAT_TT_PFWC_SPIN_US > 0 holds the
+    // BRISC writer that long (at 1350 MHz wall clock) after its last write.
+    if (fuse) {
+        const char* sp = std::getenv("GSPLAT_TT_PFWC_SPIN_US");
+        const double us = sp != nullptr ? std::atof(sp) : 0.0;
+        if (us > 0) writer_defines["PFWC_SPIN_CYC"] = std::to_string(static_cast<uint32_t>(us * 1350.0)) + "u";
+    }
     const KernelHandle writer = CreateKernel(
         program,
         wsplit  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_split.cpp"

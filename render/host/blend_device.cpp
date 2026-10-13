@@ -41,6 +41,7 @@
 #include "env_config.h"
 #include "host_profile.h"
 #include "host_tracy.hpp"
+#include "htl.h"
 #include "stage_timers.h"
 
 #include "alpha_blend_host.h"
@@ -1007,9 +1008,17 @@ static double process_frame_mb_devcull_resident(
             // Task #552: the next view's pfwc goes ahead of this mat+blend, which
             // then runs that view's K2 on BRISC (args prepared by the hook).
             const auto h0 = std::chrono::steady_clock::now();
-            before_hook();
+            {
+                GSPLAT_HTL_ZONE("fold_hook");
+                before_hook();
+                // Task #614 slack probe (profiling only): host delay between the
+                // next view's pfwc enqueue and this mat+blend enqueue.
+                static const double fold_spin = gsplat_tt::htl::env_us("GSPLAT_TT_HTL_FOLD_SPIN_US");
+                gsplat_tt::htl::spin_us(fold_spin);
+            }
             gsplat_tt::stagetimers::acc().xview +=
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
+            GSPLAT_HTL_ZONE("fold_rtargs");
             for (auto& fb : fold_brisc) {
                 fb.m0.resize(kB4aRtaBase);
                 if (!tile_assign_b4a_args(fb.kc, fb.m0)) continue;
@@ -1020,6 +1029,7 @@ static double process_frame_mb_devcull_resident(
             }
         }
         pend.clear();
+        GSPLAT_HTL_ZONE("fz_enqueue");
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.fz_workload, /*blocking=*/false);
     } else {
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
