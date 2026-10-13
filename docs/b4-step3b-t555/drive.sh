@@ -50,7 +50,8 @@ if [ "$PLAN" = check ]; then
   step r1-b2b remote_ab.sh 1 b2b base $ARM
 else
   case $ARM in solo) senv="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1" ;;
-    fuse) senv="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1" ;; *) senv= ;; esac
+    fuse) senv="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1" ;;
+    fuse34) senv="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1 GSPLAT_TT_KCFG_EXTRA_KB=34" ;; *) senv= ;; esac
   echo "=== shot $(TZ=America/Los_Angeles date +%T)"
   H=$H T=$T NO_SYNC=1 NAME=ttw-t555 SHOT_TIMEOUT=500 opt/ttw/screenshot.sh 227 "$rev" --locked $senv \
     > "$O/shot.out" 2>&1; s=$?

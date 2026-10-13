@@ -18,7 +18,9 @@ r=${1:?round}; mode=${2:?mode}; shift 2
 fail=0
 for arm in "$@"; do
   case $arm in base) k= ;; nt1) k=GSPLAT_TT_OL_TOWN_NT=1 ;; solo) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1" ;;
-    fuse) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1" ;; *) echo "bad arm $arm"; exit 2 ;; esac
+    fuse) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1" ;;
+    fuse34) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1 GSPLAT_TT_KCFG_EXTRA_KB=34" ;;  # t565: KCFG probe
+    *) echo "bad arm $arm"; exit 2 ;; esac
   tag=r$r-$mode-$arm
   args=(--no-ref --iter-dir t555-$tag)
   case $mode in b2b) args+=(--back-to-back) ;; dump) args+=(--dump-views t555-dump-$tag) ;; esac
