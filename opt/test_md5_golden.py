@@ -6,8 +6,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 import md5_golden as g
 
 ROOT = Path(__file__).resolve().parent.parent
-W11 = (ROOT / "docs/matblend-ready-t273/t289/md5-golden-906e0435.txt").read_bytes()
-E12 = (ROOT / "docs/eth-dispatch-t397/out/md5-r1-E.txt").read_bytes()
+W11_OFF = (ROOT / "docs/matblend-ready-t273/t289/md5-golden-906e0435.txt").read_bytes()
+W11 = (ROOT / "docs/exp1-t584/md5-golden-077caaba.txt").read_bytes()
+E12_OFF = (ROOT / "docs/eth-dispatch-t397/out/md5-r1-E.txt").read_bytes()
+E12 = (ROOT / "docs/viewer-t586/md5-golden-84695855.txt").read_bytes()
 W10 = (ROOT / "docs/eth-dispatch-t397/out397b/md5-W10.txt").read_bytes()
 LOG_W = "x\n[DEV] dispatch worker (worker), command queues 2, compute grid 11x10\ny\n"
 LOG_E = "[DEV] dispatch eth (auto: card has ETH cores, overlay active, card p150b), command queues 2, compute grid 12x10\n"
@@ -28,14 +30,18 @@ assert g.grid_from_log(LOG_AFR.replace("[afr1] [DEV] device 0 (card 1), dispatch
     "AFR workers on different grids have no single golden"
 assert g.grid_from_log("[afr] starting worker 0\n") is None
 
-assert g.list_md5(W11) == "906e0435" and g.list_md5(E12) == "39d84b28"
-# Each grid takes its own golden.
+assert g.list_md5(W11) == "077caaba" and g.list_md5(W11_OFF) == "906e0435" and g.list_md5(E12_OFF) == "39d84b28"
+assert g.list_md5(E12) == "84695855"
+assert g.GOLDENS_EXP1_OFF == {"11x10": "906e0435", "12x10": "39d84b28"}
 assert g.check(W11, LOG_W)[0] == 0
-assert g.check(E12, LOG_E)[0] == 0
 assert g.check(W11, LOG_E11)[0] == 0, "eth at 11x10 = worker golden"
+# Iter 227 (BLEND_EXP1 on): the pre-227 lists no longer pass; 12x10 golden captured on bh-30 (task #586).
+assert g.check(W11_OFF, LOG_W)[0] == 1
+assert g.check(E12_OFF, LOG_E)[0] == 1
+assert g.check(E12, LOG_E)[0] == 0
+assert g.check(E12, LOG_E11)[0] == 1, "a 12x10 list against the capped 11x10 golden is a mismatch"
 # A golden from the other grid is a mismatch, not a pass.
 assert g.check(E12, LOG_W)[0] == 1
-assert g.check(W11, LOG_E)[0] == 1
 # Grid with no golden, or no grid in the log: fail (never skip).
 assert g.check(W10, "[DEV] dispatch worker (worker), command queues 2, compute grid 10x10\n")[0] == 2
 assert g.check(W11, "")[0] == 2

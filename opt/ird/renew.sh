@@ -20,10 +20,9 @@ PORT=46483
 TIMEOUT=14:00:00
 IRD_USER=${IRD_USER:-$USER}
 RROOT=/localdev/$IRD_USER
-# The viewer starts with the B4a fold off (VIEWER_B4A_FOLD=0, task #563): the fold hangs the
-# pipelined viewer under ETH dispatch (#556). Set VIEWER_B4A_FOLD=1, or empty for the tree's
-# default, once that hang is fixed.
-VIEWER_B4A_FOLD=${VIEWER_B4A_FOLD-0}
+# Forwarded to viewer.sh, which keeps the B4a fold off in the viewer unless it is 1 (task #577:
+# fold on cost page FPS on bh-30).
+VIEWER_B4A_FOLD=${VIEWER_B4A_FOLD-}
 VIEWER_BOX=bh-30
 RESERVE_WAIT=${IRD_RESERVE_WAIT:-240}
 PREFLIGHT=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}

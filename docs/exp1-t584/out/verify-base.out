@@ -1,0 +1,28 @@
+[ttw 2026-10-12T22:52:07-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=480s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T22:52:07-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 480s.
+[ttw 2026-10-12T22:52:07-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T22:52:07-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T22:52:07-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T22:52:07-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T22:52:07-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T22:52:07-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T22:52:07-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T22:52:07-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T22:52:07-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T22:52:07-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=2e0d8462 bin=b59e928091f71166 t584 2e0d8462 BLEND_EXP1 A/B (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t584-verify-base  timeout=480s  worry=600s  ts=2026-10-12T22:52:07-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/exp1-t584/remote_ab.sh 0 dump base
+-----------------------------------------
+=== r0-dump-base 2e0d8462 EXP1=0 cache=/localdev/smarton/.cache/ttmc-t584base 05:52:09 load=2.12
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.8 p50_ms=8.8 min_ms=6.1 max_ms=11.5 n_views=30 warmup_s=19.8 out=/localdev/smarton/gstt2-t513/tmp/t584-r0-dump-base
+TTW_TIMING ms_view=8.791
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+MD5 golden rc=0 (base)
+=== done 0 dump 05:52:43
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t584/tmp/ttw-state/logs/t584-verify-base-20261012-225207.log

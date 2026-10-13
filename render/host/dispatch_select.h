@@ -82,13 +82,15 @@ inline Choice resolve(Mode mode, const std::string& card_type, uint32_t num_cqs,
 }
 
 // Task #562: the B4a fold (tile_assign_device.cpp b4a_fold_enabled; K2(N+1) on BRISC in the
-// fused mat+blend(N)) hangs a p150 under ETH dispatch (12x10) on the first folded view and
-// wedges the board; it was only validated under worker dispatch (p100, 11x10). Default: on
-// under worker dispatch, off under ETH. GSPLAT_TT_B4A_FOLD (`env`, nullptr if unset) wins:
-// 0 (or empty) is the kill switch, any other number forces it on.
+// fused mat+blend(N)) hung a p150 under ETH dispatch on the first folded view: its K2 count
+// row (4 KB on the BRISC stack) ran the stack into .bss (g_b4a_fn) with ETH's 80 B larger
+// firmware. Task #577 (K2_CNT16, 2 KB row) fixed it, so the fold is on under both dispatch
+// kinds again. GSPLAT_TT_B4A_FOLD (`env`, nullptr if unset) wins: 0 (or empty) is the kill
+// switch, any other number forces it on.
 inline bool b4a_fold_on(const char* env, Kind kind) {
+    (void)kind;
     if (env != nullptr) return std::atoi(env) != 0;
-    return kind == Kind::kWorker;
+    return true;
 }
 
 // Task #581 (AFR, render/afr.py): the device this process opens. GSPLAT_TT_DEVICE_ID

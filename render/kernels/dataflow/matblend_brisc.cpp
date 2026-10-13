@@ -27,6 +27,7 @@ namespace matk {
 #endif
 #define K2_NARGS 21
 #define K2_DIET 1
+#define K2_CNT16 1  // task #577: 2 KB count row, not 4 KB (stack ran into .bss under ETH)
 void b4a_yield();
 #define K2_YIELD() b4a_yield()
 #include "pfwc_fuse.h"

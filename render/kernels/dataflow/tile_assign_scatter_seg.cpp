@@ -67,6 +67,12 @@
 #define K2_TJ1 215u  // permille for job 1 (TRISC 1, runs both movers' jobs)
 #endif
 #endif
+#ifndef K2_CNT16
+#define K2_CNT16 0  // task #577: uint16_t count row (matblend_brisc.cpp, B4a)
+#endif
+#if K2_CNT16 && K2_TRISC
+#error "K2_CNT16 needs the mover-only count pass (K2_TRISC=0)"
+#endif
 #ifndef K2_FOLD_TILES
 #define K2_FOLD_TILES 1024u  // tiles a count row can hold (local memory)
 #endif
@@ -275,8 +281,13 @@ void kernel_main() {
     };
 #endif
     if (row_pages != 0 && span <= K2_FOLD_TILES) {
+        auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
+#if K2_CNT16
+        uint16_t cnt[K2_FOLD_TILES];  // task #577: half the stack (fused BRISC, 8 KB local)
+#else
         uint32_t cnt[K2_FOLD_TILES];
         for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
+#endif
         K2P_ADD(K2P_SETUP, t_tot);
         {
             DeviceZoneScopedN("k2_pairs");
@@ -329,6 +340,9 @@ void kernel_main() {
             }
             noc_async_writes_flushed();
             for (uint32_t j = 0; j < 2; j++) job_clear(j);
+#elif K2_CNT16
+            pfwc_fuse::emit_pairs_diet_cnt16(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt, span, rowp);
+            K2P_ADD(K2P_PAIRS, t_pairs);
 #else
             pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
             K2P_ADD(K2P_PAIRS, t_pairs);
@@ -336,8 +350,9 @@ void kernel_main() {
         }
         DeviceZoneScopedN("k2_rows");
         K2P_T0(t_rows);
-        auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
+#if !K2_CNT16
         for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
+#endif
         asm volatile("fence" ::: "memory");
         const uint32_t r0 = (kc * 2u + mover) * row_pages;
         for (uint32_t q = 0; q < row_pages; q++)

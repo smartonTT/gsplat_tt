@@ -237,17 +237,13 @@ bool b4a_shadow_enabled() {
     return on;
 }
 // Task #554: default on (iter 226); GSPLAT_TT_B4A_FOLD=0 is the kill switch.
-// Task #562: default off under ETH dispatch (it hangs the p150 there);
-// GSPLAT_TT_B4A_FOLD=1 forces it on (dispatch_select.h b4a_fold_on).
+// Task #562: was default off under ETH dispatch (it hung the p150 there); on again
+// since the #577 stack fix (dispatch_select.h b4a_fold_on).
 bool b4a_fold_enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_B4A_FOLD");
         const bool eth = device_state::eth_dispatch();
-        const bool v = dispatch::b4a_fold_on(e, eth ? dispatch::Kind::kEth : dispatch::Kind::kWorker);
-        if (e == nullptr && eth)
-            std::fprintf(stderr, "[B4A] fold off: default under ETH dispatch (task #562 hang); "
-                                 "GSPLAT_TT_B4A_FOLD=1 forces it on\n");
-        return v;
+        return dispatch::b4a_fold_on(e, eth ? dispatch::Kind::kEth : dispatch::Kind::kWorker);
     }();
     return on;
 }

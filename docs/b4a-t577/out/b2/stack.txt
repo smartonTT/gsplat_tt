@@ -1,0 +1,4 @@
+      1 BRISC_STACK kernel=matblend_brisc margin=1024 depth=3936 avail=4960 reserve=128
+      1 BRISC_STACK kernel=sort_bin_onelaunch margin=3808 depth=1168 avail=4976 reserve=128
+      1 BRISC_STACK kernel=tile_assign_scatter_seg margin=352 depth=4624 avail=4976 reserve=128
+      1 BRISC_STACK kernel=writer_pfwc_split margin=3648 depth=1168 avail=4816 reserve=128

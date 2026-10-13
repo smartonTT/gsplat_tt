@@ -448,6 +448,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         compute_defines["BLEND_CONST_HOIST"] = env_or("GSPLAT_TT_BLEND_CONST_HOIST", "1");
         compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
         compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
+        // Task #584: degree-1 minimax exp in the bodies (iter 227: 1 by default,
+        // b2b -0.142 ms/view, hero 42.85 dB; not bit-identical, 0 = the degree-2 form).
+        compute_defines["BLEND_EXP1"] = env_or("GSPLAT_TT_BLEND_EXP1", "1");
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
     }
     if (fused) {

@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=a0478ed6 bin=14cabfbc511670a1 t577m a0478ed6 B4a fold K2_CNT16 vs 90268457 (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t577m-warm  timeout=300s  worry=600s  ts=2026-10-12T21:59:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 TB=/localdev/smarton/gstt2-t574b RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/b4a-t577/meas/remote_ab.sh 0 b2b base new
+-----------------------------------------
+=== r0-b2b-base 90268457 /localdev/smarton/gstt2-t574b cache=/localdev/smarton/.cache/ttmc-t577mbase 04:59:18 load=1.84
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.753 fps=114.25 ms_frame_median=8.603 pass_ms_frame=8.723,8.678,8.623,8.585,8.592,9.852,8.637,8.599,8.599,8.604,8.593,8.647,8.603,8.602,8.637,10.148,8.603,8.598,8.591,8.540 check_pass_ms_frame=8.862 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=8.753 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt
+TTW_TIMING b2b_ms_frame=8.753
+brisc_stack_lines=0
+=== r0-b2b-new a0478ed6 /localdev/smarton/gstt2-t513 cache=/localdev/smarton/.cache/ttmc-t577mnew 04:59:32 load=2.25
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.691 fps=115.06 ms_frame_median=8.630 pass_ms_frame=9.734,8.622,8.700,8.694,8.677,8.681,8.647,8.646,8.623,8.692,8.619,8.620,8.591,8.640,8.614,8.612,8.638,8.612,8.587,8.565 check_pass_ms_frame=9.724 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=8.691 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.691
+brisc_stack_lines=0
+=== done 0 b2b 04:59:46
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t577/tmp/ttw-state/logs/t577m-warm-20261012-215916.log

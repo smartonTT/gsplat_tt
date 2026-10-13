@@ -13,6 +13,7 @@
 // written once; the pair list equals the legacy one after mapping the storage
 // index back to the dense compact index (gid), tid identical, padding (0, 0);
 // depth by gid equals the legacy depth by dense gid.
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -299,7 +300,8 @@ template <bool COUNT>
 void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
                 uint32_t K, uint32_t dual, uint32_t permille, uint32_t P_pub,
                 const std::vector<uint32_t>& gid, const std::vector<uint32_t>& tid,
-                const std::vector<uint32_t>* speed = nullptr, const uint32_t* jobs = nullptr) {
+                const std::vector<uint32_t>* speed = nullptr, const uint32_t* jobs = nullptr,
+                uint32_t cnt16_chunk = 0) {
     std::vector<uint32_t> acc, sb;
     if (speed != nullptr) {
         acc.assign(speed->size() + 1u, 0u);
@@ -310,6 +312,9 @@ void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab
     std::vector<uint32_t> dg(pages * 16, 0xFFFFFFFFu), dt(pages * 16, 0xFFFFFFFFu);
     std::vector<uint32_t> written(pages, 0);
     std::vector<uint32_t> cnt(1u << 20), ref_cnt(1u << 20);
+    uint32_t span = 1;  // task #577: the uint16_t row covers the tiles in use
+    for (uint32_t p = 0; p < P_pub; p++) span = std::max(span, tid[p] + 1u);
+    std::vector<uint16_t> cnt16(span);
     for (uint32_t k = 0; k < K; k++)
         for (uint32_t mv = 0; mv < 2; mv++) {
             uint32_t pg0 = 0, npg = 0;
@@ -328,7 +333,12 @@ void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab
             io.tid = &dt;
             io.written = &written;
             std::fill(cnt.begin(), cnt.end(), 0u);
-            if (jobs == nullptr) {
+            if (COUNT && cnt16_chunk != 0) {
+                std::fill(cnt.begin(), cnt.end(), 0xDEADu);  // the first chunk sets the row
+                pfwc_fuse::emit_pairs_diet_cnt16(tab.data(), C, P_pub, s.tiles_x, pg0, npg, io,
+                                                 cnt16.data(), span, cnt.data(), cnt16_chunk);
+                std::fill(cnt.begin() + span, cnt.end(), 0u);
+            } else if (jobs == nullptr) {
                 pfwc_fuse::emit_pairs_diet<COUNT>(tab.data(), C, P_pub, s.tiles_x, pg0, npg, io,
                                                   COUNT ? cnt.data() : nullptr);
             } else {
@@ -415,6 +425,9 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
     const uint32_t jd[4] = {430, 215, 640, 640}, js[4] = {300, 300, 3, 4};
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed, jd);
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, nullptr, js);
+    // Task #577 (K2_CNT16): uint16_t counts in chunks of 1, 3 and the device's pages.
+    for (uint32_t ch : {1u, 3u, pfwc_fuse::CNT16_CHUNK_PG})
+        check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, nullptr, nullptr, ch);
 }
 
 }  // namespace
