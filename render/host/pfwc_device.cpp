@@ -237,7 +237,14 @@ static bool chunk_unit_on() {
     return v;
 }
 constexpr uint32_t UL_ELEMS = 64, UL_PER_CHUNK = 16;
-static uint32_t tlist_max_page() { return chunk_unit_on() ? 2048u : TLIST_MAX_PAGE; }
+// GSPLAT_TT_CHUNK_UNIT_ID=1: same u64 unit cull on the host, but each pfwc chunk is the 16 units
+// of a 1024-tile holding a surviving unit (lanes as in the c1k path), still read as 16 x 256 B:
+// the gather cost at c1k's data and order (the interleaved u64 list failed the sort on device).
+static bool chunk_unit_id_on() {
+    static const bool v = chunk_unit_on() && vis_env_u32("GSPLAT_TT_CHUNK_UNIT_ID", 0) != 0;
+    return v;
+}
+static uint32_t tlist_max_page() { return chunk_unit_on() ? 4096u : TLIST_MAX_PAGE; }
 static float chunk_cull_k() {
     static const float k = [] {
         const char* e = std::getenv("GSPLAT_TT_CHUNK_K");
@@ -1002,6 +1009,16 @@ double pfwc_tt(
             }
             const std::size_t M = surv.size(), T = (M + UL_PER_CHUNK - 1) / UL_PER_CHUNK;
             n_list = T + (tail != NONE ? 1 : 0);
+            std::vector<uint32_t> idt;  // chunk_unit_id_on: the 1024-tiles holding a surviving unit
+            if (chunk_unit_id_on()) {
+                if (tail != NONE) surv.push_back(tail);
+                for (uint32_t u : surv)
+                    if (idt.empty() || idt.back() != u / UL_PER_CHUNK) idt.push_back(u / UL_PER_CHUNK);
+                if (vis_env_u32("GSPLAT_TT_CHUNK_LOG", 0) != 0)
+                    std::cerr << "[gsplat_tt::pfwc] unit-id cull: units " << surv.size() << " u64_chunks " << n_list
+                              << " id_chunks " << idt.size() << "\n";
+                n_list = idt.size();
+            }
             const uint32_t words = page / 4u;
             if (n_list > num_tiles || chunk_cull::list_count(n_list, 0, num_cores) * UL_PER_CHUNK > words)
                 throw std::runtime_error("[gsplat_tt::pfwc] unit cull: " + std::to_string(n_list) +
@@ -1009,6 +1026,11 @@ double pfwc_tt(
             ctx->tlist_host.assign(std::size_t{words} * num_cores, NONE);
             for (std::size_t j = 0; j < n_list; ++j) {
                 uint32_t* d = &ctx->tlist_host[(j % num_cores) * words + (j / num_cores) * UL_PER_CHUNK];
+                if (!idt.empty()) {
+                    for (uint32_t i = 0; i < UL_PER_CHUNK && idt[j] * UL_PER_CHUNK + i < nce; ++i)
+                        d[i] = idt[j] * UL_PER_CHUNK + i;
+                    continue;
+                }
                 if (j == T) { d[0] = tail; continue; }
                 for (std::size_t i = 0; i < UL_PER_CHUNK && j + i * T < M; ++i) d[i] = surv[j + i * T];
             }

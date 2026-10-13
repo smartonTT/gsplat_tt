@@ -2,7 +2,7 @@
 # t644 (from docs/exp1-t584/drive.sh): device probe of the pfwc u64 unit gather (arms in remote_ab.sh)
 # on the measurement box, one `ttp lock p100` around: ssh preflight, sync + build of <rev> into $T,
 # a 30-view md5 dump per arm (base must match the golden), a discarded b2b warm-up per arm, then
-# 3 rounds (orders base u64 u64ns c1k / reversed / forward) of b2b + serialised latency per arm.
+# 3 rounds (orders base c1k u64id / reversed / forward) of b2b + serialised latency per arm.
 # No kept iteration, so no hero shot.
 #   ttp detach t644 -- docs/u64-gather-t644/drive.sh <rev>   (Mac, worktree root; O=<out dir>)
 # Each remote step is its own short devrun ssh session, so an ssh drop loses one step only.
@@ -35,7 +35,7 @@ echo "=== drive t644 $sha unit-gather probe on $H:$T $(TZ=America/Los_Angeles da
 opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 3; }
 tail -2 "$O/sync.log"
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t644 $sha u64 gather probe ($H)"
-$SSH "$H" "rm -rf $T/tmp/t644 /localdev/smarton/.cache/ttmc-t644base /localdev/smarton/.cache/ttmc-t644c1k /localdev/smarton/.cache/ttmc-t644u64 /localdev/smarton/.cache/ttmc-t644u64ns; mkdir -p $T/tmp/t644"
+$SSH "$H" "rm -rf $T/tmp/t644 /localdev/smarton/.cache/ttmc-t644base /localdev/smarton/.cache/ttmc-t644c1k /localdev/smarton/.cache/ttmc-t644u64 /localdev/smarton/.cache/ttmc-t644u64id; mkdir -p $T/tmp/t644"
 pat="^(===|run rc|B2B |SUMMARY|MD5|HANG|Trace|TT_FATAL|TT_THROW|error:)"
 rc=0
 step() {  # name timeout round mode arms...
@@ -45,12 +45,13 @@ step() {  # name timeout round mode arms...
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
-for a in base u64 u64ns c1k; do step verify-$a 480 0 dump $a; done
+for a in base c1k u64id u64; do step verify-$a 480 0 dump $a; done
 grep -q "MD5 golden rc=0 (base)" "$O/verify-base.out" || { echo "=== base verify failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/"; exit 8; }
-grep -q "^run rc=0" "$O/verify-u64.out" || { echo "=== u64 arm failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/"; exit 9; }
-for a in base u64 u64ns c1k; do step warm-$a 240 0 b2b $a; done
+grep -q "^run rc=0" "$O/verify-u64id.out" || { echo "=== u64id arm failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/"; exit 9; }
+rc=0  # the u64 dump is diagnostic only
+for a in base c1k u64id; do step warm-$a 240 0 b2b $a; done
 for r in 1 2 3; do
-  case $r in 2) arms="c1k u64ns u64 base" ;; *) arms="base u64 u64ns c1k" ;; esac
+  case $r in 2) arms="u64id c1k base" ;; *) arms="base c1k u64id" ;; esac
   for a in $arms; do step r$r-b2b-$a 240 $r b2b $a; step r$r-lat-$a 240 $r lat $a; done
 done
 scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/" || rc=4

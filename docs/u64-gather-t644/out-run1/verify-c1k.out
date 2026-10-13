@@ -1,0 +1,65 @@
+[ttw 2026-10-13T13:25:19-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=480s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-13T13:25:19-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 480s.
+[ttw 2026-10-13T13:25:19-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-13T13:25:19-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-13T13:25:19-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-13T13:25:19-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-13T13:25:19-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-13T13:25:19-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-13T13:25:19-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-13T13:25:19-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-13T13:25:19-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-13T13:25:19-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=90553d1e bin=dad729cb129737fe t644 90553d1e u64 gather probe (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t644-verify-c1k  timeout=480s  worry=600s  ts=2026-10-13T13:25:19-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/u64-gather-t644/remote_ab.sh 0 dump c1k
+-----------------------------------------
+=== r0-dump-c1k 90553d1e GSPLAT_TT_CHUNK_CULL=1  cache=/localdev/smarton/.cache/ttmc-t644c1k 20:25:21 load=1.97
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.3 min_ms=6.4 max_ms=12.2 n_views=30 warmup_s=19.6 out=/localdev/smarton/gstt2-t513/tmp/t644-r0-dump-c1k
+TTW_TIMING ms_view=9.219
+TTW_TIMING stage_head=0.007
+TTW_TIMING stage_project=0.456
+TTW_TIMING stage_tile_assign=0.008
+TTW_TIMING stage_sort=0.833
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=7.440
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.005
+TTW_TIMING stage_xview=0.380
+TTW_TIMING stage_view_total=9.143
+TTW_TIMING stage_pybind=0.076
+STAGES n=30 head=0.007 project=0.456 tile_assign=0.008 sort=0.833 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.440 d2h=0.011 assemble=0.000 tail=0.005 xview=0.380 | sum=9.140 view_total=9.143 resid_in_view=+0.003 avg_frame_ms=9.219 resid_vs_frame=+0.079 xview_hits=29 xview_misses=0
+TTW_TIMING stage_sort_pread=0.003
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_layout=0.081
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.518
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.332
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.108
+TTW_TIMING stage_sort_pre=0.002
+TTW_TIMING stage_sort_log=0.011
+TTW_TIMING stage_sort_cont_prep=0.037
+TTW_TIMING stage_sort_cont_rtargs=0.108
+TTW_TIMING stage_sort_cont_other=-0.373
+TTW_TIMING stage_sort_other=0.005
+TTW_TIMING stage_project_pfwc_setup=0.191
+TTW_TIMING stage_project_pfwc_rtargs=0.095
+TTW_TIMING stage_project_pfwc_chunkcull=0.185
+TTW_TIMING stage_project_pfwc_enqueue=0.040
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.004
+TTW_TIMING stage_project_gather_rtargs=0.000
+MD5_GOLDEN_FAIL grid 11x10: list 93a4cef1 != golden 077caaba (30 views)
+MD5 golden rc=1 (c1k)
+=== done 0 dump 20:25:57
+[ttw] log: /Users/smarton/dev/gsplat_tt-wt/t644/tmp/ttw-state/logs/t644-verify-c1k-20261013-132519.log
