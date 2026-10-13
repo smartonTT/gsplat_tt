@@ -1,0 +1,42 @@
+================ BUILD ID ================
+  cpp : #124 sha=cd2a935f bin=348a7bd374bf3885 t629 51111ee6 b2b floor probes (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t629-r2b  timeout=400s  worry=600s  ts=2026-10-13T11:52:23-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/size-unsized-t629/remote.sh 2 ts100 ts50 base
+-----------------------------------------
+=== r2-ts100 51111ee6 GSPLAT_TT_HTL=1 GSPLAT_TT_PFWC_TSPIN_US=100  18:52:27 load=10.53
+run rc=0
+HTL wrote 1676 marks
+HTL wrote 3296 marks
+HTL wrote 4916 marks
+HTL wrote 6536 marks
+HTL wrote 8156 marks
+HTL wrote 9776 marks
+HTL wrote 11396 marks
+HTL wrote 13016 marks
+HTL wrote 14636 marks
+HTL wrote 16256 marks
+HTL wrote 17876 marks
+HTL wrote 19496 marks
+=== r2-ts50 51111ee6 GSPLAT_TT_HTL=1 GSPLAT_TT_PFWC_TSPIN_US=50  18:52:41 load=9.22
+run rc=0
+HTL wrote 1676 marks
+HTL wrote 3296 marks
+HTL wrote 4916 marks
+HTL wrote 6536 marks
+HTL wrote 8156 marks
+HTL wrote 9776 marks
+HTL wrote 11396 marks
+HTL wrote 13016 marks
+HTL wrote 14636 marks
+HTL wrote 16256 marks
+HTL wrote 17876 marks
+HTL wrote 19496 marks
+=== r2-base 51111ee6   18:52:55 load=9.01
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.431 fps=118.61 ms_frame_median=8.433 pass_ms_frame=8.431,8.437,8.443,8.431,8.427,8.427,8.441,8.428,8.437,8.443,8.428,8.437,8.437,8.425,8.433,8.433,8.432,8.433,8.437,8.384 check_pass_ms_frame=8.710 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.431
+TTW_TIMING b2b_ms_frame_median=8.433
+=== done 2 18:53:09
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t629/tmp/ttw-state/logs/t629-r2b-20261013-115221.log

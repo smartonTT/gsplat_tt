@@ -1,0 +1,81 @@
+run-r0-base ms_frame=8.452 fps=118.32 ms_frame_median=8.450 raw_md5=1d372b94
+run-r0-htl ms_frame=8.451 fps=118.32 ms_frame_median=8.456 raw_md5=1d372b94
+run-r1-base ms_frame=8.454 fps=118.28 ms_frame_median=8.452 raw_md5=1d372b94
+run-r1-htl ms_frame=8.459 fps=118.21 ms_frame_median=8.461 raw_md5=1d372b94
+run-r1-ts100 ms_frame=8.854 fps=112.95 ms_frame_median=8.564 raw_md5=1d372b94
+run-r1-ts200 ms_frame=8.564 fps=116.77 ms_frame_median=8.563 raw_md5=1d372b94
+run-r1-ts400 ms_frame=8.742 fps=114.40 ms_frame_median=8.742 raw_md5=1d372b94
+run-r1-ts50 ms_frame=8.473 fps=118.02 ms_frame_median=8.472 raw_md5=1d372b94
+run-r2-base ms_frame=8.431 fps=118.61 ms_frame_median=8.433 raw_md5=1d372b94
+run-r2-htl ms_frame=8.473 fps=118.02 ms_frame_median=8.454 raw_md5=1d372b94
+run-r2-ts100 ms_frame=8.502 fps=117.62 ms_frame_median=8.503 raw_md5=1d372b94
+run-r2-ts200 ms_frame=8.595 fps=116.35 ms_frame_median=8.586 raw_md5=1d372b94
+run-r2-ts400 ms_frame=8.780 fps=113.90 ms_frame_median=8.761 raw_md5=1d372b94
+run-r2-ts50 ms_frame=8.465 fps=118.14 ms_frame_median=8.465 raw_md5=1d372b94
+
+== out/htl-r0-htl.txt.gz
+view_total                 n=  661 med=  8517.1 p90=  9501.9 start@     0.0 us
+head                       n=  661 med=     3.2 p90=     3.4 start@     0.1 us
+project                    n=  661 med=   235.8 p90=   259.4 start@     3.4 us
+project_gather_setup       n=  661 med=     1.7 p90=     1.8 start@     3.7 us
+project_gather_wait        n=  661 med=   232.8 p90=   256.8 start@     5.5 us
+sort_early_rtargs          n=  661 med=    18.9 p90=    19.5 start@    99.8 us
+sort_early_enqueue         n=  661 med=    28.8 p90=    35.2 start@   119.1 us
+cq1_proj_m                 n=  661 med=    40.4 p90=    62.1 start@   151.0 us
+project_gather_result      n=  661 med=     0.2 p90=     0.2 start@   238.9 us
+tile_assign                n=  661 med=     3.2 p90=     3.9 start@   240.0 us
+tile_assign_setup          n= 1322 med=     1.6 p90=     1.8 start@   241.1 us
+tile_assign_publish        n=  661 med=     0.7 p90=     0.8 start@   242.5 us
+sort                       n=  661 med=  8262.5 p90=  9255.1 start@   244.0 us
+fold_hook                  n=  659 med=   179.1 p90=   190.8 start@  1239.5 us
+project_cov3d              n=  661 med=     0.1 p90=     0.2 start@  1239.9 us
+project_pfwc_setup         n=  661 med=     2.9 p90=     3.0 start@  1240.5 us
+project_pfwc_rtargs        n=  661 med=    78.5 p90=    87.3 start@  1243.5 us
+project_pfwc_enqueue       n=  661 med=    28.4 p90=    34.2 start@  1323.5 us
+fold_rtargs                n=  659 med=    50.5 p90=    53.7 start@  1421.2 us
+fz_enqueue                 n=  661 med=    17.4 p90=    23.7 start@  1483.7 us
+tail                       n=  661 med=     4.5 p90=     5.0 start@  8510.1 us
+== out/htl-r1-htl.txt.gz
+view_total                 n=  661 med=  8514.5 p90=  9510.9 start@     0.0 us
+head                       n=  661 med=     3.2 p90=     3.5 start@     0.1 us
+project                    n=  661 med=   241.8 p90=   269.2 start@     3.5 us
+project_gather_setup       n=  661 med=     1.7 p90=     1.9 start@     3.7 us
+project_gather_wait        n=  661 med=   238.9 p90=   266.5 start@     5.5 us
+sort_early_rtargs          n=  661 med=    18.9 p90=    21.4 start@    94.6 us
+sort_early_enqueue         n=  661 med=    26.9 p90=    35.2 start@   114.1 us
+cq1_proj_m                 n=  661 med=    42.7 p90=    76.3 start@   145.6 us
+project_gather_result      n=  661 med=     0.2 p90=     0.2 start@   246.4 us
+tile_assign                n=  661 med=     3.1 p90=     3.9 start@   247.6 us
+tile_assign_setup          n= 1322 med=     1.5 p90=     1.6 start@   248.7 us
+tile_assign_publish        n=  661 med=     0.7 p90=     0.9 start@   250.3 us
+sort                       n=  661 med=  8261.0 p90=  9228.6 start@   252.1 us
+fold_hook                  n=  659 med=   177.6 p90=   194.3 start@  1255.2 us
+project_cov3d              n=  661 med=     0.2 p90=     0.2 start@  1255.6 us
+project_pfwc_setup         n=  661 med=     2.9 p90=     3.3 start@  1256.6 us
+project_pfwc_rtargs        n=  661 med=    78.0 p90=    86.4 start@  1259.7 us
+project_pfwc_enqueue       n=  661 med=    28.4 p90=    35.6 start@  1340.7 us
+fold_rtargs                n=  659 med=    49.6 p90=    53.4 start@  1437.6 us
+fz_enqueue                 n=  661 med=    17.6 p90=    25.6 start@  1499.3 us
+tail                       n=  661 med=     4.4 p90=     5.2 start@  8509.9 us
+== out/htl-r2-htl.txt.gz
+view_total                 n=  661 med=  8520.9 p90=  9525.5 start@     0.0 us
+head                       n=  661 med=     3.1 p90=     3.6 start@     0.1 us
+project                    n=  661 med=   246.3 p90=   271.6 start@     3.4 us
+project_gather_setup       n=  661 med=     1.7 p90=     1.9 start@     3.6 us
+project_gather_wait        n=  661 med=   241.2 p90=   269.0 start@     5.3 us
+sort_early_rtargs          n=  661 med=    18.0 p90=    25.6 start@    95.5 us
+sort_early_enqueue         n=  661 med=    26.1 p90=    34.5 start@   113.6 us
+cq1_proj_m                 n=  661 med=    42.5 p90=    76.1 start@   143.5 us
+project_gather_result      n=  661 med=     0.2 p90=     0.2 start@   249.2 us
+tile_assign                n=  661 med=     3.0 p90=     4.2 start@   250.0 us
+tile_assign_setup          n= 1322 med=     1.5 p90=     1.7 start@   252.9 us
+tile_assign_publish        n=  661 med=     0.7 p90=     0.8 start@   254.6 us
+sort                       n=  661 med=  8263.2 p90=  9267.8 start@   256.9 us
+fold_hook                  n=  659 med=   173.5 p90=   212.4 start@  1306.4 us
+project_cov3d              n=  661 med=     0.1 p90=     0.2 start@  1306.8 us
+project_pfwc_setup         n=  661 med=     2.9 p90=     3.4 start@  1307.2 us
+project_pfwc_rtargs        n=  661 med=    76.6 p90=    97.3 start@  1310.1 us
+project_pfwc_enqueue       n=  661 med=    27.6 p90=    34.3 start@  1387.3 us
+fold_rtargs                n=  659 med=    49.4 p90=    55.5 start@  1480.9 us
+fz_enqueue                 n=  661 med=    17.4 p90=    25.5 start@  1540.2 us
+tail                       n=  661 med=     4.4 p90=     4.9 start@  8515.7 us
