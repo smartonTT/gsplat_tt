@@ -1,12 +1,14 @@
 ================ BUILD ID ================
-  cpp : #125 sha=25a7756e bin=f463cbc791d85a95 t595 25a7756e b2b profile (bh-33)
+  cpp : #126 sha=80679a7b bin=f463cbc791d85a95 t595 80679a7b b2b profile (bh-33)
   data: # sha= 
 =========================================
-host=bh-33  tag=t595-p25  timeout=380s  worry=600s  ts=2026-10-13T01:06:38-0700
-cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh tracy P25 25 30 GSPLAT_TT_KCFG_EXTRA_KB=36
+host=bh-33  tag=t595-p25  timeout=380s  worry=600s  ts=2026-10-13T01:18:19-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh tracy P25 25 30 GSPLAT_TT_B4A_FOLD=0
 -----------------------------------------
-=== tracy P25 25:30 [GSPLAT_TT_KCFG_EXTRA_KB=36] 25a7756e 08:06:39 card=p100a load=1.29 0.87 0.68
-tracy P25 rc=1 08:06:43
-Traceback (most recent call last):
-no device csv P25
-[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-p25-20261013-010637.log
+=== tracy P25 25:30 [GSPLAT_TT_B4A_FOLD=0] 80679a7b 08:18:21 card=p100a load=0.83 0.62 0.60
+tracy P25 rc=0 08:18:26
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=7.838 render=7.838 py_resid=0.062 project=2.030 sort=1.175 blend=4.443 d2h=0.009 tail=0.004 xview=0.105 view_total=7.776 project_pfwc_rtargs=0.106 project_pfwc_enqueue=0.032 project_gather_wait=1.988 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=139.293 fps=7.18 ms_frame_median=139.293 pass_ms_frame=139.293 check_pass_ms_frame=7.838 raw_md5=76d4d99c gap_ms=0.00 render_ms_frame=139.293 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t5
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P25 rows 240682
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-p25-20261013-011818.log
