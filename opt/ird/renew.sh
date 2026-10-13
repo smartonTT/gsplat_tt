@@ -435,7 +435,7 @@ if [ "$DEPLOY" = 1 ] && [ "$ROLE" = viewer ]; then
   timeout 60 git fetch -q --tags origin 2>/dev/null || log "git fetch failed: using local refs"
   TSHA=$(git rev-parse --verify -q "$REV^{commit}") || { STATUS=bad_rev; DEPLOY_MSG="cannot resolve --rev $REV"; emit 2; }
   TTREE=$(git rev-parse "$TSHA^{tree}")
-  vs=; [ $PLANNED = 1 ] || vs=$(env VIEWER_HOST="$HOST" opt/viewer/viewer.sh status 2>&1 | head -1)
+  vs=; [ $PLANNED = 1 ] || vs=$(timeout 60 env VIEWER_HOST="$HOST" opt/viewer/viewer.sh status 2>&1 | head -1)
   DSHA=$(sed -nE 's/.*sha=([0-9a-f]+).*/\1/p' <<<"$vs")
   DTREE=; [ -n "$DSHA" ] && DTREE=$(git rev-parse -q --verify "$DSHA^{tree}" 2>/dev/null)
   if [ -n "$DTREE" ] && [ "$DTREE" = "$TTREE" ]; then

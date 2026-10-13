@@ -274,12 +274,17 @@ c() { [ -s "$T/opts" ] && [ -z "$bad" ]; }; check "all $(grep -c . "$T/opts") ss
 [ -z "$bad" ] || sort -u <<<"$bad" | head -5 | sed 's/^/     bad: /'
 
 # 11. Viewer deploy starts the viewer with the B4a fold off (#563: the fold hangs it under ETH
-# dispatch, #556); VIEWER_B4A_FOLD in the caller's env overrides. After case 10: viewer.sh status
-# runs for real here, and its ssh carries no outer timeout.
+# dispatch, #556); VIEWER_B4A_FOLD in the caller's env overrides. viewer.sh status runs for real
+# here; its ssh must run under renew.sh's outer `timeout 60` (#564).
+: > "$T/opts"
 new_case viewer_fold_off; run viewer --rev HEAD
 c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=0 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "deploy runs viewer.sh with VIEWER_B4A_FOLD=0" c
 new_case viewer_fold_env; VIEWER_B4A_FOLD=1 run viewer --rev HEAD
 c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=1 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "VIEWER_B4A_FOLD=1 in the env wins" c
+# 12. Every bh-30 ssh in case 11, viewer.sh status included, runs under an outer timeout (#564).
+CASE=viewer_status_timeout; OUT=
+st=$(grep -c '^ssh bh-30 ' "$T/opts"); unb=$(grep '^ssh bh-30 ' "$T/opts" | grep -vc ' T=1 ')
+c() { [ "$st" -ge 2 ] && [ "$unb" = 0 ]; }; check "viewer.sh status ssh runs under timeout ($st calls, $unb unbounded)" c
 
 echo "$((N - FAILS))/$N passed"
 [ "$FAILS" = 0 ]
