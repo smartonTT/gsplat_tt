@@ -289,10 +289,10 @@ inline volatile uint32_t& ellipse_probe_sink() {
 
 // emit_pairs_diet from a known stream start (c0, lo0) = diet_start(pg0 * 16)
 // (unused when pg0 * 16 >= P_pub: padding only).
-template <bool COUNT, class Io>
+template <bool COUNT, class Io, class Cnt>
 inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
                                  uint32_t tiles_x, uint32_t pg0, uint32_t npg, uint32_t c0,
-                                 uint32_t lo0, Io& io, uint32_t* cnt) {
+                                 uint32_t lo0, Io& io, Cnt* cnt) {
     if (npg == 0) return;
     const uint32_t p_end = (pg0 + npg) * PAGE_WORDS;
     const uint32_t p_real = p_end < P_pub ? p_end : P_pub;
@@ -452,14 +452,37 @@ inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, ui
     }
 }
 
-template <bool COUNT, class Io>
+template <bool COUNT, class Io, class Cnt>
 inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
-                            uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io, uint32_t* cnt) {
+                            uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io, Cnt* cnt) {
     if (npg == 0) return;
     const uint32_t p = pg0 * PAGE_WORDS;
     uint32_t c = 0, lo = 0;
     if (p < P_pub) diet_start(tab, nseg, p, io, &c, &lo);
     emit_pairs_diet_from<COUNT>(tab, nseg, P_pub, tiles_x, pg0, npg, c, lo, io, cnt);
+}
+
+// Task #577: the COUNT pass of emit_pairs_diet with a uint16_t count row (the
+// caller's `span` entries) in chunks of at most chunk_pg pages, so no count can
+// wrap (<= 65535 pairs a chunk), each chunk summed into the 32-bit row `row`.
+// The fused mat+blend BRISC's K2 (B4a fold) keeps its count row on the 8 KB
+// local stack: 4 KB as uint32 ran the stack into .bss (g_b4a_fn) under p150 ETH
+// dispatch, whose firmware leaves 80 B less local memory (#562/#567).
+constexpr uint32_t CNT16_CHUNK_PG = 0xFFFFu / PAGE_WORDS;
+template <class Io, class Row>
+inline void emit_pairs_diet_cnt16(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
+                                  uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io,
+                                  uint16_t* cnt, uint32_t span, Row row,
+                                  uint32_t chunk_pg = CNT16_CHUNK_PG) {
+    uint32_t q = 0;
+    do {
+        const uint32_t n = npg - q < chunk_pg ? npg - q : chunk_pg;
+        for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
+        if (q != 0) io.writes_flushed();  // the last chunk's staged pages leave first
+        emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0 + q, n, io, cnt);
+        for (uint32_t t = 0; t < span; t++) row[t] = (q == 0 ? 0u : row[t]) + cnt[t];
+        q += n;
+    } while (q < npg);
 }
 
 // Task #274 (GSPLAT_TT_K2_TRISC=1): the core's TRISCs run emit_pairs_diet_from
