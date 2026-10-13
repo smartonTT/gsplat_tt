@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=2c895ad2 bin=2711fa7524e0ce89 t574 2c895ad2 BRISC stack fix vs 90268457 (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t574-r3-b2b  timeout=300s  worry=600s  ts=2026-10-12T20:51:43-0700
+cmd: T=/localdev/smarton/gstt2-t513 TB=/localdev/smarton/gstt2-t574b RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/land-t574/remote_ab.sh 3 b2b base new
+-----------------------------------------
+=== r3-b2b-base 90268457 /localdev/smarton/gstt2-t574b cache=/localdev/smarton/.cache/ttmc-t574base 03:51:43 load=3.89
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.587 fps=116.45 ms_frame_median=8.589 pass_ms_frame=8.592,8.589,8.582,8.589,8.588,8.589,8.585,8.589,8.592,8.594,8.592,8.595,8.587,8.599,8.587,8.592,8.585,8.591,8.594,8.532 check_pass_ms_frame=8.672 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=8.587 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.587
+brisc_stack_lines=0
+=== r3-b2b-new 2c895ad2 /localdev/smarton/gstt2-t513 cache=/localdev/smarton/.cache/ttmc-t574new 03:51:57 load=3.33
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.624 fps=115.96 ms_frame_median=8.621 pass_ms_frame=8.629,8.704,8.644,8.619,8.624,8.622,8.624,8.631,8.624,8.632,8.625,8.611,8.618,8.619,8.615,8.616,8.618,8.619,8.618,8.566 check_pass_ms_frame=9.907 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=8.624 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.624
+brisc_stack_lines=0
+=== done 3 b2b 03:52:11
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t574/tmp/ttw-state/logs/t574-r3-b2b-20261012-205142.log

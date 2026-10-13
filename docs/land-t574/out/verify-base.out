@@ -1,0 +1,38 @@
+[ttw 2026-10-12T20:48:47-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=480s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T20:48:47-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 480s.
+[ttw 2026-10-12T20:48:47-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T20:48:47-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T20:48:47-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T20:48:47-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T20:48:47-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T20:48:47-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T20:48:47-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T20:48:47-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T20:48:47-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T20:48:47-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=2c895ad2 bin=2711fa7524e0ce89 t574 2c895ad2 BRISC stack fix vs 90268457 (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t574-verify-base  timeout=480s  worry=600s  ts=2026-10-12T20:48:47-0700
+cmd: T=/localdev/smarton/gstt2-t513 TB=/localdev/smarton/gstt2-t574b RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/land-t574/remote_ab.sh 0 dump base
+-----------------------------------------
+=== r0-dump-base 90268457 /localdev/smarton/gstt2-t574b cache=/localdev/smarton/.cache/ttmc-t574base 03:48:48 load=1.83
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.8 p50_ms=8.9 min_ms=6.2 max_ms=11.4 n_views=30 warmup_s=19.8 out=/localdev/smarton/gstt2-t574b/tmp/t574-r0-dump-base
+TTW_TIMING ms_view=8.771
+brisc_stack_lines=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+stack scan rc=0 elfs=9
+STACK cq_dispatch margin=3856 depth=736 avail=4592 udivdi3=False
+STACK cq_dispatch margin=3856 depth=736 avail=4592 udivdi3=False
+STACK cq_prefetch margin=3856 depth=896 avail=4752 udivdi3=False
+STACK cq_prefetch margin=3840 depth=896 avail=4736 udivdi3=False
+STACK cq_realtime_profiler margin=5040 depth=32 avail=5072 udivdi3=False
+STACK matblend_brisc margin=112 depth=4688 avail=4800 udivdi3=False
+STACK sort_bin_onelaunch margin=3632 depth=1184 avail=4816 udivdi3=False
+STACK tile_assign_scatter_seg margin=176 depth=4640 avail=4816 udivdi3=False
+STACK writer_pfwc_split margin=3728 depth=1184 avail=4912 udivdi3=False
+=== done 0 dump 03:49:22
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t574/tmp/ttw-state/logs/t574-verify-base-20261012-204847.log
