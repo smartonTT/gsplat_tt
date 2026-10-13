@@ -17,3 +17,14 @@
    - 2 = full sort, with the result discarded so the standalone sort reruns.
    If 1 passes and 2 crashes, the cause is in the sort body or the town. If 1 crashes, the
    cause is the barrier/semaphores or the SIB program config itself.
+
+## SIB_DBG result (out-sibdbg/, f6546891, bh-33, 2026-10-12 18:37-18:43 PDT)
+
+- Arm 1 (barrier only): passed, all 30 views rendered (rc 0). The KCFG 48 KB program, the SIB
+  arena, the barrier and the semaphores are not the cause.
+- Arm 2 (full sort in blend, result discarded): hangs at view 2, right after
+  `[B4A] fold view 2 ... ran=1` (rc 124, same as the plain fuse check).
+- So the corruption comes from the sort body or the PACK town running inside blend. Next split:
+  run the sort body without the PACK town (TRISC side) and vice versa, and check whether the sort
+  writes past CB21's arena (e.g. bucket/output pointers sized for the standalone layout landing
+  in K2 scratch kB4aCb 62 or in kernel text).

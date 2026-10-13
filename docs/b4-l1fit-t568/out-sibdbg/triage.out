@@ -1,0 +1,99 @@
+[ttw 2026-10-12T18:40:04-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T18:40:04-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T18:40:04-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T18:40:04-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T18:40:04-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T18:40:04-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T18:40:04-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T18:40:04-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T18:40:04-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T18:40:04-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T18:40:04-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T18:40:04-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #126 sha=f6546891 bin=01898e5c3c417b65 t555 f6546891 triage solo (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t555-triage  timeout=590s  worry=600s  ts=2026-10-12T18:40:05-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t568/remote_triage.sh 
+-----------------------------------------
+=== r0-sibdbg1 f654689 01:40:05 load=10.00
+run rc=0
+[SORT] stage=ONELAUNCH P=2729054 P_kept=2729054 num_tiles=1024 max_tile_n=18629 onelaunch=0.33 layout=0.08 pub_host=0.37 total=0.79ms
+[SORT] stage=ONELAUNCH P=2713776 P_kept=2713776 num_tiles=1024 max_tile_n=18369 onelaunch=0.34 layout=0.08 pub_host=0.36 total=0.78ms
+[SORT] stage=ONELAUNCH P=2684908 P_kept=2684908 num_tiles=1024 max_tile_n=22330 onelaunch=0.36 layout=0.08 pub_host=0.37 total=0.82ms
+[SORT] stage=ONELAUNCH P=2605190 P_kept=2605190 num_tiles=1024 max_tile_n=18553 onelaunch=0.70 layout=0.09 pub_host=0.39 total=1.19ms
+[SORT] stage=ONELAUNCH P=2502433 P_kept=2502433 num_tiles=1024 max_tile_n=20113 onelaunch=0.51 layout=0.09 pub_host=0.36 total=0.96ms
+[SORT] stage=ONELAUNCH P=2324571 P_kept=2324571 num_tiles=1024 max_tile_n=18871 onelaunch=0.52 layout=0.08 pub_host=0.35 total=0.96ms
+[SORT] stage=ONELAUNCH P=2188463 P_kept=2188463 num_tiles=1024 max_tile_n=21416 onelaunch=0.52 layout=0.09 pub_host=0.37 total=0.99ms
+[SORT] stage=ONELAUNCH P=2100242 P_kept=2100242 num_tiles=1024 max_tile_n=21340 onelaunch=0.51 layout=0.08 pub_host=0.36 total=0.96ms
+[SORT] stage=ONELAUNCH P=2052961 P_kept=2052961 num_tiles=1024 max_tile_n=21713 onelaunch=0.55 layout=0.08 pub_host=0.35 total=0.99ms
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+[SORT] stage=ONELAUNCH P=2050213 P_kept=2050213 num_tiles=1024 max_tile_n=20666 onelaunch=0.53 layout=0.08 pub_host=0.34 total=0.95ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.7 p50_ms=10.8 min_ms=7.5 max_ms=13.4 n_views=30 warmup_s=5.1 out=/localdev/smarton/gstt2-t513/tmp/t555-r0-sibdbg1
+=== r0-sibdbg2 f654689 01:40:26 load=9.79
+HANG in r0-sibdbg2
+reset rc=0
+run rc=124
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.52 layout=0.10 pub_host=0.35 total=1.05ms
+[SORT] SORT_IN_BLEND=1 (needs B4A fold, OL early, OL_SOLO+TOWN_NT=1, REC32)
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.47 layout=0.08 pub_host=0.34 total=0.90ms
+[SORT] SORT_IN_BLEND arena placed (R=4)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+----- HANG/TIMEOUT (rc=124) -----
+Command exceeded 590s. Snapshotting non-destructive diagnostics.
+===== ttw diagnose host=bh-33 @ 2026-10-12T18:43:05-0700 =====
+--- device status (read-only) ---
+{
+    "time": "2026-10-13T01:43:06.498074",
+    "host_info": {
+        "OS": "Linux",
+        "Distro": "Ubuntu 22.04.5 LTS",
+        "Kernel": "6.8.0-57-generic",
+        "Hostname": "bh-33-special-smarton-for-reservation-138447",
+        "Platform": "x86_64",
+        "Python": "3.10.21",
+        "Memory": "503.72 GB",
+        "Driver": "TT-KMD 2.9.0"
+    },
+    "host_sw_vers": {
+        "tt_smi": "6.7.0",
+        "pyluwen": "0.10.0",
+        "tt_umd": "0.9.12"
+    },
+    "device_info": [
+        {
+            "smbus_telem": {
+                "BOARD_ID_HIGH": "0x432",
+                "BOARD_ID_LOW": "0x3191b040",
+                "ASIC_ID": null,
+                "HARVESTING_STATE": "0x0",
+                "UPDATE_TELEM_SPEED": "0x64",
+                "VCORE": "0x2cd",
+                "TDP": "0xf",
+                "TDC": "0x15",
+                "VDD_LIMITS": "0x38402bc",
+                "THM_LIMIT_SHUTDOWN": "0x6e",
+                "ASIC_TEMPERATURE": "0x26ef22",
+                "VREG_TEMPERATURE": "0x0",
+                "BOARD_TEMPERATURE": "0x0",
+                "AICLK": "0x320",
+                "AXICLK": "0x3c0",
+                "ARCCLK": "0x320",
+                "L2CPUCLK0": "0x0",
+                "L2CPUCLK1": "0x0",
+                "L2CPUCLK2": "0x0",
+                "L2CPUCLK3": "0x0",
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 01:43:06 up 16:13,  0 users,  load average: 10.20, 9.53, 9.16
+--- device processes ---
+--- JIT cache size ---
+no cache dir
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+Recovery beyond diagnosis is DESTRUCTIVE-GATED. See: recover.sh --help
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t568/tmp/ttw-state/logs/t555-triage-20261012-184005.log
