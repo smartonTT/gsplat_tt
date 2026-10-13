@@ -3670,6 +3670,16 @@ bool sort_in_blend_enabled() {
 }
 
 namespace {
+// Task #568 debug (GSPLAT_TT_SIB_DBG, default 0): 1 = the fused BRISC runs only the global
+// barrier (no sort, no PACK town), 2 = the full sort; both discard sort(N+1), so the
+// standalone sort runs as usual (localises the t568 view-2 crash).
+uint32_t sib_dbg() {
+    static const uint32_t v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SIB_DBG");
+        return (e != nullptr && (e[0] == '1' || e[0] == '2')) ? static_cast<uint32_t>(e[0] - '0') : 0u;
+    }();
+    return v;
+}
 constexpr uint32_t kSibRing = 4u;
 constexpr std::size_t kSibRtaLen = 170;  // 50 + 120 core NoC words (core 0)
 // Scratch buffer ids in matblend_brisc.cpp kSibIds order (mover 0 = id + 16).
@@ -3692,6 +3702,7 @@ void sort_in_blend_defines(std::map<std::string, std::string>& dm, std::map<std:
     dm["OL_TOWN_NT"] = "1u";
     dm["OL_SOLO"] = "1";
     dm["OL_ARENA"] = "1";
+    dm["SIB_DBG"] = std::to_string(sib_dbg()) + "u";
     tdef["OL_RING"] = dm["OL_RING"];
     tdef["OL_RING_DEPTH"] = dm["OL_RING_DEPTH"];
     tdef["OL_TOWN_NT"] = "1u";
@@ -3795,7 +3806,7 @@ bool sort_in_blend_core_args(uint32_t core, const std::array<uint32_t, 8>& sems,
     n[n_base + 2] = ctx->sib_noc_xy[0] & 0xFFFFu;
     n[n_base + 3] = ctx->sib_noc_xy[0] >> 16;
     cp.resize(cp_idx + 1u, 0u);
-    cp[cp_idx] = arena[11];  // town mailbox (id 30)
+    cp[cp_idx] = sib_dbg() == 1u ? 0u : arena[11];  // town mailbox (id 30); 0 = no town
     ctx->sib_used = true;
     return true;
 }
@@ -3812,6 +3823,7 @@ bool sort_in_blend_take(uint32_t num_tiles, uint32_t tiles_x) {
     auto* ctx = context_slot().get();
     if (ctx == nullptr || !ctx->sib_ran) return false;
     ctx->sib_ran = false;
+    if (sib_dbg() != 0u) return false;
     if (ctx->sib_tiles != num_tiles || ctx->sib_tiles_x != tiles_x) return false;
     ctx->ol_early_tiles = num_tiles;
     ctx->ol_early_tiles_x = tiles_x;

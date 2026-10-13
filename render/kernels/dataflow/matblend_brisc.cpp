@@ -107,7 +107,9 @@ void sib_run(F& poll) {
         poll();
         invalidate_l1_cache();
     }
+#if !defined(SIB_DBG) || SIB_DBG != 1u  // t568 debug: 1 = barrier only
     olk::kernel_main();
+#endif
     noc_async_write_barrier();
 }
 #pragma GCC pop_options
