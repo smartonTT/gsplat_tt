@@ -128,10 +128,18 @@ void sib_run(F& poll) {
         twh[tw::H_FIN] = 0u;
         asm volatile("fence" ::: "memory");
     }
-#elif defined(SIB_DBG) && SIB_DBG == 5u
-    {  // t571 debug: 5 = the arm-4 mailbox writes, PACK town off (no handshake, no FIN wait)
+#elif defined(SIB_DBG) && (SIB_DBG == 5u || SIB_DBG == 6u || SIB_DBG == 7u)
+    {  // t571 debug: 5 = the arm-4 mailbox writes, PACK town off (no handshake, no FIN wait);
+       // 6 = the same writes at CB21's base (BRISC's dead mat CB_BSORT), 7 = at CB5's base + 8192
+       // (the start of the CB5 arena region past the blend alias cut)
         namespace tw = sort_ol_town;
-        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(olk::g_ol_arena[tw::CB_TWN + 16u]);
+        auto cb_base = [](uint32_t cb) {
+            const auto& c = get_local_cb_interface(cb);
+            return (c.fifo_limit - c.fifo_size) << cb_addr_shift;
+        };
+        const uint32_t twa = SIB_DBG == 6u ? cb_base(21) : SIB_DBG == 7u ? cb_base(5) + 8192u
+                                                                          : olk::g_ol_arena[tw::CB_TWN + 16u];
+        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(twa);
         twh[tw::H_NB] = 0u;
         twh[tw::H_READY] = 0u;
         for (uint32_t i = 0; i < tw::NT; i++) twh[tw::H_FIN + i] = 0u;
