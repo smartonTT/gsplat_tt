@@ -1,0 +1,15 @@
+
+CMake Error at /usr/local/share/cmake-4.2/Modules/FetchContent.cmake:1928 (message):
+  Build step for flatbuffers failed: 1
+Call Stack (most recent call first):
+  /usr/local/share/cmake-4.2/Modules/FetchContent.cmake:1619 (__FetchContent_populateSubbuild)
+  /usr/local/share/cmake-4.2/Modules/FetchContent.cmake:2155:EVAL:2 (__FetchContent_doPopulation)
+  /usr/local/share/cmake-4.2/Modules/FetchContent.cmake:2155 (cmake_language)
+  /usr/local/share/cmake-4.2/Modules/FetchContent.cmake:2394 (__FetchContent_Populate)
+  .cpmcache/cpm/CPM_0.40.2.cmake:1114 (FetchContent_MakeAvailable)
+  .cpmcache/cpm/CPM_0.40.2.cmake:895 (cpm_fetch_package)
+  third_party/CMakeLists.txt:350 (CPMAddPackage)
+
+
+-- Configuring incomplete, errors occurred!
+[setup_box] rc=1

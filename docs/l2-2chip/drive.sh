@@ -13,8 +13,8 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
-H=${H:-bh-50}; JOB=${JOB:-132917}; T=${T:-/localdev/smarton/gstt2}; R=/localdev/smarton
-JOB_START=${JOB_START:-1791867178}   # 2026-10-12 21:52:58 PDT, from ird reserve's output
+H=${H:-bh-50}; JOB=${JOB:-132945}; T=${T:-/localdev/smarton/gstt2}; R=/localdev/smarton
+JOB_START=${JOB_START:-1791869358}   # 2026-10-12 22:29:18 PDT, from ird reserve's output
 D=docs/l2-2chip; O=${O:-$D/out}; mkdir -p "$O" tmp/t582-bin
 PRE=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
 for c in ssh scp; do
