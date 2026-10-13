@@ -60,6 +60,10 @@ void b4a_yield() {
 // 3 cores, 4-5 core 0 NoC x/y, 6-19 arena placements (cb << 24 | byte offset)
 // of kSibIds, 20-49 the sort's args (core 0: 50- the NoC xy list).
 #include "sort_onelaunch_algo.h"
+// Task #565: the sort part at -Os. At -O3 it put the fused program at 122640 B,
+// needing a +51 KB kernel config buffer, where the static CBs fit only up to +34 KB.
+#pragma GCC push_options
+#pragma GCC optimize("Os")
 #include "sort_ol_town.h"
 #define OL_YIELD() b4a_yield()
 namespace olk {
@@ -106,6 +110,7 @@ void sib_run(F& poll) {
     olk::kernel_main();
     noc_async_write_barrier();
 }
+#pragma GCC pop_options
 #endif
 template <class F>
 void b4a_run_k2(F& poll) {

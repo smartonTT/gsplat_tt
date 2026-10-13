@@ -1,0 +1,53 @@
+[ttw 2026-10-12T17:34:17-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T17:34:17-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T17:34:17-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T17:34:17-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T17:34:17-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T17:34:17-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T17:34:17-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T17:34:17-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T17:34:17-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T17:34:17-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T17:34:17-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T17:34:17-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #126 sha=d1977c17 bin=12a579c0b48c5def t555 d1977c17 check fuse34 (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t555-r1-b2b  timeout=590s  worry=600s  ts=2026-10-12T17:34:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/remote_ab.sh 1 b2b base fuse34
+-----------------------------------------
+=== r1-b2b-base d1977c1 env=[] 00:34:18 load=12.51
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 OL_TOWN_NT=3 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=9.836 render=9.836 py_resid=0.066 project=0.292 sort=2.224 blend=7.036 d2h=0.010 tail=0.005 xview=0.191 view_total=9.770 project_pfwc_rtargs=0.089 project_pfwc_enqueue=0.034 project_gather_wait=0.283 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=1.127 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.083 sort
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=8.690 render=8.690 py_resid=0.061 project=0.212 sort=0.844 blend=7.371 d2h=0.009 tail=0.005 xview=0.180 view_total=8.630 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.029 project_gather_wait=0.209 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.358 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.083 sort
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=8.601 render=8.601 py_resid=0.061 project=0.206 sort=0.760 blend=7.373 d2h=0.009 tail=0.004 xview=0.181 view_total=8.541 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.029 project_gather_wait=0.203 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.311 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.083 sort
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=8.611 render=8.611 py_resid=0.063 project=0.202 sort=0.729 blend=7.411 d2h=0.009 tail=0.005 xview=0.185 view_total=8.549 project_pfwc_rtargs=0.084 project_pfwc_enqueue=0.030 project_gather_wait=0.199 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.294 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.068 sort
+B2B_STAGES pass=4 views=30 gap_ms=0.00 period=8.616 render=8.616 py_resid=0.062 project=0.201 sort=0.730 blend=7.418 d2h=0.009 tail=0.005 xview=0.183 view_total=8.554 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.029 project_gather_wait=0.198 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.295 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.067 sort
+B2B_STAGES pass=5 views=30 gap_ms=0.00 period=8.628 render=8.628 py_resid=0.064 project=0.204 sort=0.739 blend=7.414 d2h=0.009 tail=0.005 xview=0.185 view_total=8.564 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.030 project_gather_wait=0.201 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.299 sort_publish_host=0.340 sort_publish_wait=0.000 sort_mat=0.066 sort
+B2B_STAGES pass=6 views=30 gap_ms=0.00 period=8.602 render=8.602 py_resid=0.061 project=0.195 sort=0.732 blend=7.411 d2h=0.009 tail=0.005 xview=0.181 view_total=8.540 project_pfwc_rtargs=0.084 project_pfwc_enqueue=0.029 project_gather_wait=0.192 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.298 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.066 sort
+B2B_STAGES pass=7 views=30 gap_ms=0.00 period=8.603 render=8.603 py_resid=0.060 project=0.192 sort=0.719 blend=7.430 d2h=0.009 tail=0.004 xview=0.180 view_total=8.543 project_pfwc_rtargs=0.083 project_pfwc_enqueue=0.029 project_gather_wait=0.190 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.291 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.066 sort
+B2B_STAGES pass=8 views=30 gap_ms=0.00 period=8.603 render=8.603 py_resid=0.060 project=0.192 sort=0.719 blend=7.433 d2h=0.009 tail=0.004 xview=0.178 view_total=8.543 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.028 project_gather_wait=0.189 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.289 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.065 sort
+B2B_STAGES pass=9 views=30 gap_ms=0.00 period=8.599 render=8.599 py_resid=0.059 project=0.192 sort=0.717 blend=7.432 d2h=0.009 tail=0.004 xview=0.178 view_total=8.540 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.029 project_gather_wait=0.189 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.289 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.064 sort
+B2B_STAGES pass=10 views=30 gap_ms=0.00 period=8.610 render=8.610 py_resid=0.060 project=0.193 sort=0.715 blend=7.440 d2h=0.009 tail=0.004 xview=0.181 view_total=8.550 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.028 project_gather_wait=0.190 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.289 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.064 sor
+B2B_STAGES pass=11 views=30 gap_ms=0.00 period=8.603 render=8.603 py_resid=0.061 project=0.191 sort=0.718 blend=7.434 d2h=0.009 tail=0.005 xview=0.178 view_total=8.543 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.028 project_gather_wait=0.188 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.289 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.064 sor
+B2B_STAGES pass=12 views=30 gap_ms=0.00 period=8.604 render=8.604 py_resid=0.060 project=0.192 sort=0.715 blend=7.437 d2h=0.008 tail=0.005 xview=0.179 view_total=8.544 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.029 project_gather_wait=0.189 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.288 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.065 sor
+B2B_STAGES pass=13 views=30 gap_ms=0.00 period=8.597 render=8.597 py_resid=0.060 project=0.192 sort=0.720 blend=7.425 d2h=0.009 tail=0.004 xview=0.179 view_total=8.537 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.028 project_gather_wait=0.190 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.291 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.064 sor
+B2B_STAGES pass=14 views=30 gap_ms=0.00 period=8.601 render=8.601 py_resid=0.060 project=0.191 sort=0.718 blend=7.430 d2h=0.009 tail=0.004 xview=0.179 view_total=8.541 project_pfwc_rtargs=0.082 project_pfwc_enqueue=0.030 project_gather_wait=0.188 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.289 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.065 sor
+=== r1-b2b-fuse34 d1977c1 env=[GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1 GSPLAT_TT_KCFG_EXTRA_KB=34] 00:34:34 load=11.89
+run rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 OL_TOWN_NT=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+2026-10-13 00:34:38.413 | critical |          Always | TT_FATAL: Program size (122640) too large for kernel config buffer (105472) on TENSIX (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+Traceback (most recent call last):
+=== done 1 b2b 00:34:38
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t565/tmp/ttw-state/logs/t555-r1-b2b-20261012-173417.log

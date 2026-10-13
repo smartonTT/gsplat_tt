@@ -26,14 +26,15 @@ inline bool kcfg_profiler_on(const char* prof_env) {
 // Task #302: with the split the profiler size is +32 KB, not +40. The traced split pfwc with
 // the BRISC reader is 97536 B (fits from +27 KB), and at +40 KB the fused mat+blend program's
 // static CBs overflow L1 by 5888 B (they fit up to +34 KB).
-// Task #565: GSPLAT_TT_SORT_IN_BLEND=1 adds the solo sort to the fused BRISC
-// (t544: about +12.4 KB over today's 32), so at least 45 KB.
+// Task #565: GSPLAT_TT_SORT_IN_BLEND=1 adds the solo sort to the fused BRISC and PACK.
+// At -O3 that program was 122640 B (+51 KB), but the fused static CBs overflow L1 above
+// +34 KB, so sort in blend opens at 34 KB and builds its sort code at -Os.
 inline long kcfg_extra_kb(const char* extra_env, bool split_fused, bool rd_brisc, bool covcam_sfpu,
                           bool profiler, bool sort_in_blend = false) {
     if (extra_env != nullptr) return std::atol(extra_env);
     long kb = split_fused ? (rd_brisc ? 32 : 24) : (covcam_sfpu ? 8 : 0);
     if (profiler) kb = split_fused ? 32 : kb + 8;
-    if (sort_in_blend && kb < 45) kb = 45;
+    if (sort_in_blend && kb < 34) kb = 34;
     return kb;
 }
 

@@ -43,9 +43,12 @@ namespace matk {
 // then drains it after the blend. Compute arg SIB_TOWN_RTA: the mailbox's
 // placement (cb << 24 | byte offset in that CB's storage), 0 = no sort.
 #define OL_TOWN_EMBED 1
+#pragma GCC push_options
+#pragma GCC optimize("Os")  // task #565: kernel config size, see matblend_brisc.cpp
 namespace olt {
 #include "sort_ol_town_compute.cpp"
 }  // namespace olt
+#pragma GCC pop_options
 // PACK only (blend_t_readback calls it on every thread). No tensix_sync: a
 // stale nonzero read only ends the poll early; tile_regs_wait still waits.
 inline void sib_mathwait() {
