@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=ab9b4077 bin=2b081f7383a0748e t606 ab9b4077 PFWC_RECFAST+VIS_FAST A/B (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t606-warm  timeout=300s  worry=600s  ts=2026-10-13T02:39:45-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/pfwc-bundle-t606/remote_ab.sh 0 b2b base new
+-----------------------------------------
+=== r0-b2b-base ab9b4077 RECFAST=0 VIS_FAST=0 cache=/localdev/smarton/.cache/ttmc-t606base 09:39:47 load=1.25
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.442 fps=118.46 ms_frame_median=8.440 pass_ms_frame=8.456,8.461,8.450,8.493,8.434,8.439,8.438,8.436,8.441,8.440,8.441,8.438,8.442,8.438,8.445,8.435,8.435,8.438,8.446,8.387 check_pass_ms_frame=9.916 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.442 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.442
+=== r0-b2b-new ab9b4077 RECFAST=1 VIS_FAST=1 cache=/localdev/smarton/.cache/ttmc-t606new 09:40:01 load=1.26
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.370 fps=119.47 ms_frame_median=8.372 pass_ms_frame=8.375,8.372,8.377,8.364,8.375,8.372,8.361,8.416,8.370,8.368,8.371,8.379,8.370,8.358,8.375,8.373,8.367,8.374,8.369,8.319 check_pass_ms_frame=9.700 raw_md5=b0ca00be gap_ms=0.00 render_ms_frame=8.370 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.370
+=== done 0 b2b 09:40:14
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t606/tmp/ttw-state/logs/t606-warm-20261013-023945.log

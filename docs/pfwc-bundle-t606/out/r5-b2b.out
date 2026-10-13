@@ -1,0 +1,36 @@
+[ttw 2026-10-13T02:42:24-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=420s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-13T02:42:24-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 420s.
+[ttw 2026-10-13T02:42:24-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-13T02:42:24-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-13T02:42:24-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-13T02:42:24-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-13T02:42:24-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-13T02:42:24-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-13T02:42:24-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-13T02:42:24-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-13T02:42:24-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-13T02:42:24-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=ab9b4077 bin=2b081f7383a0748e t606 ab9b4077 PFWC_RECFAST+VIS_FAST A/B (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t606-r5-b2b  timeout=420s  worry=600s  ts=2026-10-13T02:42:25-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=390 bash /localdev/smarton/gstt2-t513/docs/pfwc-bundle-t606/remote_ab.sh 5 b2b vis new base
+-----------------------------------------
+=== r5-b2b-vis ab9b4077 RECFAST=0 VIS_FAST=1 cache=/localdev/smarton/.cache/ttmc-t606vis 09:42:26 load=2.53
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.422 fps=118.73 ms_frame_median=8.424 pass_ms_frame=8.431,8.433,8.427,8.437,8.422,8.426,8.424,8.424,8.424,8.422,8.423,8.420,8.425,8.432,8.427,8.429,8.425,8.411,8.419,8.368 check_pass_ms_frame=9.838 raw_md5=b0ca00be gap_ms=0.00 render_ms_frame=8.422 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.422
+=== r5-b2b-new ab9b4077 RECFAST=1 VIS_FAST=1 cache=/localdev/smarton/.cache/ttmc-t606new 09:42:58 load=2.90
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.367 fps=119.52 ms_frame_median=8.370 pass_ms_frame=8.374,8.370,8.376,8.375,8.370,8.358,8.371,8.368,8.362,8.370,8.365,8.375,8.372,8.367,8.376,8.374,8.371,8.364,8.363,8.321 check_pass_ms_frame=9.744 raw_md5=b0ca00be gap_ms=0.00 render_ms_frame=8.367 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.367
+=== r5-b2b-base ab9b4077 RECFAST=0 VIS_FAST=0 cache=/localdev/smarton/.cache/ttmc-t606base 09:43:12 load=2.63
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.444 fps=118.43 ms_frame_median=8.445 pass_ms_frame=8.444,8.440,8.449,8.448,8.456,8.443,8.451,8.445,8.433,8.444,8.444,8.455,8.458,8.441,8.447,8.439,8.443,8.447,8.456,8.389 check_pass_ms_frame=9.755 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.444 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.444
+=== done 5 b2b 09:43:25
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t606/tmp/ttw-state/logs/t606-r5-b2b-20261013-024224.log
