@@ -60,7 +60,7 @@ R
 do_start() {
   # Debug knobs (task #357), forwarded only when set here: VIEWER_STALL_FILE arms the
   # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks.
-  # VIEWER_B4A_FOLD=0 turns the B4a fold off (task #556: the fold hangs the pipelined viewer).
+  # VIEWER_B4A_FOLD=0 turns the B4a fold off (task #556 hang, fixed by #577), 1 forces it on.
   rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH ETHOV=$ETHOV DISPATCH=${VIEWER_DISPATCH:-}" \
       "GSPLAT_VIEWER_STALL_FILE=${VIEWER_STALL_FILE:-} GSPLAT_VIEWER_PYSPY=${VIEWER_PYSPY:-}" \
       "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S}" \

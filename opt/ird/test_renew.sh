@@ -273,12 +273,12 @@ bad=$(grep -vE 'ControlMaster=no' "$T/opts"; grep -vE 'ControlPath=none' "$T/opt
 c() { [ -s "$T/opts" ] && [ -z "$bad" ]; }; check "all $(grep -c . "$T/opts") ssh/scp calls are mux-free, strict and bounded" c
 [ -z "$bad" ] || sort -u <<<"$bad" | head -5 | sed 's/^/     bad: /'
 
-# 11. Viewer deploy starts the viewer with the B4a fold off (#563: the fold hangs it under ETH
-# dispatch, #556); VIEWER_B4A_FOLD in the caller's env overrides. viewer.sh status runs for real
+# 11. Viewer deploy starts the viewer with the tree's B4a fold default (VIEWER_B4A_FOLD empty;
+# on since #577 fixed the ETH hang, #556/#563); VIEWER_B4A_FOLD in the caller's env overrides. viewer.sh status runs for real
 # here; its ssh must run under renew.sh's outer `timeout 60` (#564).
 : > "$T/opts"
 new_case viewer_fold_off; run viewer --rev HEAD
-c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=0 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "deploy runs viewer.sh with VIEWER_B4A_FOLD=0" c
+c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD= opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "deploy runs viewer.sh with the tree's fold default" c
 new_case viewer_fold_env; VIEWER_B4A_FOLD=1 run viewer --rev HEAD
 c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=1 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "VIEWER_B4A_FOLD=1 in the env wins" c
 # 12. Every bh-30 ssh in case 11, viewer.sh status included, runs under an outer timeout (#564).
