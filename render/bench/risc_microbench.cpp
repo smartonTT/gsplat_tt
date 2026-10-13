@@ -173,7 +173,7 @@ void emit_suite(Env& e, double mhz) {
         {{BRISC, 4096}}, {{NCRISC, 4096}}, {{BRISC, 4096}, {NCRISC, 4096}}};
     for (const auto& p : probes)
         for (const auto& movers : mover_sets)
-            for (int scope = 0; scope < (pfwcrec ? 1 : 2); scope++) {
+            for (int scope = 0; scope < 2; scope++) {
                 Spec s{p.name, "p10_emit_noc.cpp",
                        {{"MB_DATA_PAGE", std::to_string(p.mode == 0 ? P64_PAGE : BKT_PAGE) + "u"},
                         {"MB_XFER", std::to_string(p.xfer) + "u"},
