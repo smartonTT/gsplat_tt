@@ -1,0 +1,65 @@
+[ttw 2026-10-13T15:09:35-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=480s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-13T15:09:35-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 480s.
+[ttw 2026-10-13T15:09:36-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-13T15:09:36-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-13T15:09:36-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-13T15:09:36-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-13T15:09:37-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-13T15:09:37-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-13T15:09:37-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-13T15:09:38-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-13T15:09:38-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-13T15:09:38-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #126 sha=29a00c41 bin=357c3d117adcabe8 t644 29a00c41 u64 gather probe (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t644-verify-u64  timeout=480s  worry=600s  ts=2026-10-13T15:09:41-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/u64-gather-t644/remote_ab.sh 0 dump u64
+-----------------------------------------
+=== r0-dump-u64 29a00c41 GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_UNIT=64 GSPLAT_TT_CHUNK_LOG=1 cache=/localdev/smarton/.cache/ttmc-t644u64 22:09:51 load=2.31
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.7 p50_ms=10.7 min_ms=6.2 max_ms=15.7 n_views=30 warmup_s=19.6 out=/localdev/smarton/gstt2-t513/tmp/t644-r0-dump-u64
+TTW_TIMING ms_view=10.712
+TTW_TIMING stage_head=0.006
+TTW_TIMING stage_project=0.531
+TTW_TIMING stage_tile_assign=0.009
+TTW_TIMING stage_sort=-1.061
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=8.888
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.008
+TTW_TIMING stage_xview=2.234
+TTW_TIMING stage_view_total=10.630
+TTW_TIMING stage_pybind=0.081
+STAGES n=30 head=0.006 project=0.531 tile_assign=0.009 sort=-1.061 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.888 d2h=0.012 assemble=0.000 tail=0.008 xview=2.234 | sum=10.627 view_total=10.630 resid_in_view=+0.003 avg_frame_ms=10.712 resid_vs_frame=+0.084 xview_hits=29 xview_misses=0
+TTW_TIMING stage_sort_pread=0.003
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_layout=0.084
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.468
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.347
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.107
+TTW_TIMING stage_sort_pre=0.002
+TTW_TIMING stage_sort_log=0.012
+TTW_TIMING stage_sort_cont_prep=0.035
+TTW_TIMING stage_sort_cont_rtargs=0.103
+TTW_TIMING stage_sort_cont_other=-2.228
+TTW_TIMING stage_sort_other=0.006
+TTW_TIMING stage_project_pfwc_setup=2.096
+TTW_TIMING stage_project_pfwc_rtargs=0.098
+TTW_TIMING stage_project_pfwc_chunkcull=2.089
+TTW_TIMING stage_project_pfwc_enqueue=0.044
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.004
+TTW_TIMING stage_project_gather_rtargs=0.000
+MD5_GOLDEN_FAIL grid 11x10: list cebc33b5 != golden 077caaba (30 views)
+MD5 golden rc=1 (u64)
+=== done 0 dump 22:10:28
+[ttw] log: /Users/smarton/dev/gsplat_tt-wt/t644/tmp/ttw-state/logs/t644-verify-u64-20261013-150938.log

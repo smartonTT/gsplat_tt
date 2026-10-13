@@ -1,0 +1,51 @@
+================ BUILD ID ================
+  cpp : #126 sha=29a00c41 bin=357c3d117adcabe8 t644 29a00c41 u64 gather probe (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t644-r2-lat-u64  timeout=240s  worry=600s  ts=2026-10-13T15:15:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=210 bash /localdev/smarton/gstt2-t513/docs/u64-gather-t644/remote_ab.sh 2 lat u64
+-----------------------------------------
+=== r2-lat-u64 29a00c41 GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_UNIT=64 GSPLAT_TT_CHUNK_LOG=0 GSPLAT_TT_XVIEW_OVERLAP=0 cache=/localdev/smarton/.cache/ttmc-t644u64 22:15:19 load=2.40
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.6 p50_ms=11.8 min_ms=10.0 max_ms=13.2 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t513/tmp/t644-r2-lat-u64
+TTW_TIMING ms_view=11.597
+TTW_TIMING stage_head=0.003
+TTW_TIMING stage_project=4.470
+TTW_TIMING stage_tile_assign=0.006
+TTW_TIMING stage_sort=1.055
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=6.010
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.005
+TTW_TIMING stage_xview=0.000
+TTW_TIMING stage_view_total=11.551
+TTW_TIMING stage_pybind=0.045
+STAGES n=30 head=0.003 project=4.470 tile_assign=0.006 sort=1.055 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.010 d2h=0.000 assemble=0.000 tail=0.005 xview=0.000 | sum=11.549 view_total=11.551 resid_in_view=+0.002 avg_frame_ms=11.597 resid_vs_frame=+0.047 xview_hits=0 xview_misses=0
+TTW_TIMING stage_sort_pread=0.002
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_layout=0.075
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.424
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.331
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.079
+TTW_TIMING stage_sort_pre=0.002
+TTW_TIMING stage_sort_log=0.008
+TTW_TIMING stage_sort_cont_prep=0.026
+TTW_TIMING stage_sort_cont_rtargs=0.098
+TTW_TIMING stage_sort_cont_other=0.005
+TTW_TIMING stage_sort_other=0.006
+TTW_TIMING stage_project_pfwc_setup=2.059
+TTW_TIMING stage_project_pfwc_rtargs=0.087
+TTW_TIMING stage_project_pfwc_chunkcull=2.054
+TTW_TIMING stage_project_pfwc_enqueue=0.039
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.002
+TTW_TIMING stage_project_gather_rtargs=0.000
+=== done 2 lat 22:15:26
+[ttw] log: /Users/smarton/dev/gsplat_tt-wt/t644/tmp/ttw-state/logs/t644-r2-lat-u64-20261013-151516.log

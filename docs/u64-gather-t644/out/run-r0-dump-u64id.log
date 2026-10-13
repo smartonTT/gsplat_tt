@@ -1,0 +1,340 @@
+[eth] card p100a: worker dispatch (ETH default is p150 only)
+[run] opacity prune off: GSPLAT_TT_CHUNK_CULL=1 uses another pfwc order
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-13 22:08:44.490 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 22:08:44.490 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 22:08:44.493 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 22:08:44.494 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 22:08:44.494 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 22:08:44.494 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 22:08:44.495 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-13 22:08:44.495 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-13 22:08:44.496 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 22:08:44.496 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 22:08:44.499 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 22:08:44.500 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 22:08:44.500 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 22:08:44.500 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 22:08:44.500 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-13 22:08:44.500 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-13 22:08:44.500 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-13 22:08:44.570 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-13 22:08:44.570 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-13 22:08:44.570 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-13 22:08:44.570 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-13 22:08:44.571 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-13 22:08:44.572 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-13 22:08:44.573 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-13 22:08:44.667 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-13 22:08:44.667 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-13 22:08:44.668 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 22:08:44.668 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 22:08:44.669 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 22:08:44.671 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 22:08:44.671 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 22:08:44.671 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 22:08:44.672 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0x61) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-13 22:08:44.673 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-13 22:08:44.673 | info     |          Fabric |
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 22:08:44.673 | info     |          Fabric |
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 22:08:44.673 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-13 22:08:44.673 | info     |          Fabric |
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 22:08:44.673 | info     |          Fabric |
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 22:08:44.673 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-13 22:08:44.673 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-13 22:08:44.673 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-13 22:08:44.673 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-13 22:08:44.673 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-13 22:08:44.673 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-13 22:08:44.681 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/5481144561508939120/ (build_env_manager.cpp:257)
+2026-10-13 22:08:47.839 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_358738_1256801161_0' (shm_resource_tracker.cpp:265)
+2026-10-13 22:08:47.839 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_358738' (shm_resource_tracker.cpp:275)
+2026-10-13 22:08:49.410 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349985 GHz, device_time_at_sync=6014711511820 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::sort] bucket tile stride 512 pages, 7 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 4946.6 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[gsplat_tt::pfwc] chunk cull: 43138/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 43138 u64_chunks 2698 id_chunks 3619
+[gsplat_tt::pfwc] unit cull: 3619 chunks of 16 units
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.56 layout=0.10 pub_host=0.34 total=1.06ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+BRISC_STACK kernel=cq_dispatch margin=3856 depth=736 avail=4592 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/cq_dispatch/633934113491318542/brisc/brisc.elf
+BRISC_STACK kernel=cq_dispatch margin=3856 depth=736 avail=4592 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/cq_dispatch/8930730885530445444/brisc/brisc.elf
+BRISC_STACK kernel=cq_prefetch margin=3856 depth=896 avail=4752 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/cq_prefetch/13573449100883428965/brisc/brisc.elf
+BRISC_STACK kernel=cq_prefetch margin=3840 depth=896 avail=4736 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/cq_prefetch/8361631735186729858/brisc/brisc.elf
+BRISC_STACK kernel=cq_realtime_profiler margin=5040 depth=32 avail=5072 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/cq_realtime_profiler/9374668436872233237/brisc/brisc.elf
+BRISC_STACK kernel=matblend_brisc margin=1104 depth=3952 avail=5056 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/matblend_brisc/2188857505155710578/brisc/brisc.elf
+BRISC_STACK kernel=sort_bin_onelaunch margin=3888 depth=1184 avail=5072 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/sort_bin_onelaunch/430432708597095045/brisc/brisc.elf
+BRISC_STACK kernel=tile_assign_scatter_seg margin=432 depth=4640 avail=5072 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/tile_assign_scatter_seg/13980983941993714917/brisc/brisc.elf
+BRISC_STACK kernel=writer_pfwc_split margin=3728 depth=1184 avail=4912 reserve=128 elf=/localdev/smarton/.cache/ttmc-t644u64id/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/13165127800422636146/brisc/brisc.elf
+[run] timing 30 views (warmup excluded)
+[gsplat_tt::pfwc] chunk cull: 43138/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 43138 u64_chunks 2698 id_chunks 3619
+[gsplat_tt::pfwc] unit cull: 3619 chunks of 16 units
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.56 layout=0.08 pub_host=0.34 total=0.99ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[gsplat_tt::pfwc] chunk cull: 35154/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 35154 u64_chunks 2199 id_chunks 3391
+[gsplat_tt::pfwc] unit cull: 3391 chunks of 16 units
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[run]   view=hero 17.4ms saved=view00_hero.png
+[B4A] fold: view K2 from the previous blend (1 views)
+[SUBCHUNK] tiles_split=64 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=33181
+[SORT] stage=ONELAUNCH P=2090575 P_kept=2090575 num_tiles=1024 max_tile_n=19171 onelaunch=0.49 layout=0.08 pub_host=0.33 total=0.91ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[gsplat_tt::pfwc] chunk cull: 36445/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 36445 u64_chunks 2279 id_chunks 3446
+[gsplat_tt::pfwc] unit cull: 3446 chunks of 16 units
+[run]   view=orb_00 10.9ms saved=view01_orb_00.png
+[B4A] fold: view K2 from the previous blend (2 views)
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=0.49 layout=0.08 pub_host=0.32 total=0.89ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[gsplat_tt::pfwc] chunk cull: 37993/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 37993 u64_chunks 2376 id_chunks 3503
+[gsplat_tt::pfwc] unit cull: 3503 chunks of 16 units
+[run]   view=orb_01 11.3ms saved=view02_orb_01.png
+[SUBCHUNK] tiles_split=66 total_subchunks=1093 max_subchunks_per_tile=3 payload_pages=35760
+[SORT] stage=ONELAUNCH P=2255766 P_kept=2255766 num_tiles=1024 max_tile_n=18906 onelaunch=0.49 layout=0.08 pub_host=0.34 total=0.92ms
+[gsplat_tt::pfwc] chunk cull: 39608/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 39608 u64_chunks 2477 id_chunks 3578
+[gsplat_tt::pfwc] unit cull: 3578 chunks of 16 units
+[run]   view=orb_02 11.0ms saved=view03_orb_02.png
+[SUBCHUNK] tiles_split=62 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=37612
+[SORT] stage=ONELAUNCH P=2374790 P_kept=2374790 num_tiles=1024 max_tile_n=17834 onelaunch=0.49 layout=0.08 pub_host=0.35 total=0.93ms
+[gsplat_tt::pfwc] chunk cull: 41033/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 41033 u64_chunks 2566 id_chunks 3656
+[gsplat_tt::pfwc] unit cull: 3656 chunks of 16 units
+[run]   view=orb_03 11.3ms saved=view04_orb_03.png
+[SUBCHUNK] tiles_split=68 total_subchunks=1096 max_subchunks_per_tile=3 payload_pages=39937
+[SORT] stage=ONELAUNCH P=2523377 P_kept=2523377 num_tiles=1024 max_tile_n=20034 onelaunch=0.44 layout=0.08 pub_host=0.35 total=0.88ms
+[gsplat_tt::pfwc] chunk cull: 42362/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 42362 u64_chunks 2649 id_chunks 3720
+[gsplat_tt::pfwc] unit cull: 3720 chunks of 16 units
+[run]   view=orb_04 11.5ms saved=view05_orb_04.png
+[SUBCHUNK] tiles_split=70 total_subchunks=1097 max_subchunks_per_tile=3 payload_pages=43036
+[SORT] stage=ONELAUNCH P=2722282 P_kept=2722282 num_tiles=1024 max_tile_n=22369 onelaunch=0.44 layout=0.08 pub_host=0.34 total=0.86ms
+[gsplat_tt::pfwc] chunk cull: 43608/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 43608 u64_chunks 2727 id_chunks 3730
+[gsplat_tt::pfwc] unit cull: 3730 chunks of 16 units
+[run]   view=orb_05 11.8ms saved=view06_orb_05.png
+[SUBCHUNK] tiles_split=75 total_subchunks=1104 max_subchunks_per_tile=3 payload_pages=45752
+[SORT] stage=ONELAUNCH P=2895762 P_kept=2895762 num_tiles=1024 max_tile_n=21267 onelaunch=0.48 layout=0.08 pub_host=0.33 total=0.90ms
+[gsplat_tt::pfwc] chunk cull: 44514/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 44514 u64_chunks 2784 id_chunks 3761
+[gsplat_tt::pfwc] unit cull: 3761 chunks of 16 units
+[run]   view=orb_06 12.1ms saved=view07_orb_06.png
+[SUBCHUNK] tiles_split=81 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=48611
+[SORT] stage=ONELAUNCH P=3078956 P_kept=3078956 num_tiles=1024 max_tile_n=21032 onelaunch=0.49 layout=0.08 pub_host=0.36 total=0.94ms
+[gsplat_tt::pfwc] chunk cull: 45423/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 45423 u64_chunks 2840 id_chunks 3775
+[gsplat_tt::pfwc] unit cull: 3775 chunks of 16 units
+[run]   view=orb_07 12.4ms saved=view08_orb_07.png
+[SUBCHUNK] tiles_split=85 total_subchunks=1114 max_subchunks_per_tile=3 payload_pages=49703
+[SORT] stage=ONELAUNCH P=3149841 P_kept=3149841 num_tiles=1024 max_tile_n=19047 onelaunch=0.48 layout=0.08 pub_host=0.35 total=0.92ms
+[gsplat_tt::pfwc] chunk cull: 46109/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 46109 u64_chunks 2882 id_chunks 3784
+[gsplat_tt::pfwc] unit cull: 3784 chunks of 16 units
+[run]   view=orb_08 12.5ms saved=view09_orb_08.png
+[SUBCHUNK] tiles_split=84 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=50216
+[SORT] stage=ONELAUNCH P=3181780 P_kept=3181780 num_tiles=1024 max_tile_n=19358 onelaunch=0.47 layout=0.08 pub_host=0.34 total=0.90ms
+[gsplat_tt::pfwc] chunk cull: 45926/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 45926 u64_chunks 2871 id_chunks 3764
+[gsplat_tt::pfwc] unit cull: 3764 chunks of 16 units
+[run]   view=orb_09 12.6ms saved=view10_orb_09.png
+[SUBCHUNK] tiles_split=81 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=50327
+[SORT] stage=ONELAUNCH P=3188467 P_kept=3188467 num_tiles=1024 max_tile_n=19519 onelaunch=0.46 layout=0.08 pub_host=0.37 total=0.93ms
+[gsplat_tt::pfwc] chunk cull: 45170/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 45170 u64_chunks 2824 id_chunks 3717
+[gsplat_tt::pfwc] unit cull: 3717 chunks of 16 units
+[run]   view=orb_10 12.5ms saved=view11_orb_10.png
+[SUBCHUNK] tiles_split=82 total_subchunks=1111 max_subchunks_per_tile=3 payload_pages=49049
+[SORT] stage=ONELAUNCH P=3106694 P_kept=3106694 num_tiles=1024 max_tile_n=20025 onelaunch=0.47 layout=0.08 pub_host=0.34 total=0.90ms
+[gsplat_tt::pfwc] chunk cull: 44127/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 44127 u64_chunks 2758 id_chunks 3644
+[gsplat_tt::pfwc] unit cull: 3644 chunks of 16 units
+[run]   view=orb_11 12.2ms saved=view12_orb_11.png
+[SUBCHUNK] tiles_split=81 total_subchunks=1108 max_subchunks_per_tile=3 payload_pages=47132
+[SORT] stage=ONELAUNCH P=2984152 P_kept=2984152 num_tiles=1024 max_tile_n=20390 onelaunch=0.47 layout=0.08 pub_host=0.34 total=0.90ms
+[gsplat_tt::pfwc] chunk cull: 43010/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 43010 u64_chunks 2690 id_chunks 3573
+[gsplat_tt::pfwc] unit cull: 3573 chunks of 16 units
+[run]   view=orb_12 12.0ms saved=view13_orb_12.png
+[SUBCHUNK] tiles_split=79 total_subchunks=1106 max_subchunks_per_tile=3 payload_pages=45617
+[SORT] stage=ONELAUNCH P=2887843 P_kept=2887843 num_tiles=1024 max_tile_n=20927 onelaunch=0.48 layout=0.08 pub_host=0.36 total=0.92ms
+[gsplat_tt::pfwc] chunk cull: 41956/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 41956 u64_chunks 2624 id_chunks 3523
+[gsplat_tt::pfwc] unit cull: 3523 chunks of 16 units
+[run]   view=orb_13 11.9ms saved=view14_orb_13.png
+[SUBCHUNK] tiles_split=75 total_subchunks=1101 max_subchunks_per_tile=3 payload_pages=44556
+[SORT] stage=ONELAUNCH P=2818980 P_kept=2818980 num_tiles=1024 max_tile_n=21145 onelaunch=0.45 layout=0.08 pub_host=0.36 total=0.91ms
+[gsplat_tt::pfwc] chunk cull: 41265/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 41265 u64_chunks 2580 id_chunks 3476
+[gsplat_tt::pfwc] unit cull: 3476 chunks of 16 units
+[run]   view=orb_14 11.7ms saved=view15_orb_14.png
+[SUBCHUNK] tiles_split=75 total_subchunks=1101 max_subchunks_per_tile=3 payload_pages=43664
+[SORT] stage=ONELAUNCH P=2762186 P_kept=2762186 num_tiles=1024 max_tile_n=19314 onelaunch=0.44 layout=0.08 pub_host=0.35 total=0.88ms
+[gsplat_tt::pfwc] chunk cull: 40901/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40901 u64_chunks 2558 id_chunks 3432
+[gsplat_tt::pfwc] unit cull: 3432 chunks of 16 units
+[run]   view=orb_15 11.5ms saved=view16_orb_15.png
+[SUBCHUNK] tiles_split=80 total_subchunks=1106 max_subchunks_per_tile=3 payload_pages=42989
+[SORT] stage=ONELAUNCH P=2719305 P_kept=2719305 num_tiles=1024 max_tile_n=19744 onelaunch=0.48 layout=0.08 pub_host=0.33 total=0.89ms
+[gsplat_tt::pfwc] chunk cull: 40839/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40839 u64_chunks 2553 id_chunks 3408
+[gsplat_tt::pfwc] unit cull: 3408 chunks of 16 units
+[run]   view=orb_16 11.4ms saved=view17_orb_16.png
+[SUBCHUNK] tiles_split=79 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=42964
+[SORT] stage=ONELAUNCH P=2717542 P_kept=2717542 num_tiles=1024 max_tile_n=18173 onelaunch=0.47 layout=0.08 pub_host=0.36 total=0.91ms
+[gsplat_tt::pfwc] chunk cull: 40945/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40945 u64_chunks 2560 id_chunks 3416
+[gsplat_tt::pfwc] unit cull: 3416 chunks of 16 units
+[run]   view=orb_17 11.5ms saved=view18_orb_17.png
+[SUBCHUNK] tiles_split=82 total_subchunks=1110 max_subchunks_per_tile=3 payload_pages=43226
+[SORT] stage=ONELAUNCH P=2733748 P_kept=2733748 num_tiles=1024 max_tile_n=18007 onelaunch=0.49 layout=0.09 pub_host=0.33 total=0.92ms
+[gsplat_tt::pfwc] chunk cull: 40881/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40881 u64_chunks 2556 id_chunks 3453
+[gsplat_tt::pfwc] unit cull: 3453 chunks of 16 units
+[run]   view=orb_18 11.6ms saved=view19_orb_18.png
+[SUBCHUNK] tiles_split=78 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=43149
+[SORT] stage=ONELAUNCH P=2729054 P_kept=2729054 num_tiles=1024 max_tile_n=18629 onelaunch=0.49 layout=0.08 pub_host=0.36 total=0.93ms
+[gsplat_tt::pfwc] chunk cull: 40578/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40578 u64_chunks 2537 id_chunks 3493
+[gsplat_tt::pfwc] unit cull: 3493 chunks of 16 units
+[run]   view=orb_19 11.5ms saved=view20_orb_19.png
+[SUBCHUNK] tiles_split=85 total_subchunks=1112 max_subchunks_per_tile=3 payload_pages=42920
+[SORT] stage=ONELAUNCH P=2713776 P_kept=2713776 num_tiles=1024 max_tile_n=18369 onelaunch=0.45 layout=0.09 pub_host=0.36 total=0.91ms
+[gsplat_tt::pfwc] chunk cull: 40631/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40631 u64_chunks 2541 id_chunks 3493
+[gsplat_tt::pfwc] unit cull: 3493 chunks of 16 units
+[run]   view=orb_20 11.7ms saved=view21_orb_20.png
+[SUBCHUNK] tiles_split=82 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=42444
+[SORT] stage=ONELAUNCH P=2684908 P_kept=2684908 num_tiles=1024 max_tile_n=22330 onelaunch=0.46 layout=0.08 pub_host=0.34 total=0.89ms
+[gsplat_tt::pfwc] chunk cull: 40566/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 40566 u64_chunks 2537 id_chunks 3487
+[gsplat_tt::pfwc] unit cull: 3487 chunks of 16 units
+[run]   view=orb_21 11.6ms saved=view22_orb_21.png
+[SUBCHUNK] tiles_split=84 total_subchunks=1111 max_subchunks_per_tile=3 payload_pages=41219
+[SORT] stage=ONELAUNCH P=2605190 P_kept=2605190 num_tiles=1024 max_tile_n=18553 onelaunch=0.43 layout=0.08 pub_host=0.34 total=0.86ms
+[gsplat_tt::pfwc] chunk cull: 39560/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 39560 u64_chunks 2474 id_chunks 3452
+[gsplat_tt::pfwc] unit cull: 3452 chunks of 16 units
+[run]   view=orb_22 11.2ms saved=view23_orb_22.png
+[SUBCHUNK] tiles_split=79 total_subchunks=1105 max_subchunks_per_tile=3 payload_pages=39602
+[SORT] stage=ONELAUNCH P=2502433 P_kept=2502433 num_tiles=1024 max_tile_n=20113 onelaunch=0.47 layout=0.08 pub_host=0.32 total=0.88ms
+[gsplat_tt::pfwc] chunk cull: 37885/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 37885 u64_chunks 2369 id_chunks 3405
+[gsplat_tt::pfwc] unit cull: 3405 chunks of 16 units
+[run]   view=orb_23 11.2ms saved=view24_orb_23.png
+[SUBCHUNK] tiles_split=74 total_subchunks=1101 max_subchunks_per_tile=3 payload_pages=36821
+[SORT] stage=ONELAUNCH P=2324571 P_kept=2324571 num_tiles=1024 max_tile_n=18871 onelaunch=0.42 layout=0.08 pub_host=0.32 total=0.83ms
+[gsplat_tt::pfwc] chunk cull: 35703/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 35703 u64_chunks 2233 id_chunks 3341
+[gsplat_tt::pfwc] unit cull: 3341 chunks of 16 units
+[run]   view=orb_24 10.6ms saved=view25_orb_24.png
+[SUBCHUNK] tiles_split=67 total_subchunks=1094 max_subchunks_per_tile=3 payload_pages=34703
+[SORT] stage=ONELAUNCH P=2188463 P_kept=2188463 num_tiles=1024 max_tile_n=21416 onelaunch=0.48 layout=0.08 pub_host=0.34 total=0.90ms
+[gsplat_tt::pfwc] chunk cull: 34321/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 34321 u64_chunks 2146 id_chunks 3320
+[gsplat_tt::pfwc] unit cull: 3320 chunks of 16 units
+[run]   view=orb_25 10.5ms saved=view26_orb_25.png
+[SUBCHUNK] tiles_split=65 total_subchunks=1092 max_subchunks_per_tile=3 payload_pages=33321
+[SORT] stage=ONELAUNCH P=2100242 P_kept=2100242 num_tiles=1024 max_tile_n=21340 onelaunch=0.48 layout=0.08 pub_host=0.32 total=0.88ms
+[gsplat_tt::pfwc] chunk cull: 33979/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 33979 u64_chunks 2125 id_chunks 3313
+[gsplat_tt::pfwc] unit cull: 3313 chunks of 16 units
+[run]   view=orb_26 10.5ms saved=view27_orb_26.png
+[SUBCHUNK] tiles_split=65 total_subchunks=1092 max_subchunks_per_tile=3 payload_pages=32586
+[SORT] stage=ONELAUNCH P=2052961 P_kept=2052961 num_tiles=1024 max_tile_n=21713 onelaunch=0.48 layout=0.09 pub_host=0.32 total=0.89ms
+[gsplat_tt::pfwc] chunk cull: 34331/5989 tiles kept
+[gsplat_tt::pfwc] unit-id cull: units 34331 u64_chunks 2147 id_chunks 3334
+[gsplat_tt::pfwc] unit cull: 3334 chunks of 16 units
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+[run]   view=orb_27 10.4ms saved=view28_orb_27.png
+[SUBCHUNK] tiles_split=60 total_subchunks=1087 max_subchunks_per_tile=3 payload_pages=32524
+[SORT] stage=ONELAUNCH P=2050213 P_kept=2050213 num_tiles=1024 max_tile_n=20666 onelaunch=0.48 layout=0.08 pub_host=0.33 total=0.89ms
+[run]   view=orb_28 6.4ms saved=view29_orb_28.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.6 p50_ms=11.5 min_ms=6.4 max_ms=17.4 n_views=30 warmup_s=19.6 out=/localdev/smarton/gstt2-t513/tmp/t644-r0-dump-u64id
+TTW_TIMING ms_view=11.552
+TTW_TIMING blend=11.552
+TTW_TIMING stage_head=0.006
+TTW_TIMING stage_project=0.550
+TTW_TIMING stage_tile_assign=0.008
+TTW_TIMING stage_sort=-1.208
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=9.715
+TTW_TIMING stage_d2h=0.011
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.007
+TTW_TIMING stage_xview=2.379
+TTW_TIMING stage_view_total=11.472
+TTW_TIMING stage_pybind=0.081
+STAGES n=30 head=0.006 project=0.550 tile_assign=0.008 sort=-1.208 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.715 d2h=0.011 assemble=0.000 tail=0.007 xview=2.379 | sum=11.469 view_total=11.472 resid_in_view=+0.003 avg_frame_ms=11.552 resid_vs_frame=+0.084 xview_hits=29 xview_misses=0
+TTW_TIMING stage_sort_pread=0.003
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.083
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.472
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.341
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.108
+TTW_TIMING stage_sort_pre=0.002
+TTW_TIMING stage_sort_log=0.012
+TTW_TIMING stage_sort_cont_prep=0.039
+TTW_TIMING stage_sort_cont_rtargs=0.102
+TTW_TIMING stage_sort_cont_other=-2.373
+TTW_TIMING stage_sort_other=0.003
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.472 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.341 publish_wait=0.000 mat=0.108 pre=0.002 log=0.012 cont_prep=0.039 cont_rtargs=0.102 cont_other=-2.373 | sum=-1.210 sort=-1.208 resid=+0.003
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=2.249
+TTW_TIMING stage_project_pfwc_rtargs=0.099
+TTW_TIMING stage_project_pfwc_chunkcull=2.241
+TTW_TIMING stage_project_pfwc_enqueue=0.043
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.003
+TTW_TIMING stage_project_gather_rtargs=0.000
+TTW_TIMING stage_project_gather_enqueue=0.000
+TTW_TIMING stage_project_gather_wait=0.459
+TTW_TIMING stage_project_gather_result=0.000
+TTW_TIMING stage_project_other=-4.545
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=2.249 pfwc_rtargs=0.099 pfwc_chunkcull=2.241 pfwc_enqueue=0.043 pfwc_finish=0.000 gather_setup=0.003 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.459 gather_result=0.000 | sum=5.095 project=0.550 resid=-4.545
+TTW_TIMING stage_tile_assign_setup=0.006
+TTW_TIMING stage_tile_assign_rtargs=0.000
+TTW_TIMING stage_tile_assign_enqueue=0.000
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=0.000
+TTW_TIMING stage_tile_assign_publish=0.001
+TTW_TIMING stage_tile_assign_other=0.001
+TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.007 tile_assign=0.008 resid=+0.001
