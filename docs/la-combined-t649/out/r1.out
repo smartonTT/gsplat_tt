@@ -1,0 +1,66 @@
+================ BUILD ID ================
+  cpp : #124 sha=2e817955 bin=b4ed5c4bcd69c6a3 t649 2e817955 L-A + L-A' combined (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t649-r1  timeout=400s  worry=600s  ts=2026-10-13T14:14:44-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-combined-t649/remote.sh 1 base la sif both
+-----------------------------------------
+=== r1-base 2e817955 GSPLAT_TT_LA_PREFETCH=0 GSPLAT_TT_SORT_IN_FOLD=0 --back-to-back 21:14:45 load=2.97
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.447 fps=118.39 ms_frame_median=8.447 pass_ms_frame=8.457,8.440,8.465,8.449,8.444,8.453,8.438,8.446,8.447,8.453,8.435,8.437,8.441,8.461,8.458,8.446,8.439,8.453,8.462,8.412 check_pass_ms_frame=9.605 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.447
+TTW_TIMING b2b_ms_frame_median=8.447
+LEVER r1-base la_lines=0 sif_lines=0 overflow=0
+=== r1-la 2e817955 GSPLAT_TT_LA_PREFETCH=1 GSPLAT_TT_SORT_IN_FOLD=0 --back-to-back 21:14:59 load=2.69
+run rc=0
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (60 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (90 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (120 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (150 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (180 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (210 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (240 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (270 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (300 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (330 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (360 views, cq1 1)
+LEVER r1-la la_lines=23 sif_lines=0 overflow=0
+=== r1-sif 2e817955 GSPLAT_TT_LA_PREFETCH=0 GSPLAT_TT_SORT_IN_FOLD=1 --back-to-back 21:15:13 load=2.58
+run rc=0
+[B4A] sort_in_fold: next view's sort enqueued=1 (1 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (2 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (30 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (60 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (90 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (120 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (150 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (180 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (210 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (240 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (270 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (300 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (330 hooks)
+[B4A] sort_in_fold: next view's sort enqueued=1 (360 hooks)
+LEVER r1-sif la_lines=0 sif_lines=23 overflow=0
+=== r1-both 2e817955  --back-to-back 21:15:26 load=2.30
+run rc=0
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (60 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (90 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (120 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (150 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (180 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (210 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (240 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (270 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (300 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (330 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (360 views, cq1 1)
+LEVER r1-both la_lines=23 sif_lines=0 overflow=0
+=== done 1 21:15:40
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t649/tmp/ttw-state/logs/t649-r1-20261013-141443.log

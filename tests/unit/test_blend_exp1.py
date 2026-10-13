@@ -16,3 +16,5 @@ def test_blend_exp1_source():
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "check_exp1: OK" in r.stdout
+    # Task #646: the pad-filled bodies are checked too (equivalent, 4 ops fewer).
+    assert "A2 singles with SWAP_FILL: 32/32" in r.stdout

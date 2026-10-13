@@ -10,7 +10,9 @@
 #define GSPLAT_HOST_ZONE_C(name) ZoneScopedNC(name, tracy::Color::SteelBlue)
 #define GSPLAT_HOST_FRAME_MARK(name) FrameMarkNamed(name)
 #else
-#define GSPLAT_HOST_ZONE(name) ((void)0)
-#define GSPLAT_HOST_ZONE_C(name) ((void)0)
-#define GSPLAT_HOST_FRAME_MARK(name) ((void)0)
+// Task #614: without Tracy the host zones feed the GSPLAT_TT_HTL timeline (htl.h).
+#include "htl.h"
+#define GSPLAT_HOST_ZONE(name) GSPLAT_HTL_ZONE(name)
+#define GSPLAT_HOST_ZONE_C(name) GSPLAT_HTL_ZONE(name)
+#define GSPLAT_HOST_FRAME_MARK(name) ::gsplat_tt::htl::mark(name)
 #endif

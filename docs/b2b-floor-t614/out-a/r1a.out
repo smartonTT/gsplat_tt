@@ -1,0 +1,42 @@
+================ BUILD ID ================
+  cpp : #125 sha=a42bcfb4 bin=45ea145ff10fd819 t614 a42bcfb4 b2b floor probes (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t614-r1a  timeout=400s  worry=600s  ts=2026-10-13T10:15:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 1 base htl hs300
+-----------------------------------------
+=== r1-base a42bcfb4  17:15:19 load=3.05
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.447 fps=118.38 ms_frame_median=8.447 pass_ms_frame=8.459,8.446,8.462,8.449,8.443,8.434,8.439,8.446,8.442,8.445,8.454,8.457,8.459,8.443,8.442,8.449,8.454,8.451,8.458,8.410 check_pass_ms_frame=8.564 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.447
+TTW_TIMING b2b_ms_frame_median=8.447
+=== r1-htl a42bcfb4 GSPLAT_TT_HTL=1 17:15:32 load=3.45
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r1-hs300 a42bcfb4 GSPLAT_TT_HTL=1 GSPLAT_TT_HTL_FOLD_SPIN_US=300 17:15:46 load=3.43
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== done 1 17:16:01
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-r1a-20261013-101515.log

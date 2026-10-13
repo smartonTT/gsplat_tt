@@ -40,6 +40,8 @@
 #include <chrono>
 #include <cstdint>
 
+#include "htl.h"
+
 namespace gsplat_tt::stagetimers {
 
 using clk = std::chrono::steady_clock;
@@ -138,10 +140,15 @@ void reset();
 // the mat / cull / blend buckets each time one program (default off).
 bool split_blend();
 
+// Task #614: field name of an Acc bucket (nullptr if `sink` is not in acc()).
+const char* bucket_name(const double* sink);
+
 // Scoped span: adds its lifetime (ms) into `sink` at stop()/destruction.
 class Span {
   public:
-    explicit Span(double& sink) : sink_(&sink), t0_(clk::now()) {}
+    explicit Span(double& sink) : sink_(&sink), t0_(clk::now()) {
+        if (htl::on()) htl::mark_at(bucket_name(sink_), 'B', t0_);
+    }
     Span(const Span&) = delete;
     Span& operator=(const Span&) = delete;
     ~Span() { stop(); }
@@ -149,8 +156,9 @@ class Span {
     // Closes the span early. Returns the elapsed ms (0 if already closed).
     double stop() {
         if (sink_ == nullptr) return 0.0;
-        const double ms =
-            std::chrono::duration<double, std::milli>(clk::now() - t0_).count();
+        const clk::time_point t1 = clk::now();
+        if (htl::on()) htl::mark_at(bucket_name(sink_), 'E', t1);
+        const double ms = std::chrono::duration<double, std::milli>(t1 - t0_).count();
         *sink_ += ms;
         sink_ = nullptr;
         return ms;

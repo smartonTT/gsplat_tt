@@ -426,7 +426,19 @@ py::tuple render_view(
                     gsplat_tt::tile_assign_fold_prepare(fi.num_cores, fi.num_tiles, fi.tiles_x,
                                                         fi.screen_tiles);
             });
-            gsplat_tt::blend_set_after_enqueue_hook([] {});
+            gsplat_tt::blend_set_after_enqueue_hook([] {
+                // Task #628 (L-A): the next view's sort + proj_M read behind
+                // this view's mat+blend. Task #643 (GSPLAT_TT_SORT_IN_FOLD):
+                // when L-A did not run, only the next view's sort goes there.
+                if (gsplat_tt::env_config::la_prefetch()) {
+                    gsplat_tt::PfwcFuseInfo fi;
+                    if (gsplat_tt::pfwc_ran_fused(&fi) &&
+                        gsplat_tt::tile_assign_fold_prefetch(fi.num_cores, fi.num_tiles,
+                                                             fi.tiles_x, fi.screen_tiles))
+                        return;
+                }
+                (void)gsplat_tt::tile_assign_fold_enqueue_sort();
+            });
         } else if (have_next) {
             gsplat_tt::blend_set_after_enqueue_hook([&] {
                 enqueue_pfwc(means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr,
@@ -590,6 +602,9 @@ PYBIND11_MODULE(render_clean, m) {
     // Per-stage host attribution. Totals in ms accumulated over every
     // render_view since reset_stage_timings(); `views` is the sample count.
     m.def("stage_timings", []() {
+        // Task #614: run.py leaves through os._exit (no atexit), so the host
+        // timeline is written here, once per pass, outside the timed window.
+        if (gsplat_tt::htl::on()) gsplat_tt::htl::dump();
         const auto& a = gsplat_tt::stagetimers::acc();
         py::dict d;
         d["views"] = static_cast<int64_t>(a.views);

@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=2e817955 bin=b4ed5c4bcd69c6a3 t649 2e817955 L-A + L-A' combined (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t649-lat  timeout=400s  worry=600s  ts=2026-10-13T14:17:52-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-combined-t649/remote.sh 4 lat-base lat-both
+-----------------------------------------
+=== r4-lat-base 2e817955 GSPLAT_TT_LA_PREFETCH=0 GSPLAT_TT_SORT_IN_FOLD=0  21:18:01 load=3.20
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.5 p50_ms=8.6 min_ms=5.8 max_ms=11.3 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t649-r4-lat-base
+TTW_TIMING ms_view=8.527
+LEVER r4-lat-base la_lines=0 sif_lines=0 overflow=0
+=== r4-lat-both 2e817955   21:18:06 load=3.18
+run rc=0
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.2 p50_ms=8.2 min_ms=5.6 max_ms=11.2 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t649-r4-lat-both
+TTW_TIMING ms_view=8.182
+LEVER r4-lat-both la_lines=2 sif_lines=0 overflow=0
+=== done 4 21:18:11
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t649/tmp/ttw-state/logs/t649-lat-20261013-141751.log

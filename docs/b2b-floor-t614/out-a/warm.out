@@ -1,0 +1,28 @@
+================ BUILD ID ================
+  cpp : #125 sha=a42bcfb4 bin=45ea145ff10fd819 t614 a42bcfb4 b2b floor probes (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t614-warm  timeout=400s  worry=600s  ts=2026-10-13T10:14:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 0 base htl
+-----------------------------------------
+=== r0-base a42bcfb4  17:14:19 load=2.65
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.454 fps=118.29 ms_frame_median=8.452 pass_ms_frame=8.452,8.460,8.469,8.460,8.458,8.462,8.465,8.467,8.449,8.449,8.448,8.517,8.452,8.440,8.442,8.464,8.449,8.446,8.442,8.390 check_pass_ms_frame=9.755 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.454
+TTW_TIMING b2b_ms_frame_median=8.452
+=== r0-htl a42bcfb4 GSPLAT_TT_HTL=1 17:14:51 load=3.80
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== done 0 17:15:05
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-warm-20261013-101416.log

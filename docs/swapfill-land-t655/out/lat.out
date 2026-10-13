@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=7b7ace57 bin=6a6df52870bfae39 t655 7b7ace57 BLEND_SWAP_FILL default on (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t655-lat  timeout=400s  worry=600s  ts=2026-10-13T15:36:11-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/swapfill-land-t655/remote.sh 5 lat-base lat-new
+-----------------------------------------
+=== r5-lat-base 7b7ace57 GSPLAT_TT_BLEND_SWAP_FILL=0  22:36:13 load=1.56
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.2 min_ms=5.6 max_ms=11.2 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t655-r5-lat-base
+TTW_TIMING ms_view=8.133
+LEVER r5-lat-base cache_defines=[define BLEND_SWAP_FILL 0 ]
+=== r5-lat-new 7b7ace57   22:36:18 load=3.44
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.5 max_ms=11.1 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t655-r5-lat-new
+TTW_TIMING ms_view=7.990
+LEVER r5-lat-new cache_defines=[define BLEND_SWAP_FILL 1 ]
+=== done 5 22:36:23
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t655/tmp/ttw-state/logs/t655-lat-20261013-153610.log

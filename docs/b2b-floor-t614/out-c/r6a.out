@@ -1,0 +1,56 @@
+================ BUILD ID ================
+  cpp : #127 sha=03c4032d bin=c1aa4c82a7bd9402 t614 11ce07d5 b2b floor probes (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t614-r6a  timeout=400s  worry=600s  ts=2026-10-13T10:47:34-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 6 htl ps150 ps400 base
+-----------------------------------------
+=== r6-htl 11ce07d5 GSPLAT_TT_HTL=1  17:47:35 load=2.66
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r6-ps150 11ce07d5 GSPLAT_TT_HTL=1 GSPLAT_TT_HTL_PRE_SPIN_US=150  17:48:08 load=3.38
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r6-ps400 11ce07d5 GSPLAT_TT_HTL=1 GSPLAT_TT_HTL_PRE_SPIN_US=400  17:48:21 load=3.30
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r6-base 11ce07d5   17:48:36 load=5.15
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.455 fps=118.27 ms_frame_median=8.451 pass_ms_frame=8.441,8.470,8.498,8.508,8.451,8.482,8.475,8.439,8.485,8.451,8.456,8.452,8.436,8.428,8.456,8.442,8.479,8.441,8.429,8.389 check_pass_ms_frame=9.761 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.455
+TTW_TIMING b2b_ms_frame_median=8.451
+=== done 6 17:48:50
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-r6a-20261013-104733.log

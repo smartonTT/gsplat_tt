@@ -1,0 +1,47 @@
+================ BUILD ID ================
+  cpp : #125 sha=a42bcfb4 bin=45ea145ff10fd819 t614 a42bcfb4 b2b floor probes (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t614-r3  timeout=400s  worry=600s  ts=2026-10-13T10:18:46-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 3 base htl f0 base
+-----------------------------------------
+=== r3-base a42bcfb4  17:18:48 load=4.20
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.482 fps=117.90 ms_frame_median=8.473 pass_ms_frame=8.517,8.493,8.469,8.461,8.506,8.487,8.502,8.459,8.512,8.489,8.531,8.502,8.472,8.473,8.473,8.472,8.467,8.461,8.467,8.416 check_pass_ms_frame=9.725 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.482
+TTW_TIMING b2b_ms_frame_median=8.473
+=== r3-htl a42bcfb4 GSPLAT_TT_HTL=1 17:19:02 load=3.87
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r3-f0 a42bcfb4 GSPLAT_TT_HTL=1 GSPLAT_TT_B4A_FOLD=0 17:19:16 load=3.59
+run rc=0
+HTL wrote 1370 marks
+HTL wrote 2690 marks
+HTL wrote 4010 marks
+HTL wrote 5330 marks
+HTL wrote 6650 marks
+HTL wrote 7970 marks
+HTL wrote 9290 marks
+HTL wrote 10610 marks
+HTL wrote 11930 marks
+HTL wrote 13250 marks
+HTL wrote 14570 marks
+HTL wrote 15890 marks
+=== r3-base a42bcfb4  17:19:35 load=4.10
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.463 fps=118.16 ms_frame_median=8.463 pass_ms_frame=8.499,8.472,8.498,8.455,8.455,8.475,8.460,8.453,8.456,8.446,8.488,8.468,8.478,8.470,8.473,8.457,8.451,8.466,8.453,8.392 check_pass_ms_frame=9.843 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.463
+TTW_TIMING b2b_ms_frame_median=8.463
+=== done 3 17:19:49
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-r3-20261013-101845.log

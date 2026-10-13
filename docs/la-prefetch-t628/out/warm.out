@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=7cbf73fc bin=14b97a8c6aa85bfd t628 7cbf73fc L-A prefetch (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t628-warm  timeout=400s  worry=600s  ts=2026-10-13T11:27:27-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-prefetch-t628/remote.sh 0 base la
+-----------------------------------------
+=== r0-base 7cbf73fc   18:27:34 load=1.08
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.463 fps=118.16 ms_frame_median=8.460 pass_ms_frame=8.474,8.480,8.521,8.454,8.457,8.434,8.457,8.455,8.448,8.469,8.460,8.463,8.455,8.505,8.468,8.441,8.459,8.475,8.472,8.415 check_pass_ms_frame=9.819 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.463
+TTW_TIMING b2b_ms_frame_median=8.460
+=== r0-la 7cbf73fc GSPLAT_TT_LA_PREFETCH=1  18:28:07 load=2.10
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.456 fps=118.26 ms_frame_median=8.451 pass_ms_frame=8.446,8.451,8.450,8.458,8.489,8.475,8.443,8.461,8.462,8.463,8.448,8.445,8.437,8.441,8.461,8.449,8.488,8.481,8.451,8.419 check_pass_ms_frame=9.895 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.456
+TTW_TIMING b2b_ms_frame_median=8.451
+=== done 0 18:28:22
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t628/tmp/ttw-state/logs/t628-warm-20261013-112725.log

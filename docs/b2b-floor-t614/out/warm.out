@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=62b173b1 bin=4f5be285defb1c39 t614 60475709 b2b floor probes (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t614-warm  timeout=400s  worry=600s  ts=2026-10-13T09:56:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 0 base htl
+-----------------------------------------
+=== r0-base 60475709  16:56:19 load=5.50
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.453 fps=118.30 ms_frame_median=8.454 pass_ms_frame=8.453,8.459,8.471,8.452,8.455,8.456,8.447,8.448,8.453,8.443,8.491,8.448,8.462,8.463,8.457,8.460,8.457,8.446,8.449,8.386 check_pass_ms_frame=9.832 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.453
+TTW_TIMING b2b_ms_frame_median=8.454
+=== r0-htl 60475709 GSPLAT_TT_HTL=1 16:56:51 load=9.22
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.446 fps=118.39 ms_frame_median=8.444 pass_ms_frame=8.479,8.443,8.443,8.457,8.442,8.449,8.443,8.432,8.443,8.450,8.450,8.462,8.442,8.440,8.481,8.448,8.445,8.444,8.444,8.391 check_pass_ms_frame=9.645 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.446
+TTW_TIMING b2b_ms_frame_median=8.444
+=== done 0 16:57:05
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-warm-20261013-095615.log
