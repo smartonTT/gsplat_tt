@@ -1,0 +1,244 @@
+- program_created:
+    id: 0
+    timestamp_ns: 1791852376384116668
+- program_compile_started:
+    id: 0
+    timestamp_ns: 1791852376389808015
+- program_kernel_compile_finished:
+    id: 0
+    timestamp_ns: 1791852378029411850
+    duration_ns: 1639603835
+    watcher_kernel_id: 1
+    name: cq_prefetch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/13250500817302300570/
+    source: tt_metal/impl/dispatch/kernels/cq_prefetch.cpp
+- program_kernel_compile_finished:
+    id: 0
+    timestamp_ns: 1791852378033220835
+    duration_ns: 1643412820
+    watcher_kernel_id: 2
+    name: cq_prefetch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/10483085417349918459/
+    source: tt_metal/impl/dispatch/kernels/cq_prefetch.cpp
+- program_kernel_compile_finished:
+    id: 0
+    timestamp_ns: 1791852378075579875
+    duration_ns: 1685771860
+    watcher_kernel_id: 3
+    name: cq_dispatch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/9266777331342578995/
+    source: tt_metal/impl/dispatch/kernels/cq_dispatch.cpp
+- program_kernel_compile_finished:
+    id: 0
+    timestamp_ns: 1791852378077025749
+    duration_ns: 1687217734
+    watcher_kernel_id: 4
+    name: cq_dispatch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/13077125073013285274/
+    source: tt_metal/impl/dispatch/kernels/cq_dispatch.cpp
+- program_compile_finished:
+    id: 0
+    timestamp_ns: 1791852378077065979
+    duration_ns: 1687257964
+- program_created:
+    id: 1
+    timestamp_ns: 1791852378543857400
+- program_created:
+    id: 2
+    timestamp_ns: 1791852378544523658
+- program_destroyed:
+    id: 2
+    timestamp_ns: 1791852378544529828
+- program_created:
+    id: 3
+    timestamp_ns: 1791852378544562187
+- program_created:
+    id: 4
+    timestamp_ns: 1791852378545005166
+- program_destroyed:
+    id: 4
+    timestamp_ns: 1791852378545008606
+- program_created:
+    id: 5
+    timestamp_ns: 1791852378545012896
+- program_created:
+    id: 6
+    timestamp_ns: 1791852378545031726
+- program_destroyed:
+    id: 6
+    timestamp_ns: 1791852378545034836
+- program_created:
+    id: 7
+    timestamp_ns: 1791852378545077675
+- program_created:
+    id: 8
+    timestamp_ns: 1791852378545388034
+- program_destroyed:
+    id: 8
+    timestamp_ns: 1791852378545393194
+- program_created:
+    id: 9
+    timestamp_ns: 1791852378545397964
+- program_created:
+    id: 10
+    timestamp_ns: 1791852378545740283
+- program_destroyed:
+    id: 10
+    timestamp_ns: 1791852378545743553
+- program_created:
+    id: 11
+    timestamp_ns: 1791852378545747933
+- program_created:
+    id: 12
+    timestamp_ns: 1791852378545892992
+- program_destroyed:
+    id: 12
+    timestamp_ns: 1791852378545896192
+- program_created:
+    id: 13
+    timestamp_ns: 1791852378545900362
+- program_created:
+    id: 14
+    timestamp_ns: 1791852378545965932
+- program_destroyed:
+    id: 14
+    timestamp_ns: 1791852378545969152
+- program_created:
+    id: 15
+    timestamp_ns: 1791852378545973192
+- program_created:
+    id: 16
+    timestamp_ns: 1791852378545992242
+- program_destroyed:
+    id: 16
+    timestamp_ns: 1791852378545995332
+- program_created:
+    id: 17
+    timestamp_ns: 1791852378545999252
+- program_created:
+    id: 18
+    timestamp_ns: 1791852378546074851
+- program_destroyed:
+    id: 18
+    timestamp_ns: 1791852378546078031
+- program_created:
+    id: 19
+    timestamp_ns: 1791852378546081971
+- program_created:
+    id: 20
+    timestamp_ns: 1791852378546145671
+- program_destroyed:
+    id: 20
+    timestamp_ns: 1791852378546149061
+- program_created:
+    id: 21
+    timestamp_ns: 1791852378546238101
+- program_created:
+    id: 22
+    timestamp_ns: 1791852378546549480
+- program_destroyed:
+    id: 22
+    timestamp_ns: 1791852378546552810
+- program_created:
+    id: 23
+    timestamp_ns: 1791852378546557250
+- program_created:
+    id: 24
+    timestamp_ns: 1791852378547110477
+- program_destroyed:
+    id: 24
+    timestamp_ns: 1791852378547114547
+- program_created:
+    id: 25
+    timestamp_ns: 1791852378547133787
+- program_created:
+    id: 26
+    timestamp_ns: 1791852378547168917
+- program_destroyed:
+    id: 26
+    timestamp_ns: 1791852378547172917
+- program_created:
+    id: 27
+    timestamp_ns: 1791852378547177827
+- program_created:
+    id: 28
+    timestamp_ns: 1791852378547304237
+- program_destroyed:
+    id: 28
+    timestamp_ns: 1791852378547309157
+- program_created:
+    id: 29
+    timestamp_ns: 1791852378547313217
+- program_created:
+    id: 30
+    timestamp_ns: 1791852378547394256
+- program_destroyed:
+    id: 30
+    timestamp_ns: 1791852378547397446
+- program_created:
+    id: 31
+    timestamp_ns: 1791852378547401466
+- program_created:
+    id: 32
+    timestamp_ns: 1791852378548028404
+- program_destroyed:
+    id: 32
+    timestamp_ns: 1791852378548031684
+- program_created:
+    id: 33
+    timestamp_ns: 1791852378548067593
+- program_created:
+    id: 34
+    timestamp_ns: 1791852378548536222
+- program_destroyed:
+    id: 34
+    timestamp_ns: 1791852378548541372
+- program_created:
+    id: 35
+    timestamp_ns: 1791852378548557062
+- program_created:
+    id: 36
+    timestamp_ns: 1791852378548890990
+- program_destroyed:
+    id: 36
+    timestamp_ns: 1791852378548894280
+- program_created:
+    id: 37
+    timestamp_ns: 1791852378813799580
+- program_created:
+    id: 38
+    timestamp_ns: 1791852378814890505
+- program_destroyed:
+    id: 38
+    timestamp_ns: 1791852378814897015
+- program_compile_started:
+    id: 37
+    timestamp_ns: 1791852378815045844
+- program_kernel_compile_finished:
+    id: 37
+    timestamp_ns: 1791852381293160002
+    duration_ns: 2478114158
+    watcher_kernel_id: 36
+    name: writer_pfwc_split
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/16545814819505375911/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/dataflow/writer_pfwc_split.cpp
+- program_kernel_compile_finished:
+    id: 37
+    timestamp_ns: 1791852381324621926
+    duration_ns: 2509576082
+    watcher_kernel_id: 38
+    name: writer_pfwc_split
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/10347787412658173104/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/dataflow/writer_pfwc_split.cpp
+- program_kernel_compile_finished:
+    id: 37
+    timestamp_ns: 1791852384751872353
+    duration_ns: 5936826509
+    watcher_kernel_id: 37
+    name: project_pfwc_compute
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/project_pfwc_compute/15125848894333107213/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/compute/project_pfwc_compute.cpp
+- program_compile_finished:
+    id: 37
+    timestamp_ns: 1791852384751963043
+    duration_ns: 5936917199

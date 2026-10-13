@@ -1,0 +1,8 @@
+0: blank
+1: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/13250500817302300570//idle_erisc/idle_erisc.elf
+2: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/10483085417349918459//idle_erisc/idle_erisc.elf
+3: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/9266777331342578995//idle_erisc/idle_erisc.elf
+4: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/13077125073013285274//idle_erisc/idle_erisc.elf
+36: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/16545814819505375911//ncrisc/ncrisc.elf
+38: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/10347787412658173104//brisc/brisc.elf
+37: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/project_pfwc_compute/15125848894333107213//trisc0/trisc0.elf:/localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/project_pfwc_compute/15125848894333107213//trisc1/trisc1.elf:/localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/project_pfwc_compute/15125848894333107213//trisc2/trisc2.elf

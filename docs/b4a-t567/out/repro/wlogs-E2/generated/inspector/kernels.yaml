@@ -1,0 +1,42 @@
+- kernel:
+    watcher_kernel_id: 1
+    name: cq_prefetch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/13250500817302300570/
+    source: tt_metal/impl/dispatch/kernels/cq_prefetch.cpp
+    program_id: 0
+- kernel:
+    watcher_kernel_id: 2
+    name: cq_prefetch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_prefetch/10483085417349918459/
+    source: tt_metal/impl/dispatch/kernels/cq_prefetch.cpp
+    program_id: 0
+- kernel:
+    watcher_kernel_id: 3
+    name: cq_dispatch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/9266777331342578995/
+    source: tt_metal/impl/dispatch/kernels/cq_dispatch.cpp
+    program_id: 0
+- kernel:
+    watcher_kernel_id: 4
+    name: cq_dispatch
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/cq_dispatch/13077125073013285274/
+    source: tt_metal/impl/dispatch/kernels/cq_dispatch.cpp
+    program_id: 0
+- kernel:
+    watcher_kernel_id: 36
+    name: writer_pfwc_split
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/16545814819505375911/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/dataflow/writer_pfwc_split.cpp
+    program_id: 37
+- kernel:
+    watcher_kernel_id: 38
+    name: writer_pfwc_split
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/writer_pfwc_split/10347787412658173104/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/dataflow/writer_pfwc_split.cpp
+    program_id: 37
+- kernel:
+    watcher_kernel_id: 37
+    name: project_pfwc_compute
+    path: /localdev/smarton/p150bench/cache567-wp36/render/tt-metal-cache13633814070365910264/kernels/project_pfwc_compute/15125848894333107213/
+    source: /localdev/smarton/p150bench/tree567/render/kernels/compute/project_pfwc_compute.cpp
+    program_id: 37
