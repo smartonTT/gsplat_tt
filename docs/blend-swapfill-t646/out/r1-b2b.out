@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=558bff20 bin=59b9af93eb80fae7 t646 1da40a62 BLEND_SWAP_FILL A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t646-r1-b2b  timeout=300s  worry=600s  ts=2026-10-13T13:38:22-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/blend-swapfill-t646/remote_ab.sh 1 b2b base new
+-----------------------------------------
+=== r1-b2b-base 1da40a62 SWAP_FILL=0 cache=/localdev/smarton/.cache/ttmc-t646base 20:38:25 load=3.07
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.459 fps=118.22 ms_frame_median=8.459 pass_ms_frame=8.447,8.450,8.442,8.465,8.467,8.458,8.467,8.456,8.471,8.498,8.442,8.460,8.447,8.459,8.478,8.486,8.449,8.467,8.459,8.405 check_pass_ms_frame=9.748 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.459 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.459
+=== r1-b2b-new 1da40a62 SWAP_FILL=1 cache=/localdev/smarton/.cache/ttmc-t646new 20:38:39 load=2.89
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.305 fps=120.40 ms_frame_median=8.301 pass_ms_frame=8.295,8.303,8.299,8.310,8.316,8.298,8.324,8.295,8.300,8.310,8.293,8.291,8.292,8.331,8.293,8.324,8.310,8.297,8.318,8.307 check_pass_ms_frame=9.629 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.305 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.305
+=== done 1 b2b 20:38:52
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t646/tmp/ttw-state/logs/t646-r1-b2b-20261013-133821.log

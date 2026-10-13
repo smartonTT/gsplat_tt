@@ -44,4 +44,35 @@ following op) rather than a data hazard. md5 30/30 golden on the FILL 1 arm deci
 
 ## Device A/B
 
-(pending: `drive.sh 1da40a62`, bh-33 p100)
+bh-33 (p100 lock), commit 1da40a62, both arms built from the same tree; FILL 0 is the
+best-iter-227 kernel. Log: `out/` (run logs per round), driver log run 1793 `t646ab.log`.
+
+- md5: both arms `MD5_GOLDEN_OK list 077caaba = golden (30/30 views)`; b2b raw_md5 1d372b94 in
+  every round of both arms, identical across passes. So the swap pad is a data hazard only: the
+  filled loads after SFPSWAP are safe.
+- Hero shot (FILL 1): `opt/metal-screenshots/ttw-t646-swapfill/hero.png`, diff `hero_diff10.png`,
+  PSNR 42.85 dB vs `benchmarks/reference_v2/hero.png`, golden_match true, max_lsb_vs_golden 0.
+  Looked at: no tile seams or block artifacts; the diff is the usual fine-edge residue (spokes,
+  foliage).
+- b2b ms/view (render/run.py --back-to-back, 30 views, 20 passes), warm round r0 then 4 ABBA rounds:
+
+| round | FILL 0 (base) | FILL 1 (new) |
+|---|---|---|
+| r0 (warm) | 8.460 | 8.302 |
+| r1 | 8.459 | 8.305 |
+| r2 | 8.449 | 8.309 |
+| r3 | 8.484 | 8.320 |
+| r4 | 8.462 | 8.320 |
+| mean r1-r4 | 8.4635 | 8.3135 |
+
+Delta **-0.150 ms/view b2b (-1.77%)**, 118.2 -> 120.3 FPS. Every new round beats every base
+round (spread within an arm 0.035 ms). Latency-mode avg (dump runs, secondary): 8.6 -> 8.4 ms.
+
+Larger than the 4/58 slot share alone predicts on the blend phase (~0.07 ms if blend were
+SFPU-issue bound): the 4 removed pushes also cut TRISC1 issue work, which t230 named as the
+A2 limiter.
+
+## Verdict
+
+Keep. Candidate for the next best-iter (BLEND_SWAP_FILL default 1). Pair param sharing not built
+(sized above, below the bar).
