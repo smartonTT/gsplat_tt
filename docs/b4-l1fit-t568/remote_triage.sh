@@ -12,7 +12,8 @@ unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACH
 T=${T:-/localdev/smarton/gstt2-t513}; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t555; mkdir -p $S
 # Args or DBG_ARMS (default "1 2"): GSPLAT_TT_SIB_DBG per arm (1 = barrier only, no sort/town;
-# 2 = full sort, 3 = sort body without the PACK town, 4 = PACK town handshake only; all discard
+# 2 = full sort, 3 = sort body without the PACK town, 4 = PACK town handshake only, 5 = arm 4's
+# BRISC mailbox writes with the PACK town off; all discard
 # the result so the standalone sort reruns). TRIAGE=1 adds callstacks.
 worst=0
 for dbg in ${*:-${DBG_ARMS:-1 2}}; do

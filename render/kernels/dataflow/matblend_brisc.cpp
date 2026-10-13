@@ -128,6 +128,21 @@ void sib_run(F& poll) {
         twh[tw::H_FIN] = 0u;
         asm volatile("fence" ::: "memory");
     }
+#elif defined(SIB_DBG) && SIB_DBG == 5u
+    {  // t571 debug: 5 = the arm-4 mailbox writes, PACK town off (no handshake, no FIN wait)
+        namespace tw = sort_ol_town;
+        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(olk::g_ol_arena[tw::CB_TWN + 16u]);
+        twh[tw::H_NB] = 0u;
+        twh[tw::H_READY] = 0u;
+        for (uint32_t i = 0; i < tw::NT; i++) twh[tw::H_FIN + i] = 0u;
+        asm volatile("fence" ::: "memory");
+        twh[tw::H_GO2] = tw::MAGIC2;
+        twh[tw::H_GO] = tw::MAGIC;
+        asm volatile("fence" ::: "memory");
+        twh[tw::H_GO] = 0u;
+        twh[tw::H_GO2] = 0u;
+        asm volatile("fence" ::: "memory");
+    }
 #elif !defined(SIB_DBG) || SIB_DBG != 1u  // t568 debug: 1 = barrier only
     olk::kernel_main();
 #endif

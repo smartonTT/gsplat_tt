@@ -41,7 +41,7 @@ rc=0
 step() {  # name script args...
   local n=$1 s=$2; shift 2
   $DEVRUN --host "$H" --no-verify --timeout 590 --tag t555-$n -- \
-    "T=$T bash $T/$D/$s $*" 2>&1 | tee "$O/$n.out" | grep -E "$pat"
+    "T=$T TRIAGE=${TRIAGE:-0} RUN_TIMEOUT=${RUN_TIMEOUT:-150} bash $T/$D/$s $*" 2>&1 | tee "$O/$n.out" | grep -E "$pat"
   local r=${PIPESTATUS[0]}; [ "$r" = 0 ] || { echo "=== step $n rc=$r"; rc=$r; }
   [ "$r" = 124 ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t555/*.log" "$O/"; exit 124; }
 }
