@@ -1,0 +1,4 @@
+boundary ceiling 0.383 ms; work 888 core-ms; pfwc share 0.177
+B jitter +-0%: best a=20 cores, period 8.381, gain +0.073 ms/view
+B jitter +-2%: best a=20 cores, period 8.381, gain +0.073 ms/view
+B jitter +-5%: best a=20 cores, period 8.381, gain +0.073 ms/view
