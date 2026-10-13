@@ -8,6 +8,8 @@
 #include "img_pack_u8.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
+// Global, before matk: its #pragma once would otherwise put sort_ol in matk (#565).
+#include "sort_onelaunch_algo.h"
 #include "../blend_alias_fifo.h"
 #include "mv_prof.h"
 
