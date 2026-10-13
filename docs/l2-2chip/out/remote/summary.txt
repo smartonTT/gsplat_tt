@@ -1,0 +1,17 @@
+run-dumpA TTW_TIMING ms_view=8.784 
+run-dumpB-vis0 
+run-dumpB ms_frame_median=8.329 raw_md5=50b707c3 ms_frame_median=8.329 ms_frame_median=8.439 raw_md5=333b945f ms_frame_median=8.439 ms_frame_median=4.220 raw_md5=5a438f5a afr_chip_ms_own_view=8.439,8.329 afr_hero_equal=yes ms_frame_median=4.220 
+run-lat1-A TTW_TIMING ms_view=8.405 
+run-lat2-A TTW_TIMING ms_view=8.420 
+run-lat3-A TTW_TIMING ms_view=8.415 
+run-r1-A ms_frame_median=8.406 raw_md5=5a438f5a ms_frame_median=8.406 
+run-r1-B ms_frame_median=8.332 raw_md5=50b707c3 ms_frame_median=8.332 ms_frame_median=8.443 raw_md5=333b945f ms_frame_median=8.443 ms_frame_median=4.221 raw_md5=5a438f5a afr_chip_ms_own_view=8.443,8.332 afr_hero_equal=yes ms_frame_median=4.221 
+run-r1-C ms_frame_median=8.394 raw_md5=5a438f5a ms_frame_median=8.394 
+run-r2-A ms_frame_median=8.395 raw_md5=5a438f5a ms_frame_median=8.395 
+run-r2-B ms_frame_median=8.335 raw_md5=50b707c3 ms_frame_median=8.335 ms_frame_median=8.453 raw_md5=333b945f ms_frame_median=8.453 ms_frame_median=4.227 raw_md5=5a438f5a afr_chip_ms_own_view=8.454,8.336 afr_hero_equal=yes ms_frame_median=4.227 
+run-r2-C ms_frame_median=8.387 raw_md5=5a438f5a ms_frame_median=8.387 
+run-r3-A ms_frame_median=8.390 raw_md5=5a438f5a ms_frame_median=8.390 
+run-r3-B ms_frame_median=8.345 raw_md5=50b707c3 ms_frame_median=8.345 ms_frame_median=8.451 raw_md5=333b945f ms_frame_median=8.451 ms_frame_median=4.226 raw_md5=5a438f5a afr_chip_ms_own_view=8.452,8.345 afr_hero_equal=yes ms_frame_median=4.226 
+run-r3-C ms_frame_median=8.392 raw_md5=5a438f5a ms_frame_median=8.392 
+run-warm-A ms_frame_median=8.393 raw_md5=5a438f5a ms_frame_median=8.393 
+run-warm-B ms_frame_median=8.323 raw_md5=50b707c3 ms_frame_median=8.323 ms_frame_median=8.439 raw_md5=333b945f ms_frame_median=8.439 ms_frame_median=4.220 raw_md5=5a438f5a afr_chip_ms_own_view=8.439,8.323 afr_hero_equal=yes ms_frame_median=4.220 

@@ -1,0 +1,3 @@
+PSNR hero-afr-chipA psnr_vs_ref=42.51 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-afr-chipB psnr_vs_ref=42.51 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-1chip psnr_vs_ref=42.51 ref=benchmarks/reference_v2/hero.png size=1024x1024

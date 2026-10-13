@@ -1,0 +1,47 @@
+{
+ "board": "bh-50 (2x Blackhole p150, IRD tt_bgd)",
+ "commit": "ed027bb4",
+ "doc": "docs/l2-2chip/RESULT.md",
+ "ms_view_b2b": 4.226,
+ "ms_view_b2b_passes": [
+  4.221,
+  4.227,
+  4.226
+ ],
+ "single_ms_view_b2b": 8.395,
+ "single_ms_view_b2b_passes": [
+  8.406,
+  8.395,
+  8.39
+ ],
+ "chip1_ms_view_b2b": 8.392,
+ "chip1_ms_view_b2b_passes": [
+  8.394,
+  8.387,
+  8.392
+ ],
+ "afr_chip_ms_own_view": [
+  [
+   8.443,
+   8.332
+  ],
+  [
+   8.454,
+   8.336
+  ],
+  [
+   8.452,
+   8.345
+  ]
+ ],
+ "latency_ms_view_single": 8.415,
+ "latency_runs": [
+  8.405,
+  8.42,
+  8.415
+ ],
+ "md5": "906e0435",
+ "md5_views": "30/30",
+ "hero_psnr_vs_ref": 42.51,
+ "gpu_g1_ms": 10.75
+}

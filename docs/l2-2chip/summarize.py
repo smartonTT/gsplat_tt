@@ -3,6 +3,8 @@
 python3 docs/l2-2chip/summarize.py <commit> [out/remote dir]
 A = one chip (id 0), B = 2 chips AFR (0,1), C = chip 1 alone. Rounds r1-r3 count; warm-* is dropped.
 """
+from __future__ import annotations
+
 import json
 import re
 import statistics
