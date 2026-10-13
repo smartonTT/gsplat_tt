@@ -13,8 +13,8 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
-H=${H:-bh-50}; JOB=${JOB:-132945}; T=${T:-/localdev/smarton/gstt2}; R=/localdev/smarton
-JOB_START=${JOB_START:-1791869358}   # 2026-10-12 22:29:18 PDT, from ird reserve's output
+H=${H:-bh-50}; JOB=${JOB:-132949}; T=${T:-/localdev/smarton/gstt2}; R=/localdev/smarton
+JOB_START=${JOB_START:-1791869991}   # 2026-10-12 22:39:51 PDT, from ird reserve's output
 # $T is the default BASE of opt/sync_remote.sh, which then links no .venv into it (the tracked
 # .venv symlink dangles there and is removed): point BASE at setup_box.sh's viewer dir instead.
 export GSTT2_BASE=${GSTT2_BASE:-$R/viewer} GSTT2_VENV=${GSTT2_VENV:-$R/viewer/venv} GSTT2_SCENES=${GSTT2_SCENES:-$T/scenes}
@@ -81,7 +81,7 @@ if [ "${up:-x}" = 0 ] && [ "${st:-x}" = 0 ]; then
     ttp lock p100 -- "$PWD/$D/drive.sh" "$rev" --locked; rc=$?
   else rc=21; fi
 else
-  ssh "$H" "tail -15 $R/viewer/setup.log" > "$O/setup-tail.log" 2>&1; rc=20
+  ssh "$H" "grep -m12 -nE 'FAILED|error:|fatal' $R/viewer/setup.log; tail -15 $R/viewer/setup.log" > "$O/setup-tail.log" 2>&1; rc=20
 fi
 echo "=== $(ts) measurement rc=$rc"
 

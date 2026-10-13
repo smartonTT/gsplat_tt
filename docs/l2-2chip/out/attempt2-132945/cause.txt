@@ -1,0 +1,5 @@
+Attempt 2 (IRD job 132945) setup failure, read from bh-50:/localdev/smarton/viewer/setup.log after re-reserving:
+FAILED: tt_metal/distributed/.../unity_2_cxx.cxx.o: cq_commands.hpp redefinition errors.
+Cause: /localdev/smarton/tt-metal (cloned by attempt 1's setup at 22:05 PDT, reflog: clone then checkout 437bc366)
+had HEAD at 437bc366 but 3401 tracked files still from the clone's main (the attempt-1 checkout was interrupted).
+Fix (22:41 PDT): git checkout -f 437bc366, git clean -fd, submodule update --force (0 modified files), rm -rf build, setup restarted.

@@ -1,0 +1,15 @@
+[855/1090] Building CXX object tools/scaleout/CMakeFiles/run_cluster_validation.dir/validation/utils/ethernet_link_api.cpp.o
+[856/1090] Building CXX object tools/scaleout/CMakeFiles/run_fabric_manager.dir/fabric_manager/run_fabric_manager.cpp.o
+[857/1090] Building CXX object tt_metal/impl/CMakeFiles/impl.dir/Unity/unity_2_cxx.cxx.o
+[858/1090] Building CXX object tools/scaleout/CMakeFiles/generate_mgd_lib.dir/generate_mgd/generate_mgd.cpp.o
+[859/1090] Building CXX object tt_metal/distributed/CMakeFiles/distributed.dir/Unity/unity_3_cxx.cxx.o
+[860/1090] Building CXX object tt_metal/impl/CMakeFiles/impl.dir/Unity/unity_0_cxx.cxx.o
+[861/1090] Building CXX object tools/scaleout/CMakeFiles/run_fabric_manager.dir/fabric_manager/utils/fabric_manager_utils.cpp.o
+[862/1090] Building CXX object tt_metal/impl/CMakeFiles/impl.dir/Unity/unity_1_cxx.cxx.o
+[863/1090] Building CXX object tools/scaleout/CMakeFiles/run_cluster_validation.dir/validation/run_cluster_validation.cpp.o
+[864/1090] Building CXX object tt_metal/impl/CMakeFiles/impl.dir/Unity/unity_7_cxx.cxx.o
+[865/1090] Building CXX object tools/scaleout/CMakeFiles/run_cluster_validation.dir/validation/utils/cluster_validation_utils.cpp.o
+[866/1090] Building CXX object tt_metal/distributed/CMakeFiles/distributed.dir/Unity/unity_0_cxx.cxx.o
+[867/1090] Building CXX object tt_metal/impl/CMakeFiles/impl.dir/Unity/unity_8_cxx.cxx.o
+ninja: build stopped: subcommand failed.
+[setup_box] rc=1
