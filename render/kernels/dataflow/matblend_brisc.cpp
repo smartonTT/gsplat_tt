@@ -46,6 +46,65 @@ void* g_b4a_ctx = nullptr;
 void b4a_yield() {
     if (g_b4a_fn != nullptr) g_b4a_fn(g_b4a_ctx);
 }
+
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+// Task #558 (GSPLAT_TT_SORT_IN_BLEND=1): after K2(N+1), BRISC runs the solo
+// sort(N+1) (sort_bin_onelaunch.cpp, OL_SOLO, OL_ARENA) in the same writer
+// pre-phase; every sort wait (OL_YIELD) serves the blend writer once. Its
+// scratch lives in the dead tails of the mat CBs (host-placed) and its town
+// runs on PACK (matblend_compute.cpp). A global barrier first: every core's
+// mat(N) (NCRISC and BRISC) and K2(N+1) are done before any sort(N+1) write.
+// Runtime args at SIB_RTA_BASE: 0 run, 1 arrive sem (core 0), 2 release sem,
+// 3 cores, 4-5 core 0 NoC x/y, 6-19 arena placements (cb << 24 | byte offset)
+// of kSibIds, 20-49 the sort's args (core 0: 50- the NoC xy list).
+#include "sort_onelaunch_algo.h"
+#include "sort_ol_town.h"
+#define OL_YIELD() b4a_yield()
+namespace olk {
+template <typename T>
+inline T get_arg_val(int arg_idx) {
+    return ::get_arg_val<T>(arg_idx + SIB_RTA_BASE + 20);
+}
+#include "sort_bin_onelaunch.cpp"
+}  // namespace olk
+
+constexpr uint32_t kSibIds[14] = {16, 17, 18, 19, 20, 21, 22, 23, 24, 28, 29, 30, 10, 11};
+template <class F>
+void sib_run(F& poll) {
+    constexpr uint32_t A = SIB_RTA_BASE;
+    if (::get_arg_val<uint32_t>(A) == 0u) return;
+    for (uint32_t i = 0; i < 14u; i++) {
+        const uint32_t pk = ::get_arg_val<uint32_t>(A + 6u + i);
+        const auto& c = get_local_cb_interface(pk >> 24);
+        olk::g_ol_arena[kSibIds[i]] = ((c.fifo_limit - c.fifo_size) << cb_addr_shift) + (pk & 0xFFFFFFu);
+    }
+    noc_async_write_barrier();
+    noc_async_atomic_barrier();
+    const uint32_t arrive_id = ::get_arg_val<uint32_t>(A + 1u), release_id = ::get_arg_val<uint32_t>(A + 2u);
+    const uint32_t nc = ::get_arg_val<uint32_t>(A + 3u);
+    noc_semaphore_inc(get_noc_addr(::get_arg_val<uint32_t>(A + 4u), ::get_arg_val<uint32_t>(A + 5u),
+                                   get_semaphore(arrive_id)), 1u);
+    if (::get_arg_val<uint32_t>(A + 20u + 14u) == 0u) {  // sort arg 14: core id
+        auto arrive = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(arrive_id));
+        while (*arrive < 2u * nc) {
+            poll();
+            invalidate_l1_cache();
+        }
+        for (uint32_t c = 0; c < nc; c++) {
+            const uint32_t xy = ::get_arg_val<uint32_t>(A + 50u + c);
+            noc_semaphore_inc(get_noc_addr(xy & 0xFFFFu, xy >> 16, get_semaphore(release_id)), 1u);
+        }
+        noc_async_atomic_barrier();
+    }
+    auto release = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(release_id));
+    while (*release == 0u) {
+        poll();
+        invalidate_l1_cache();
+    }
+    olk::kernel_main();
+    noc_async_write_barrier();
+}
+#endif
 template <class F>
 void b4a_run_k2(F& poll) {
     g_b4a_ctx = &poll;
@@ -54,6 +113,9 @@ void b4a_run_k2(F& poll) {
         k2k::g_rta = K2_RTA_BASE + m * K2_NARGS;
         if (::get_arg_val<uint32_t>(k2k::g_rta + 7) != 0) k2k::kernel_main();  // nseg != 0
     }
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+    sib_run(poll);
+#endif
     g_b4a_fn = nullptr;
 }
 #define BLEND_WRITER_PRE(poll) b4a_run_k2(poll)

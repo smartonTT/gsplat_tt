@@ -811,6 +811,7 @@ void tile_assign_b4a_end_view() {
             std::fprintf(stderr, "[B4A] fold view %u: prepared=%d cores_with_k2_args=%u/%u ran=%d\n",
                          ctx->fold_views, static_cast<int>(ctx->fold_prepared), ctx->b4a_view_cores,
                          ctx->fold_cores, static_cast<int>(ctx->fold_ran));
+        sort_in_blend_end_view(ctx->fold_ran);
         ctx->fold_prepared = false;
         ctx->b4a_valid = false;
         ctx->b4a_view_cores = 0;
@@ -1094,6 +1095,13 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
             if (prepare) {
                 ctx->fold_prepared = true;
                 ctx->b4a_valid = true;
+                // Task #558: the next view's sort in the same blend.
+                if (want_early)
+                    sort_in_blend_prepare(screen_tiles, tiles_x, row_pages, rows_addr,
+                                          static_cast<uint32_t>(ctx->buf_gids->address()),
+                                          static_cast<uint32_t>(ctx->buf_tids->address()),
+                                          static_cast<uint32_t>(ctx->buf_keep->address()),
+                                          static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc);
                 return true;
             }
             // Task #552: the previous view's blend already ran this K2.
@@ -1138,6 +1146,8 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
             }
             if (pass == 0 && want_early) {
                 auto enqueue_sort = [&]() {
+                    // Task #558: the previous view's blend already ran this sort.
+                    if (fold_skip && sort_in_blend_take(screen_tiles, tiles_x)) return true;
                     return sort_onelaunch_enqueue_early(
                         screen_tiles, tiles_x, row_pages, rows_addr,
                         static_cast<uint32_t>(ctx->buf_gids->address()),
@@ -1241,6 +1251,7 @@ void tile_assign_fold_cancel() {
     ctx->fold_prepared = false;
     ctx->fold_ran = false;
     if (b4a_fold_enabled()) ctx->b4a_valid = false;
+    sort_in_blend_cancel();
 }
 
 bool tile_assign_device_ready() { return ensure_context() != nullptr; }

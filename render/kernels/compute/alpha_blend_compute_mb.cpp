@@ -553,7 +553,9 @@ inline void t2_wait(uint32_t i, uint32_t t0) {
 #define T2_INC(i) (++g_t2[i])
 #define T2_SET(i, v) (g_t2[i] = (v))
 #else
+#ifndef T2_MATHWAIT  // task #558: matblend_compute.cpp's town poll under SORT_IN_BLEND
 #define T2_MATHWAIT() ((void)0)
+#endif
 #define T2_T0(v)
 #define T2_W(i, t0) ((void)0)
 #define T2_INC(i) ((void)0)

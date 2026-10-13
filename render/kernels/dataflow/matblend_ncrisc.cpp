@@ -35,6 +35,16 @@ inline T get_arg_val(int arg_idx) {
 void kernel_main() {
     MV_BEGIN();  // task #553: GSPLAT_TT_MV_PROF=1 mover counters (profiler builds)
     matk::kernel_main();
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+    // Task #558: arrive at the sort-in-blend barrier on core 0 (matblend_brisc.cpp
+    // sib_run): this core's mat(N) reads are done. Args: run, sem, core 0 x, y.
+    if (::get_arg_val<uint32_t>(SIB_N_RTA) != 0u) {
+        noc_semaphore_inc(get_noc_addr(::get_arg_val<uint32_t>(SIB_N_RTA + 2), ::get_arg_val<uint32_t>(SIB_N_RTA + 3),
+                                       get_semaphore(::get_arg_val<uint32_t>(SIB_N_RTA + 1))),
+                          1u);
+        noc_async_atomic_barrier();
+    }
+#endif
     noc_async_write_barrier();
     MV_MARK_PRE();
 #ifdef BLEND_ALIAS_CUT

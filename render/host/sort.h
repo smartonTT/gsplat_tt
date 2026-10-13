@@ -32,6 +32,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <map>
+#include <array>
 #include <vector>
 
 #include "gsplat_cpu/sort.h"
@@ -153,5 +156,27 @@ bool sort_device_ready();
 // Idempotent shutdown of the sort device context. Does NOT close the shared
 // MeshDevice (device_state owns that).
 void sort_device_shutdown();
+
+// Task #558 (GSPLAT_TT_SORT_IN_BLEND=1, default off): the next view's solo
+// sort runs on BRISC inside this view's fused mat+blend, right after the
+// folded K2 (needs the B4a fold, OL early, OL_SOLO, PFWC_REC32).
+// sort_in_blend_defines: the fused BRISC's sort defines (dm) and the compute
+// town's (tdef). prepare: from the fold's prepare pass (the next view's K2
+// outputs); core_args: per core, fills the BRISC block at m0_base (170 words),
+// NCRISC's 4 words at n_base and the PACK town word at cp_idx (sems: 6 sort
+// semaphores, arrive, release of the blend program). end_view: the blend was
+// enqueued (k2_ran: every K2 core got its args). take: the next view's sort
+// already ran in that blend (sets the early-sort state). cancel: drop it.
+bool sort_in_blend_enabled();
+void sort_in_blend_defines(std::map<std::string, std::string>& dm, std::map<std::string, std::string>& tdef);
+bool sort_in_blend_prepare(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages, uint32_t rows_addr,
+                           uint32_t gids_addr, uint32_t tids_addr, uint32_t keep_addr, uint32_t pairs_P_addr,
+                           const std::vector<uint64_t>& acc);
+bool sort_in_blend_core_args(uint32_t core, const std::array<uint32_t, 8>& sems, std::vector<uint32_t>& m0,
+                             std::size_t m0_base, std::vector<uint32_t>& n, std::size_t n_base,
+                             std::vector<uint32_t>& cp, std::size_t cp_idx);
+void sort_in_blend_end_view(bool k2_ran);
+bool sort_in_blend_take(uint32_t num_tiles, uint32_t tiles_x);
+void sort_in_blend_cancel();
 
 }  // namespace gsplat_tt

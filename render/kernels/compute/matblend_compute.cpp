@@ -37,6 +37,27 @@ namespace matk {
 #include "mat_cull_compute.cpp"
 }  // namespace matk
 
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+// Task #558 (GSPLAT_TT_SORT_IN_BLEND=1): PACK runs the town of BRISC's solo
+// sort(N+1) (sort_ol_town_compute.cpp, OL_TOWN_EMBED) while it waits for MATH,
+// then drains it after the blend. Compute arg SIB_TOWN_RTA: the mailbox's
+// placement (cb << 24 | byte offset in that CB's storage), 0 = no sort.
+#define OL_TOWN_EMBED 1
+namespace olt {
+#include "sort_ol_town_compute.cpp"
+}  // namespace olt
+// PACK only (blend_t_readback calls it on every thread). No tensix_sync: a
+// stale nonzero read only ends the poll early; tile_regs_wait still waits.
+inline void sib_mathwait() {
+    PACK(({
+        while (ckernel::semaphore_read(ckernel::semaphore::MATH_PACK) == 0) {
+            if (olt::town_poll()) break;
+        }
+    }));
+}
+#define T2_MATHWAIT() sib_mathwait()
+#endif
+
 namespace blendk {
 template <typename T>
 inline T get_arg_val(int arg_idx) {
@@ -46,6 +67,13 @@ inline T get_arg_val(int arg_idx) {
 }  // namespace blendk
 
 void kernel_main() {
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+    PACK(({
+        const uint32_t tw = ::get_arg_val<uint32_t>(SIB_TOWN_RTA);
+        const auto& c = get_local_cb_interface(tw >> 24);
+        olt::town_init(tw == 0u ? 0u : ((c.fifo_limit - c.fifo_size) << cb_addr_shift) + (tw & 0xFFFFFFu));
+    }));
+#endif
     matk::kernel_main();
 #ifdef BLEND_ALIAS_CUT
     // Every TRISC keeps its own copy: unpack pops CB_MB_COUNTS, pack fills CB_OUT.
@@ -53,4 +81,7 @@ void kernel_main() {
     blend_fifo_shrink(BLEND_CB_BASE + 16, BLEND_OUT_BYTES, BLEND_OUT_PAGE);
 #endif
     blendk::kernel_main();
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND
+    PACK(({ olt::town_drain(); }));
+#endif
 }

@@ -195,6 +195,11 @@ constexpr uint32_t CB_ROW = 10, CB_PFX = 11;
 #ifndef OL_ARENA
 #define OL_ARENA 0
 #endif
+// Task #558: the fused mat+blend program's BRISC appends the 9 accessors
+// after its own compile-time args.
+#ifndef OL_CTA_BASE
+#define OL_CTA_BASE 0
+#endif
 #if OL_ARENA
 uint32_t g_ol_arena[32];
 #define OL_CBP(id) g_ol_arena[(id)]
@@ -251,7 +256,7 @@ void kernel_main() {
     const uint32_t coord_y = get_arg_val<uint32_t>(26);
     const bool fold = get_arg_val<uint32_t>(27) != 0u;
 
-    constexpr auto gids_args = TensorAccessorArgs<0>();
+    constexpr auto gids_args = TensorAccessorArgs<OL_CTA_BASE>();
     constexpr auto tids_args = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
     constexpr auto keep_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
     constexpr auto depth_args = TensorAccessorArgs<keep_args.next_compile_time_args_offset()>();

@@ -188,6 +188,46 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
 
 }  // namespace
 
+#if defined(OL_TOWN_EMBED) && OL_TOWN_EMBED
+// Task #558 (GSPLAT_TT_SORT_IN_BLEND=1): the fused mat+blend program's PACK
+// runs one NT = 1 stream (BRISC's solo sort) in its MATH-wait gaps. This file
+// is included in a namespace there; kernel_main below is left out.
+// town_init(0): no sort in this launch. town_poll() does at most one batch and
+// never waits; town_drain() runs the stream to its end (after the blend).
+static_assert(OL_TOWN_NT == 1, "OL_TOWN_EMBED needs OL_TOWN_NT=1");
+Stream g_town = {nullptr, 0u, 0u, 0u, 0u, 2u, QCAP};
+inline void town_init(uint32_t a0) {
+    g_town = {reinterpret_cast<volatile uint32_t*>(a0), a0, 0u, 0u, 0u, a0 == 0u ? 2u : 0u, QCAP};
+}
+inline bool town_poll() {
+    Stream& s = g_town;
+    if (s.st == 2u) return true;
+    l1_fence();
+    if (s.st == 0u) {
+        if (s.h[H_GO] != MAGIC || s.h[H_GO2] != MAGIC2) return false;
+        l1_fence();
+        s.nb = s.h[H_NB];
+        s.st = 1u;
+    }
+    if (s.k < s.nb) {
+        if (s.h[H_READY] <= s.k) return false;
+        l1_fence();
+        process(s, 0u, s.k % SLOTS);
+        l1_fence();  // records, cursors and run words before the batch count
+        s.h[H_DONE] = ++s.k;
+    }
+    if (s.k >= s.nb) {
+        l1_fence();
+        s.h[H_FIN] = MAGIC;
+        s.st = 2u;
+        return true;
+    }
+    return false;
+}
+inline void town_drain() {
+    while (!town_poll()) spin_pause();
+}
+#else
 #if OL_TOWN_NT == 1 && !OL_TOWN_ADDR_RTA
 // Base address of a CB this RISC never moves (PACK has write, UNPACK read pointers).
 template <typename Iface>
@@ -327,3 +367,4 @@ void kernel_main() {
     for (uint32_t i = 0; i < TP_N; i++) DeviceTimestampedData("town_pc", (uint64_t(i) << 32) | g_tp[i]);
 #endif
 }
+#endif  // OL_TOWN_EMBED

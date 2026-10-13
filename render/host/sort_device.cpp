@@ -26,6 +26,8 @@
 #include "blend_claim_order.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
+#include "sort_ol_arena.h"
+#include "tile_assign.h"
 #include "overflow_retry.h"
 #include "device_state.h"
 #include "matcull_trisc_fill.h"
@@ -37,6 +39,7 @@
 #include "vis_mode.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cerrno>
 #include <chrono>
@@ -317,6 +320,13 @@ struct SortDeviceContext {
     // (sort_onelaunch_enqueue_early); sort_resident_pairs checks it.
     uint32_t ol_early_tiles = 0;
     uint32_t ol_early_tiles_x = 0;
+    // Task #558 (GSPLAT_TT_SORT_IN_BLEND=1): the next view's solo sort in the
+    // fused mat+blend program. sib_args: per core the 30 sort args (kol0
+    // layout, semaphore ids left 0); sib_ready: set for the blend about to be
+    // enqueued; sib_ran: that blend ran it (the next K2 pass takes it).
+    std::vector<uint32_t> sib_args, sib_noc_xy;
+    uint32_t sib_tiles = 0, sib_tiles_x = 0;
+    bool sib_ready = false, sib_used = false, sib_ran = false;
     // Task #285 (GSPLAT_TT_MATBLEND_FUSE): mat -> blend ready flags, one 64 B
     // page per (tile, subchunk) at tile*8+sc holding the launch epoch (grow-only,
     // zero-filled at allocation; epochs start at 1 so stale pages never match).
@@ -3617,6 +3627,179 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
     ctx->ol_early_tiles = num_tiles;
     ctx->ol_early_tiles_x = tiles_x;
     return true;
+}
+
+// Task #558 (GSPLAT_TT_SORT_IN_BLEND=1, default off): sort(N+1) runs on BRISC
+// inside mat+blend(N) (matblend_brisc.cpp sib_run), right after the folded
+// K2(N+1); needs the B4a fold, the early one-launch sort and OL_SOLO (town on
+// PACK, OL_TOWN_NT=1). The fused run ring is R = D = 4: the town needs a power
+// of two and R = 8 (266,240 B) fits no alias tail (t555 finding).
+bool sort_in_blend_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SORT_IN_BLEND");
+        if (e == nullptr || e[0] != '1') return false;
+        const bool ok = b4a_fold_enabled() && env_config::sort_ol_early() && ol_solo_active() &&
+                        env_config::pfwc_rec32();
+        std::fprintf(stderr, "[SORT] SORT_IN_BLEND=%d (needs B4A fold, OL early, OL_SOLO+TOWN_NT=1, REC32)\n",
+                     static_cast<int>(ok));
+        return ok;
+    }();
+    return v;
+}
+
+namespace {
+constexpr uint32_t kSibRing = 4u;
+constexpr std::size_t kSibRtaLen = 170;  // 50 + 120 core NoC words (core 0)
+// Scratch buffer ids in matblend_brisc.cpp kSibIds order (mover 0 = id + 16).
+constexpr uint32_t kSibIds[14] = {16, 17, 18, 19, 20, 21, 22, 23, 24, 28, 29, 30, 10, 11};
+uint32_t sib_brec_half() { return std::max(gsplat_tt::env_config::ol_pair_batch() * 16u, 256u); }
+}  // namespace
+
+void sort_in_blend_defines(std::map<std::string, std::string>& dm, std::map<std::string, std::string>& tdef) {
+    const uint32_t pb = env_config::ol_pair_batch();
+    dm["EMIT_PUBOC"] = env_config::emit_puboc() ? "1u" : "0u";
+    dm["OL_PB"] = std::to_string(pb) + "u";
+    dm["OL_RING"] = std::to_string(kSibRing) + "u";
+    dm["OL_RING_DEPTH"] = std::to_string(kSibRing) + "u";
+    dm["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
+    dm["OL_WIN_PAGES"] = std::to_string(env_config::ol_win_pages()) + "u";
+    dm["OL_BREC_BULK"] = "1";
+    dm["OL_BREC_HALF"] = std::to_string(sib_brec_half()) + "u";
+    dm["PFWC_REC32"] = "1";
+    dm["OL_EMIT_TOWN"] = "1";
+    dm["OL_TOWN_NT"] = "1u";
+    dm["OL_SOLO"] = "1";
+    dm["OL_ARENA"] = "1";
+    tdef["OL_RING"] = dm["OL_RING"];
+    tdef["OL_RING_DEPTH"] = dm["OL_RING_DEPTH"];
+    tdef["OL_TOWN_NT"] = "1u";
+    tdef["OL_SOLO"] = "1";
+    tdef["PFWC_REC32"] = "1";
+}
+
+// Arena placement: the mat CBs' storage past the blend alias cut (t544:
+// CB5 / CB6 / CB20 tails) and BRISC's dead mat CB21 / CB22. Packed cb << 24 |
+// byte offset from the CB's base, in kSibIds order; empty when it does not fit.
+static std::vector<uint32_t> sib_arena(uint32_t num_cores) {
+    namespace oa = sort_ol_arena;
+    const std::vector<oa::Region> reg = {{5, 8192, 123904}, {6, 12288, 251904}, {20, 3072, 193536},
+                                         {21, 0, (2 * 6144 + 256) * 4}, {22, 0, 6144 * 32}};
+    const uint32_t pb = env_config::ol_pair_batch(), win = env_config::ol_win_pages();
+    const uint32_t sz[14] = {3u * pb * PAGE_BYTES, 3u * pb * PAGE_BYTES, 3u * pb * PAGE_BYTES, PAGE_BYTES,
+                             BIN_ROW_BYTES, BIN_ROW_BYTES, 2u * 32u * PAGE_BYTES,
+                             sort_ol_town::SLOTS * sib_brec_half() * PAGE_BYTES, 16u * 32u,
+                             win * 3u * PAGE_BYTES, kOneLaunchRingTiles * (kSibRing * 32u + 4u),
+                             sort_ol_town::BYTES, BIN_ROW_BYTES, (2u * num_cores + 2u) * PAGE_BYTES};
+    std::vector<oa::Buf> bufs;
+    for (uint32_t i = 0; i < 14u; i++) bufs.push_back({kSibIds[i], sz[i]});
+    std::vector<uint32_t> p = oa::place(reg, bufs);
+    for (uint32_t& w : p) w = (reg[oa::region_of(w)].cb << 24) | (reg[oa::region_of(w)].skip + oa::offset_of(w));
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        std::fprintf(stderr, "[SORT] SORT_IN_BLEND arena %s (R=%u)\n", p.empty() ? "DOES NOT FIT" : "placed",
+                     kSibRing);
+    }
+    return p;
+}
+
+bool sort_in_blend_prepare(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages, uint32_t rows_addr,
+                           uint32_t gids_addr, uint32_t tids_addr, uint32_t keep_addr, uint32_t pairs_P_addr,
+                           const std::vector<uint64_t>& acc) {
+    if (!sort_in_blend_enabled()) return false;
+    auto* ctx = ensure_context();
+    if (ctx == nullptr) return false;
+    ctx->sib_ready = false;
+    ctx->sib_used = false;
+    const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
+    const uint32_t stride = round_up(num_tiles, ELEMS_PER_PAGE);
+    auto bdep = device_state::get_buffer("proj_m_depth");
+    auto bbrec = device_state::get_buffer("proj_m_blendrec");
+    if (!(sort_onelaunch_enabled() && tile_bucket_enabled() && resident_blend_chain_enabled() &&
+          sort_device_publish_enabled() && ol_mover_speed()) ||
+        num_tiles == 0 || num_tiles > MAX_BIN_TILES || stride / ELEMS_PER_PAGE != row_pages ||
+        acc.size() != 2u * num_cores + 1u || acc.back() == 0u || acc.back() > 0xFFFFFFFFull || !bdep || !bbrec ||
+        sib_arena(num_cores).empty()) {
+        return false;
+    }
+    ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
+    ctx->sib_noc_xy = core_noc_xy(ctx, num_cores);
+    ctx->sib_args.assign(static_cast<std::size_t>(num_cores) * 30u, 0u);
+    for (uint32_t c = 0; c < num_cores; c++) {
+        const std::vector<uint32_t> a = {
+            gids_addr, tids_addr, keep_addr,
+            static_cast<uint32_t>(bdep->address()),
+            static_cast<uint32_t>(bbrec->address()),
+            static_cast<uint32_t>(ctx->buf_ol_bucket->address()),
+            rows_addr,
+            static_cast<uint32_t>(ctx->buf_ol_bases->address()),
+            static_cast<uint32_t>(ctx->buf_ol_totals->address()),
+            pairs_P_addr, static_cast<uint32_t>(acc[2u * c]), 0xFFFFFFFFu,
+            num_tiles, row_pages, c, num_cores, g_ol_tile_cap, tiles_x, 0u,
+            0u, 0u, 0u, 0u, 0u, 0u,  // semaphores: the blend program's (sort_in_blend_core_args)
+            ctx->sib_noc_xy[0] & 0xFFFFu, ctx->sib_noc_xy[0] >> 16, 1u,
+            static_cast<uint32_t>(acc[2u * c + 2u]), static_cast<uint32_t>(acc.back()),
+        };
+        std::copy(a.begin(), a.end(), ctx->sib_args.begin() + c * 30u);
+    }
+    ctx->sib_tiles = num_tiles;
+    ctx->sib_tiles_x = tiles_x;
+    ctx->sib_ready = true;
+    return true;
+}
+
+bool sort_in_blend_core_args(uint32_t core, const std::array<uint32_t, 8>& sems, std::vector<uint32_t>& m0,
+                             std::size_t m0_base, std::vector<uint32_t>& n, std::size_t n_base,
+                             std::vector<uint32_t>& cp, std::size_t cp_idx) {
+    auto* ctx = context_slot().get();
+    if (ctx == nullptr || !ctx->sib_ready) return false;
+    const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
+    if (core >= num_cores || ctx->sib_args.size() != num_cores * 30u) return false;
+    const std::vector<uint32_t> arena = sib_arena(num_cores);
+    m0.resize(m0_base + kSibRtaLen, 0u);
+    m0[m0_base + 0] = 1u;
+    m0[m0_base + 1] = sems[6];
+    m0[m0_base + 2] = sems[7];
+    m0[m0_base + 3] = num_cores;
+    m0[m0_base + 4] = ctx->sib_noc_xy[0] & 0xFFFFu;
+    m0[m0_base + 5] = ctx->sib_noc_xy[0] >> 16;
+    for (uint32_t i = 0; i < 14u; i++) m0[m0_base + 6 + i] = arena[i];
+    std::copy_n(ctx->sib_args.begin() + core * 30u, 30u, m0.begin() + m0_base + 20);
+    for (uint32_t i = 0; i < 6u; i++) m0[m0_base + 20 + 19 + i] = sems[i];
+    if (core == 0) std::copy(ctx->sib_noc_xy.begin(), ctx->sib_noc_xy.end(), m0.begin() + m0_base + 50);
+    n.resize(n_base + 4u, 0u);
+    n[n_base + 0] = 1u;
+    n[n_base + 1] = sems[6];
+    n[n_base + 2] = ctx->sib_noc_xy[0] & 0xFFFFu;
+    n[n_base + 3] = ctx->sib_noc_xy[0] >> 16;
+    cp.resize(cp_idx + 1u, 0u);
+    cp[cp_idx] = arena[11];  // town mailbox (id 30)
+    ctx->sib_used = true;
+    return true;
+}
+
+void sort_in_blend_end_view(bool k2_ran) {
+    auto* ctx = context_slot().get();
+    if (ctx == nullptr) return;
+    ctx->sib_ran = ctx->sib_ready && ctx->sib_used && k2_ran;
+    ctx->sib_ready = false;
+    ctx->sib_used = false;
+}
+
+bool sort_in_blend_take(uint32_t num_tiles, uint32_t tiles_x) {
+    auto* ctx = context_slot().get();
+    if (ctx == nullptr || !ctx->sib_ran) return false;
+    ctx->sib_ran = false;
+    if (ctx->sib_tiles != num_tiles || ctx->sib_tiles_x != tiles_x) return false;
+    ctx->ol_early_tiles = num_tiles;
+    ctx->ol_early_tiles_x = tiles_x;
+    return true;
+}
+
+void sort_in_blend_cancel() {
+    auto* ctx = context_slot().get();
+    if (ctx == nullptr) return;
+    ctx->sib_ready = ctx->sib_used = ctx->sib_ran = false;
 }
 
 bool sort_matcull_fused() {
