@@ -768,7 +768,19 @@ void kernel_main() {
     const uint32_t pc_init = g_pc_t - pc_w0;
 #endif
 
+#if defined(PFWC_TSPIN_CYC) && defined(TRISC_MATH)
+    // Task #629 knee probe: MATH busy-waits PFWC_TSPIN_CYC wall cycles per launch.
+    const uint32_t tspin = num_chunks != 0 ? (uint32_t)(PFWC_TSPIN_CYC) / num_chunks : 0u;
+#endif
     for (uint32_t chunk = 0; chunk < num_chunks; chunk++) {
+#if defined(PFWC_TSPIN_CYC) && defined(TRISC_MATH)
+        {
+            volatile tt_reg_ptr uint32_t* wc =
+                reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L);
+            const uint32_t s0 = wc[0];
+            while (wc[0] - s0 < tspin) {}
+        }
+#endif
         cb_wait_front(CB_MX, 1);
         cb_wait_front(CB_MY, 1);
         cb_wait_front(CB_MZ, 1);

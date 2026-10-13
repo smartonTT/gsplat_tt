@@ -506,6 +506,13 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // (j00, j02, j11, j12, accumulator, scratch) so we MUST disable
     // double-buffering. Trade-off: math and pack can't overlap, but the kernel
     // is dominated by math anyway.
+    // Task #629 knee probe (profiling only): GSPLAT_TT_PFWC_TSPIN_US > 0 adds that much
+    // MATH-thread busy time per core per launch (spread over its chunks).
+    {
+        const char* sp = std::getenv("GSPLAT_TT_PFWC_TSPIN_US");
+        const double us = sp != nullptr ? std::atof(sp) : 0.0;
+        if (us > 0) vis_defines["PFWC_TSPIN_CYC"] = std::to_string(static_cast<uint32_t>(us * 1350.0)) + "u";
+    }
     const KernelHandle compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/project_pfwc_compute.cpp",

@@ -20,6 +20,7 @@
 #include "dispatch_select.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
+#include "htl.h"
 #include "stage_timers.h"
 #include "gather_visible.h"
 #include "vis_mode.h"
@@ -1154,6 +1155,7 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
                     early = enqueue_sort();
                     cq1->enqueue_wait_for_event(k2_done);
                     GSPLAT_HOST_ZONE("host_cq1_proj_m");
+                    GSPLAT_HTL_ZONE("cq1_proj_m");  // task #629
                     distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
                 } else {
                     distributed::ReadShard(*ctx->cq, mread, projM, distributed::MeshCoordinate(0, 0),

@@ -32,6 +32,7 @@
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/sort_ol_town.h"
 #include "host_tracy.hpp"
+#include "htl.h"
 #include "matblend_fuse.h"
 #include "stage_timers.h"
 #include "vis_mode.h"
@@ -3561,6 +3562,7 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
     ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
     const std::vector<uint32_t> noc_xy = core_noc_xy(ctx, num_cores);
     Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+    std::optional<::gsplat_tt::htl::Zone> htl_rt(std::in_place, "sort_early_rtargs");  // task #629
     for (uint32_t c = 0; c < num_cores; c++) {
         const CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         // 9 = the ta_pairs_P page, 11 = 0xFFFFFFFF (P from that page); 10, 28,
@@ -3587,7 +3589,11 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
         if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
         SetRuntimeArgs(oprog, ctx->kol0, core, a);
     }
-    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
+    htl_rt.reset();
+    {
+        GSPLAT_HTL_ZONE("sort_early_enqueue");  // task #629
+        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
+    }
     ctx->ol_early_tiles = num_tiles;
     ctx->ol_early_tiles_x = tiles_x;
     return true;
