@@ -393,7 +393,7 @@ def test_camera_update_prepares_w2c_off_the_render_thread():
         return built[-1]
 
     gv = types.SimpleNamespace(
-        _latest_cs={}, camera_prepare_fn=_prepare_w2c, get_camera_state=get_cs,
+        _latest_cs={}, _cs_stamp={}, _cs_lock=threading.Lock(), camera_prepare_fn=_prepare_w2c, get_camera_state=get_cs,
         mark_ui_active=lambda cid: None,
         server=types.SimpleNamespace(atomic=contextlib.nullcontext),
         _renderers={7: types.SimpleNamespace(submit=submitted.append)})
@@ -583,3 +583,28 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
             print(f"PASS {name}")
+
+
+def test_camera_moved_keeps_only_the_newest_pose():
+    """Task #602: overlapping callbacks: an older pose stored last must not win, and a
+    late callback must not add a disconnected client back."""
+    import contextlib
+    import threading
+    import types
+    from gsplat.nerfview_viewer import GsplatViewer
+
+    submitted = []
+    gv = types.SimpleNamespace(
+        _latest_cs={}, _cs_stamp={}, _cs_lock=threading.Lock(), camera_prepare_fn=None,
+        get_camera_state=lambda c: object(), mark_ui_active=lambda cid: None,
+        server=types.SimpleNamespace(atomic=contextlib.nullcontext),
+        _renderers={7: types.SimpleNamespace(submit=submitted.append)})
+    new = types.SimpleNamespace(client_id=7, camera=types.SimpleNamespace(update_timestamp=2.0))
+    old = types.SimpleNamespace(client_id=7, camera=types.SimpleNamespace(update_timestamp=1.0))
+    GsplatViewer._camera_moved(gv, new)
+    kept = gv._latest_cs[7]
+    GsplatViewer._camera_moved(gv, old)
+    assert gv._latest_cs[7] is kept and len(submitted) == 1
+    gone = types.SimpleNamespace(client_id=9, camera=types.SimpleNamespace(update_timestamp=3.0))
+    GsplatViewer._camera_moved(gv, gone)
+    assert 9 not in gv._latest_cs and 9 not in gv._cs_stamp

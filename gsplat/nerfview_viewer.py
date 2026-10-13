@@ -416,6 +416,10 @@ class GsplatViewer(nerfview.Viewer):
         # that callback built; the render loop reads it instead of rebuilding one.
         self.camera_prepare_fn: Optional[Callable] = None
         self._latest_cs: dict[int, object] = {}
+        # Task #602: viser runs on_update callbacks on a thread pool and atomic() does not
+        # lock, so two callbacks can overlap; keep only the newest pose (by update stamp).
+        self._cs_lock = threading.Lock()
+        self._cs_stamp: dict[int, float] = {}
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
         self._ui_active_deadline = 0.0  # all clients (render settings changed)
@@ -475,12 +479,22 @@ class GsplatViewer(nerfview.Viewer):
         client_id = client.client_id
         self._last_move_time = time.time()
         self.mark_ui_active(client_id)
+        stamp = getattr(getattr(client, "camera", None), "update_timestamp", None)
+        if stamp is None:
+            stamp = time.monotonic()
         with self.server.atomic():
             camera_state = self.get_camera_state(client)
             if self.camera_prepare_fn is not None:
                 self.camera_prepare_fn(camera_state)
-            self._latest_cs[client_id] = camera_state
-            self._renderers[client_id].submit(RenderTask("move", camera_state))
+            with self._cs_lock:
+                renderer = self._renderers.get(client_id)
+                if renderer is None:  # disconnected: do not add it back
+                    return
+                if stamp < self._cs_stamp.get(client_id, float("-inf")):
+                    return  # an older pose finished last: keep the newer one
+                self._cs_stamp[client_id] = stamp
+                self._latest_cs[client_id] = camera_state
+            renderer.submit(RenderTask("move", camera_state))
 
     def latest_camera_state(self, client: viser.ClientHandle):
         """The newest pose's state built by the camera-update callback (task #597), else
@@ -490,7 +504,9 @@ class GsplatViewer(nerfview.Viewer):
 
     def _disconnect_client(self, client: viser.ClientHandle) -> None:
         self._client_active_deadline.pop(client.client_id, None)
-        self._latest_cs.pop(client.client_id, None)
+        with self._cs_lock:
+            self._latest_cs.pop(client.client_id, None)
+            self._cs_stamp.pop(client.client_id, None)
         super()._disconnect_client(client)
 
     def stop_burst(self) -> None:
