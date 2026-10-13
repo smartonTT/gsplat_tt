@@ -17,9 +17,9 @@ rev=${1:?rev}
 # with bh-50:/localdev/smarton (alpha wins conflicts) and ignores only /nosync. Attempts 2-3 built
 # a tt-metal tree that mutagen kept overwriting with the Mac's ~/dev/tt-metal, and a sync into
 # /localdev/smarton/gstt2 would reach the Mac's main checkout.
-H=${H:-bh-50}; JOB=${JOB:-132971}; R=${R:-/localdev/smarton/nosync/t582}; T=${T:-$R/gstt2}
+H=${H:-bh-50}; JOB=${JOB:-132985}; R=${R:-/localdev/smarton/nosync/t582}; T=${T:-$R/gstt2}
 export REMOTE_TT_METAL_HOME=${REMOTE_TT_METAL_HOME:-$R/tt-metal}
-JOB_START=${JOB_START:-1791871787}   # 2026-10-12 23:09:47 PDT, from ird reserve's output
+JOB_START=${JOB_START:-1791872668}   # 2026-10-12 23:24:28 PDT, from ird reserve's output
 # $T is the default BASE of opt/sync_remote.sh, which then links no .venv into it (the tracked
 # .venv symlink dangles there and is removed): point BASE at setup_box.sh's viewer dir instead.
 export GSTT2_BASE=${GSTT2_BASE:-$R/viewer} GSTT2_VENV=${GSTT2_VENV:-$R/viewer/venv} GSTT2_SCENES=${GSTT2_SCENES:-$T/scenes}

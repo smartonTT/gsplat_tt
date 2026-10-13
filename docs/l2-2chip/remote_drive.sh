@@ -1,6 +1,6 @@
 #!/bin/bash
 # t582 (L2, 2-chip alternate-frame rendering): device half of docs/l2-2chip/drive.sh. Runs ON the
-# 2-board p150 host (bh-50, IRD job 132971) under `ttp detach --remote`, inside drive.sh's
+# 2-board p150 host (bh-50, IRD job 132985) under `ttp detach --remote`, inside drive.sh's
 # `ttp lock p100`. Tree $T (synced by opt/sync_remote.sh), JIT cache $C, outputs in $S.
 #   A = one chip (PCIe id $DA), render/run.py --no-ref --back-to-back
 #   B = 2 chips, GSPLAT_TT_AFR=1 GSPLAT_TT_AFR_DEVICES=$DA,$DB, same command
