@@ -37,3 +37,25 @@
 - Reading: 6 passes and 7 hangs = CB5's tail is live during blend (move the mailbox and CB5
   buffers out of CB5). Both hang = any BRISC L1 write after the barrier breaks it (look at the
   address computation / CB interface on BRISC). 1 hangs = the control moved; recheck t571 changes.
+
+## Result: arms 6, 7, 1 (out-sibdbg671, bh-33, 2026-10-12 19:26-19:32 PDT, commit 4d581ac6)
+
+| arm | what BRISC does in blend(N) | result |
+|---|---|---|
+| 1 | barrier only (control) | 30/30 views ran, rc=0 |
+| 5 | ~20 mailbox header writes at CB5 +87936, PACK town off | hang/crash at view 2 |
+| 6 | same writes at CB21 base | hang at view 2 (rc=124) |
+| 7 | same writes at CB5 base + 8192 | hang at view 2 (rc=124) |
+
+All hangs happen right after `[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1`,
+i.e. the first view where blend(N) carries the folded K2(N+1) and the sort-in-blend arm is live.
+
+Conclusion: the write address does not matter. Three different target regions (CB5 tail,
+CB5 interior, CB21 base) all hang, while the barrier-only arm passes. So the cause is not an
+out-of-arena sort write. It is something every arm >=2 shares and arm 1 lacks: the extra BRISC
+code itself (kernel binary size / text placement overlapping a CB or the K2 scratch kB4aCb 62),
+the KCFG/runtime-arg reads that feed the arm, or the arm's handshake with the K2 fold path on
+view 2. Next checks, in order: (a) compare BRISC kernel text size and end address for arm 1 vs
+arm 5 against the lowest CB base on that core; (b) arm 8 = arm 5 with the writes compiled in
+but skipped at runtime (`if (rt_arg == magic)`), which separates code size from the stores;
+(c) arm 5 with GSPLAT_TT_B4A_FOLD=0, which separates the fold from sort-in-blend.
