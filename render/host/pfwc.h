@@ -63,6 +63,18 @@ struct PfwcVisParams {
     // extent (project_pfwc_compute.cpp step 11.6). 0 = off for this view (band
     // cull disabled), the PFWC_PRECULL program then keeps the 3-sigma radii.
     float precull_floor = 0.0f;
+    // Task #623 (GSPLAT_TT_SPLIT=1): render only screen tiles [tile_x0, tile_x1) x
+    // [tile_y0, tile_y1). The fused writer clips each rectangle to the window and
+    // tile ids downstream are window-local. -1 = tiles_x / tiles_y (full screen).
+    int tile_x0 = 0;
+    int tile_x1 = -1;
+    int tile_y0 = 0;
+    int tile_y1 = -1;
+    int win_x1() const { return tile_x1 < 0 ? tiles_x : tile_x1; }
+    int win_y1() const { return tile_y1 < 0 ? tiles_y : tile_y1; }
+    int win_w() const { return win_x1() - tile_x0; }
+    int win_h() const { return win_y1() - tile_y0; }
+    bool windowed() const { return win_w() != tiles_x || win_h() != tiles_y; }
 };
 
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident

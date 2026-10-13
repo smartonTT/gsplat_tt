@@ -98,6 +98,7 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
     const uint32_t bbase = desc[3];
     volatile uint32_t* h = sm.h;
     const uint32_t cap = h[H_CAP], msk = h[H_MSK], sh = h[H_SH], ring = h[H_RING];
+    const uint32_t ox = h[H_X0], oy = h[H_Y0];  // task #623 tile window origin
     uint32_t* const cur = reinterpret_cast<uint32_t*>(h[H_CUR]);
     volatile uint32_t* const fl = reinterpret_cast<volatile uint32_t*>(base + FL_OFF);
     uint32_t* const q = reinterpret_cast<uint32_t*>(base + q_off(me));
@@ -142,10 +143,10 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             } while (fl[t] + (D - R) < c);
             TP_ADD(TP_WFL, t0);
         }
-        const uint32_t kx = (t & msk) * L1_TILE_SIZE;
+        const uint32_t kx = ((t & msk) + ox) * L1_TILE_SIZE;
         uint32_t mx;
         if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
-        const uint32_t tyi = t >> sh;
+        const uint32_t tyi = (t >> sh) + oy;
         if (tyi != ty_c) {
             ty_c = tyi;
             const uint32_t ky = tyi * L1_TILE_SIZE;

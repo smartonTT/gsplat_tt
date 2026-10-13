@@ -71,6 +71,7 @@
 #include "pfwc_fuse.h"
 #include "sort_bin_fp32.h"
 #include "sort_onelaunch_algo.h"
+#include "tile_window.h"
 #if defined(OL_FILL_BULK) && OL_FILL_BULK == 2
 #include "api/debug/dprint.h"
 #endif
@@ -212,7 +213,11 @@ void kernel_main() {
     const uint32_t core_id = get_arg_val<uint32_t>(14);
     const uint32_t num_cores = get_arg_val<uint32_t>(15);
     const uint32_t tile_cap = get_arg_val<uint32_t>(16);
-    const uint32_t tiles_x = get_arg_val<uint32_t>(17);
+    // Task #623: arg 17 may carry a tile window (tile_window::pack); tile ids are
+    // window-local and the tile-local mean uses the global origin.
+    const tile_window::Origin win = tile_window::decode(get_arg_val<uint32_t>(17));
+    const uint32_t tiles_x = win.w;
+    const uint32_t win_x0 = win.x0, win_y0 = win.y0;
     const uint32_t mover = get_arg_val<uint32_t>(18);
     const uint32_t sem_counted_id = get_arg_val<uint32_t>(19);
     const uint32_t sem_based_id = get_arg_val<uint32_t>(20);
@@ -663,8 +668,8 @@ void kernel_main() {
         }
     };
     auto pack_rec = [&](volatile uint32_t* p32, uint32_t tt) {
-        const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % tiles_x);
-        const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / tiles_x);
+        const uint32_t txi = (tx_is_pow2 ? (tt & tx_mask) : (tt % tiles_x)) + win_x0;
+        const uint32_t tyi = (tx_is_pow2 ? (tt >> tx_shift) : (tt / tiles_x)) + win_y0;
         uint32_t mx_bits;
         if (!sort_bin_fp32::sub_int(inv_mx_bits, txi * L1_TILE_SIZE, &mx_bits)) {
             const float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
@@ -891,6 +896,8 @@ void kernel_main() {
     twh[tw::H_SH] = tx_shift;
     twh[tw::H_RING] = ring_l1;
     twh[tw::H_CUR] = get_write_ptr(CB_CUR + cbo);  // == cur_lm
+    twh[tw::H_X0] = win_x0;
+    twh[tw::H_Y0] = win_y0;
     for (uint32_t i = 0; i < tw::NT; i++) {
         twh[tw::H_FIN + i] = 0u;
         twh[tw::H_DONE + 4u * i] = 0u;
@@ -1112,6 +1119,7 @@ void kernel_main() {
                 const uint8_t* rp = bp;
                 uint32_t jl = 0, jr = 0;
                 const uint32_t cap = tile_cap, msk = tx_mask, sh = tx_shift, ring = ring_l1;
+                const uint32_t ox = win_x0, oy = win_y0;
                 int32_t g_c = f_g;
                 uint32_t cov0 = f_cov0, cov1 = f_cov1, cov2 = f_cov2, dep = f_dep, mxb = f_mx, myb = f_my;
                 uint32_t opr = f_opr, cgb = f_cgb, ty_c = f_ty, myt = f_myt;
@@ -1164,13 +1172,13 @@ void kernel_main() {
                         EP_ADD(ep_wfl, ep_t);
                         EP_CNT(ep_nrun, 1u);
                     }
-                    const uint32_t kx = (t & msk) * L1_TILE_SIZE;
+                    const uint32_t kx = ((t & msk) + ox) * L1_TILE_SIZE;
                     uint32_t mx;
                     if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) {
                         mx = sub_int_cold(mxb, kx);
                         EP_CNT(ep_ncold, 1u);
                     }
-                    const uint32_t tyi = t >> sh;
+                    const uint32_t tyi = (t >> sh) + oy;
                     if (tyi != ty_c) {
                         ty_c = tyi;
                         const uint32_t ky = tyi * L1_TILE_SIZE;

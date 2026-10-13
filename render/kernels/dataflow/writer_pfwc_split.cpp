@@ -36,6 +36,7 @@
 #include "pfwc_fuse.h"
 #include "pfwc_wsplit.h"
 #include "sort_bin_fp32.h"
+#include "tile_window.h"
 #include "vis_tile.h"
 
 #if defined(PFWC_SKIP_RGB) && !(PFWC_REC32 && EMIT_PUBOC)
@@ -82,8 +83,16 @@ void kernel_main() {
     prm.img_w = get_arg_val<uint32_t>(15);
     prm.img_h = get_arg_val<uint32_t>(16);
     prm.max_radius = get_arg_val<uint32_t>(17);
-    prm.tiles_x = get_arg_val<uint32_t>(18);
-    prm.tiles_y = get_arg_val<uint32_t>(19);
+    {  // Task #623: args 18/19 carry the full screen plus an optional tile window.
+        const tile_window::PfwcWin win = tile_window::decode_pfwc(get_arg_val<uint32_t>(18), get_arg_val<uint32_t>(19));
+        prm.tiles_x = win.tiles_x;
+        prm.tiles_y = win.tiles_y;
+        prm.win = (win.wx != win.tiles_x || win.wy != win.tiles_y) ? 1u : 0u;
+        prm.win_x0 = win.x0;
+        prm.win_y0 = win.y0;
+        prm.win_w = win.wx;
+        prm.win_h = win.wy;
+    }
     const uint32_t tile_size = get_arg_val<uint32_t>(20);
     prm.tile_shift = dm_fp32::pow2_shift(tile_size);
     prm.inv_tile = 1.0f / static_cast<float>(tile_size);

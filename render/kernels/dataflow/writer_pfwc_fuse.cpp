@@ -24,6 +24,7 @@
 //   9: chunk_start (= c)   10: num_chunks   11: stride (= num_cores)   12: N
 //   13..17: k_near, min_opacity, image width, image height, max_radius (fp32 bits)
 //   18: tiles_x   19: tiles_y   20: tile_size (power of two)
+//       (18/19 may also carry a tile window: tile_window::pack_pfwc_x/y, task #623)
 //   21: seg_base   22: core index c (counts page)
 //   23, 24: scene_puboc01 / scene_puboc23 (tile pages; EMIT_PUBOC): record
 //       words 10 / 11 precomputed per scene (task #122). 0 = the scene has a
@@ -41,6 +42,7 @@
 #include "api/dataflow/dataflow_api.h"
 #include "pfwc_fuse.h"
 #include "sort_bin_fp32.h"
+#include "tile_window.h"
 #include "vis_tile.h"
 
 #ifndef FUSE_ABL
@@ -72,8 +74,16 @@ void kernel_main() {
     prm.img_w = get_arg_val<uint32_t>(15);
     prm.img_h = get_arg_val<uint32_t>(16);
     prm.max_radius = get_arg_val<uint32_t>(17);
-    prm.tiles_x = get_arg_val<uint32_t>(18);
-    prm.tiles_y = get_arg_val<uint32_t>(19);
+    {  // Task #623: args 18/19 carry the full screen plus an optional tile window.
+        const tile_window::PfwcWin win = tile_window::decode_pfwc(get_arg_val<uint32_t>(18), get_arg_val<uint32_t>(19));
+        prm.tiles_x = win.tiles_x;
+        prm.tiles_y = win.tiles_y;
+        prm.win = (win.wx != win.tiles_x || win.wy != win.tiles_y) ? 1u : 0u;
+        prm.win_x0 = win.x0;
+        prm.win_y0 = win.y0;
+        prm.win_w = win.wx;
+        prm.win_h = win.wy;
+    }
     const uint32_t tile_size = get_arg_val<uint32_t>(20);
     prm.tile_shift = dm_fp32::pow2_shift(tile_size);
     prm.inv_tile = 1.0f / static_cast<float>(tile_size);
