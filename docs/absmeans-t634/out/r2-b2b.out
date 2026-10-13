@@ -1,0 +1,24 @@
+================ BUILD ID ================
+  cpp : #124 sha=486a7397 bin=392c5b1c1990f32b t634 486a7397 ABS_MEANS gate (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t634-r2-b2b  timeout=360s  worry=600s  ts=2026-10-13T12:41:40-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=330 bash /localdev/smarton/gstt2-t513/docs/absmeans-t634/remote_ab.sh 2 b2b ctl base abl
+-----------------------------------------
+=== r2-b2b-ctl 486a7397 ABS_MEANS_ABL=2 cache=/localdev/smarton/.cache/ttmc-t634ctl 19:41:43 load=4.33
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.576 fps=131.99 ms_frame_median=7.583 pass_ms_frame=7.587,7.592,7.591,7.585,7.581,7.590,7.592,7.589,7.601,7.578,7.588,7.567,7.565,7.562,7.568,7.571,7.572,7.581,7.609,7.455 check_pass_ms_frame=8.922 raw_md5=a7bdd047 gap_ms=0.00 render_ms_frame=7.576 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=7.576
+=== r2-b2b-base 486a7397 ABS_MEANS_ABL=0 cache=/localdev/smarton/.cache/ttmc-t634base 19:41:56 load=4.13
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.449 fps=118.36 ms_frame_median=8.453 pass_ms_frame=8.466,8.461,8.460,8.455,8.455,8.449,8.460,8.455,8.459,8.439,8.444,8.451,8.457,8.439,8.451,8.459,8.436,8.435,8.451,8.389 check_pass_ms_frame=9.768 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.449 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.449
+=== r2-b2b-abl 486a7397 ABS_MEANS_ABL=1 cache=/localdev/smarton/.cache/ttmc-t634abl 19:42:10 load=3.82
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.442 fps=134.37 ms_frame_median=7.450 pass_ms_frame=7.450,7.439,7.435,7.458,7.464,7.428,7.454,7.463,7.451,7.474,7.452,7.443,7.448,7.371,7.450,7.456,7.472,7.467,7.443,7.324 check_pass_ms_frame=7.697 raw_md5=a7bdd047 gap_ms=0.00 render_ms_frame=7.442 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=7.442
+=== done 2 b2b 19:42:22
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t634/tmp/ttw-state/logs/t634-r2-b2b-20261013-124137.log
