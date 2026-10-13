@@ -168,26 +168,47 @@ static uint32_t g_pixel_floor_bits = 0u;
 #ifndef BLEND_CONST_HOIST
 #define BLEND_CONST_HOIST 0
 #endif
+// Task #584 (host env GSPLAT_TT_BLEND_EXP1, t580 model): degree-1 minimax 2^f
+// instead of the degree-2 poly, Q(u) = 0.97030 + 0.97000 u scaled by k = 1.0307
+// into [1, 2), with the log2(k) input shift folded into the 127 constant (now in
+// DEST slot S_C0; c1, c0 in L13, L14). Saves the poly MAD and the +127 ADDI.
+#ifndef BLEND_EXP1
+#define BLEND_EXP1 0
+#endif
 #if BLEND_CONST_HOIST && BLEND_COEF_DEST && defined(TRISC_MATH)
 constexpr uint32_t S_C0 = 11, S_K99 = 12;
 sfpi_inline sfpi::vFloat blend_exp21f(sfpi::vFloat val) {
     using namespace sfpi;
+#if BLEND_EXP1
+    vFloat xlog2 = val * vConstFloatPrgm0 + vFloat(dst_reg[DR_S + S_C0]);
+#else
     vFloat xlog2 = val * vConstFloatPrgm0 + 127.f;
+#endif
     vFloat threshold_low = 0.f;
     vec_min_max(threshold_low, xlog2);
     vInt z = ckernel::sfpu::_float_to_int32_for_exp_21f_(xlog2);
     vInt exponential_part = exexp(reinterpret<vFloat>(z), ExponentMode::NoDebias);
     vInt fractional_part = exman(reinterpret<vFloat>(z));
     vFloat frac = int32_to_float(fractional_part, RoundMode::NearestEven);
+#if BLEND_EXP1
+    frac = frac * vConstFloatPrgm1 + vConstFloatPrgm2;     // c1 x + c0
+#else
     vFloat t = frac * vConstFloatPrgm1 + vConstFloatPrgm2;  // c2 x + c1
     frac = frac * t + vFloat(dst_reg[DR_S + S_C0]);         // (.) x + c0
+#endif
     return setexp(frac, exponential_part);
 }
 inline void blend_stage_hoist() {
     sfpi::vConstFloatPrgm0 = 1.4426950216293334961f;   // ONE_LN2
+#if BLEND_EXP1
+    sfpi::vConstFloatPrgm1 = 1.1918294262613927e-07f;  // c1 = 0.97000 k / 2^23
+    sfpi::vConstFloatPrgm2 = 1.0000882148742676f;      // c0 = 0.97030 k
+    sfpi::dst_reg[DR_S + S_C0] = 126.95637512207031f;  // 127 - log2(k)
+#else
     sfpi::vConstFloatPrgm1 = 4.791750143340323e-15f;   // c2
     sfpi::vConstFloatPrgm2 = 7.839635491371155e-08f;   // c1
     sfpi::dst_reg[DR_S + S_C0] = 1.0017248f;
+#endif
     sfpi::dst_reg[DR_S + S_K99] = 0.99f;
 }
 #define BLEND_EXP(v) blend_exp21f(v)
@@ -597,6 +618,9 @@ inline void dispatch_blend_pairs(
 #if !BLEND_CONST_HOIST || !defined(BLEND_PIXEL_FLOOR) || BLEND_FPU_QF_ABL
 #error "BLEND_SCHED bodies are the CONST_HOIST + PIXEL_FLOOR bodies"
 #endif
+#if BLEND_EXP1 && BLEND_SCHED == 1
+#error "BLEND_EXP1 has no level-1 pair body (use BLEND_SCHED 2)"
+#endif
 #define BS_V(r, i) (2u * ((r) + (i)))  // SFPLOAD/SFPSTORE address of dst_reg[r + i]
 #define BS_S(s) BS_V(DR_S, s)
 #define BS_LD(l, a, m, am) TTI_SFPLOAD(l, m, am, a)
@@ -640,6 +664,34 @@ template <uint32_t IX>
 }
 // weight = exp21f(min(power, 0)), alpha = min(op * weight, 0.99), colours.
 [[gnu::always_inline]] inline void bs_middle() {
+#if BLEND_EXP1
+    // Task #584: xlog2 = power * ONE_LN2 + bias in one MAD (bias from S_C0, loaded
+    // in the slot of the leading NOP), degree-1 poly c1 x + c0 from L13/L14. 24 ops.
+    BS_LD(4, BS_S(S_C0), 0, 7);
+    BS_SWAP(0, 9, 1);
+    BS_NOP();
+    BS_MAD(0, 0, 12, 4, 0);
+    BS_NOP();
+    BS_SWAP(9, 0, 1);
+    BS_NOP();
+    BS_EXEXP(1, 0, 0);
+    BS_EXMAN(0, 0, 0);
+    BS_SHFT(0, 1, 0x000, 0);
+    BS_EXEXP(1, 0, 1);
+    BS_EXMAN(0, 0, 1);
+    BS_CAST(0, 0, 0);
+    BS_MAD(0, 0, 13, 14, 0);
+    BS_LD(5, BS_S(S_OP), 0, 7);
+    BS_LD(6, BS_S(S_K99), 0, 7);
+    BS_SETEXP(1, 0, 0x000, 0);
+    BS_MUL(0, 5, 1, 9, 0);
+    BS_LD(7, BS_S(S_FL), 0, 7);
+    BS_SWAP(0, 6, 1);
+    BS_NOP();
+    BS_LD(3, BS_S(S_CR), 0, 7);
+    BS_LD(4, BS_S(S_CG), 0, 7);
+    BS_LD(5, BS_S(S_CB), 0, 7);
+#else
     BS_NOP();
     BS_SWAP(0, 9, 1);
     BS_NOP();
@@ -667,6 +719,7 @@ template <uint32_t IX>
     BS_LD(3, BS_S(S_CR), 0, 7);
     BS_LD(4, BS_S(S_CG), 0, 7);
     BS_LD(5, BS_S(S_CB), 0, 7);
+#endif
 }
 // Pixel floor, R/G/B += alpha T colour, T *= 1 - alpha. AT/AR/AG/AB: addresses
 // of T/R/G/B (absolute in F, relative to RWC D in the A2 replay).
