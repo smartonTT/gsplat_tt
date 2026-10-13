@@ -486,7 +486,49 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     return 0 if identical else 5
 
 
+_STACK_CHECKED: set = set()
+
+
+def _brisc_stack_check(since):
+    """Task #574: static BRISC stack margin (opt/brisc_stack_check.py) of every
+    brisc.elf this run compiled into the JIT cache (mtime >= since). Returns 9 and
+    prints BRISC_STACK_FAIL when one has < 128 B margin (#573: a stack run into
+    .data/.bss hangs the device at wild PCs), else 0. GSPLAT_TT_STACK_CHECK=0
+    skips it; so does a host without the RISC-V tools (CPU-only runs)."""
+    if os.environ.get("GSPLAT_TT_STACK_CHECK", "1") == "0":
+        return 0
+    tools = Path(os.environ.get("TT_METAL_HOME", "/localdev/smarton/tt-metal")) / \
+        "runtime/sfpi/compiler/bin"
+    cache = os.environ.get("TT_METAL_CACHE", "")
+    if not (tools / "riscv-tt-elf-objdump").exists() or not cache or not os.path.isdir(cache):
+        return 0
+    spec = importlib.util.spec_from_file_location(
+        "brisc_stack_check", REPO_ROOT / "opt" / "brisc_stack_check.py")
+    bsc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bsc)
+    rc = 0
+    for elf in bsc.find_elfs(cache, since):
+        if elf in _STACK_CHECKED:
+            continue
+        _STACK_CHECKED.add(elf)
+        try:
+            r = bsc.check_elf(elf, str(tools))
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            print(f"BRISC_STACK_FAIL elf={elf} error={e}", flush=True)
+            rc = 9
+            continue
+        kern = Path(elf).parent.parent.parent.name
+        tag = "BRISC_STACK" if r["ok"] else "BRISC_STACK_FAIL"
+        print(f"{tag} kernel={kern} margin={r['margin']} depth={r['depth']} "
+              f"avail={r['avail']} reserve={r['reserve']} elf={elf}", flush=True)
+        if not r["ok"]:
+            print(f"{tag} chain={' > '.join(r['chain'])}", flush=True)
+            rc = 9
+    return rc
+
+
 def _main():
+    t_start = time.time() - 1.0
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", default="bicycle")
     ap.add_argument("--cameras", type=Path,
@@ -605,6 +647,8 @@ def _main():
     t_warm = time.perf_counter()
     warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
+    if _brisc_stack_check(t_start):
+        sys.exit(9)
 
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     # Zero the C++ per-stage accumulators so they cover the timed views only.
@@ -621,6 +665,7 @@ def _main():
     if args.back_to_back:
         rc = _back_to_back(args, clean_pipeline, gauss, cam, order, K, H, W,
                            hero_name, hero_clean, dump_dir, out_dir)
+        rc = rc or _brisc_stack_check(t_start)
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(rc)
@@ -785,9 +830,10 @@ def _main():
                   + f" | sum={sub_sum:.3f} {stage}={stage_ms:.3f}"
                   + f" resid={stage_ms - sub_sum:+.3f}", flush=True)
 
+    rc = _brisc_stack_check(t_start)
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(0)
+    os._exit(rc)
 
 
 def morton_order(means: np.ndarray) -> np.ndarray:

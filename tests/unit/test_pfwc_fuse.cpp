@@ -447,6 +447,27 @@ int main() {
         check_k2(e, legacy(e, 110), fused_writer(e, 110), 110, 110, 1, 500, 1000);
         cases++;
     }
+    // Task #573: muldiv_lo32 (no 64-bit division on BRISC) equals the uint64_t
+    // expression the K2 ranges used before, on edges and random inputs.
+    {
+        const uint32_t edge[] = {0u, 1u, 2u, 3u, 999u, 1000u, 1001u, 65535u, 65536u,
+                                 0x7FFFFFFFu, 0x80000000u, 0xFFFFFFFEu, 0xFFFFFFFFu};
+        auto check_md = [](uint32_t a, uint32_t b, uint32_t d) {
+            const uint32_t want = static_cast<uint32_t>(static_cast<uint64_t>(a) * b / d);
+            const uint32_t got = pfwc_fuse::muldiv_lo32(a, b, d);
+            if (got != want) fail("muldiv_lo32", got, want);
+        };
+        for (uint32_t a : edge)
+            for (uint32_t b : edge)
+                for (uint32_t d : edge)
+                    if (d != 0u) check_md(a, b, d);
+        for (int i = 0; i < 200000; i++) {
+            const uint32_t d = static_cast<uint32_t>(rng() >> (rng() % 32));
+            check_md(static_cast<uint32_t>(rng()), static_cast<uint32_t>(rng() >> (rng() % 32)),
+                     d != 0u ? d : 1u);
+        }
+        cases++;
+    }
     if (jobs_run == 0 || jobs_fallback == 0) fail("TRISC jobs not exercised", jobs_run, jobs_fallback);
     if (failures) {
         std::fprintf(stderr, "test_pfwc_fuse: %d failures in %d cases\n", failures, cases);
