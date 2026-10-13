@@ -417,8 +417,14 @@ void kernel_main() {
                 a[i]   = rec[0];
                 b[i]   = rec[1];
                 c[i]   = rec[2];
+#ifdef CULL_ABS_RAW
+                // Task #647 timing gate only: take the means as written (no round trip).
+                mlx[i] = rec[4];
+                mly[i] = rec[5];
+#else
                 mlx[i] = dm_fp32::add_sub_roundtrip(rec[4], txf_bits);
                 mly[i] = dm_fp32::add_sub_roundtrip(rec[5], tyf_bits);
+#endif
                 op[i]  = dm_fp32::unorm16_to_f(rec[6] & 0xffffu);
             }
 #endif

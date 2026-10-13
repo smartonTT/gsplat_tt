@@ -1214,6 +1214,11 @@ static void build_program_and_workload(DeviceContext& ctx) {
     u2d[CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
     // Single-path cull compute kernel: CULL_LPT_CB is inlined in the source.
+    // Task #647 timing gate only: cull takes rec[4]/rec[5] as written (no add_sub_roundtrip).
+    std::map<std::string, std::string> cull_defs;
+    if (const char* e = std::getenv("GSPLAT_TT_CULL_ABS_RAW"); e != nullptr && std::atoi(e) == 1) {
+        cull_defs["CULL_ABS_RAW"] = "1";
+    }
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
@@ -1224,6 +1229,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
+            .defines = cull_defs,
         });
 
     // Writer: 5 accessors (cull_masks, ranges, tile_ids, sort_lpt_meta,

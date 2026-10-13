@@ -1466,6 +1466,11 @@ static void build_program_bucket_cull(SortDeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[0] = UnpackToDestMode::UnpackToDestFp32;
     u2d[1] = UnpackToDestMode::UnpackToDestFp32;
+    // Task #647 timing gate only: cull takes rec[4]/rec[5] as written (no add_sub_roundtrip).
+    std::map<std::string, std::string> cull_defs;
+    if (const char* e = std::getenv("GSPLAT_TT_CULL_ABS_RAW"); e != nullptr && std::atoi(e) == 1) {
+        cull_defs["CULL_ABS_RAW"] = "1";
+    }
     ctx.kc_compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
@@ -1476,6 +1481,7 @@ static void build_program_bucket_cull(SortDeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
+            .defines = cull_defs,
         });
 
     // Writer: 3 DRAM-interleaved accessors (tile_recs, bucket_meta, tile_ids).
