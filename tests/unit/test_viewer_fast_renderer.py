@@ -416,7 +416,6 @@ def test_camera_update_prepares_w2c_off_the_render_thread():
     assert torch.equal(_cached_w2c(st), w2c)
 
     # The render loop takes the hint from latest_camera_state, not get_camera_state.
-    import threading
     from nerfview._renderer import RenderTask
     from gsplat.nerfview_viewer import FastRenderer
     seen = []
