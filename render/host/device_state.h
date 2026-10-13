@@ -48,6 +48,8 @@ namespace device_state {
 
 std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device();
 bool is_initialized();
+// Task #562: true if the device was opened with Ethernet dispatch (opens it if needed).
+bool eth_dispatch();
 void shutdown();
 
 tt::tt_metal::distributed::MeshCommandQueue* command_queue();

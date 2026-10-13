@@ -13,6 +13,7 @@
 
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 
@@ -78,6 +79,16 @@ inline Choice resolve(Mode mode, const std::string& card_type, uint32_t num_cqs,
     if (!card_has_eth(card_type)) return {Kind::kWorker, "auto: card has no ETH cores"};
     if (!overlay) return {Kind::kWorker, "auto: TT_METAL_RUNTIME_ROOT is not an opt/eth overlay, falling back"};
     return {Kind::kEth, "auto: card has ETH cores, overlay active"};
+}
+
+// Task #562: the B4a fold (tile_assign_device.cpp b4a_fold_enabled; K2(N+1) on BRISC in the
+// fused mat+blend(N)) hangs a p150 under ETH dispatch (12x10) on the first folded view and
+// wedges the board; it was only validated under worker dispatch (p100, 11x10). Default: on
+// under worker dispatch, off under ETH. GSPLAT_TT_B4A_FOLD (`env`, nullptr if unset) wins:
+// 0 (or empty) is the kill switch, any other number forces it on.
+inline bool b4a_fold_on(const char* env, Kind kind) {
+    if (env != nullptr) return std::atoi(env) != 0;
+    return kind == Kind::kWorker;
 }
 
 // tt-kmd's card type attribute ("p150a", "p100a", ...) of /dev/tenstorrent/<id>.
