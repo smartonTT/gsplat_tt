@@ -12,7 +12,7 @@
 [ttw 2026-10-12T20:48:06-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=2c895ad2 bin=2711fa7524e0ce89 t574 2c895ad2 BRISC stack fix vs 90268457 (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t574-verify-new  timeout=480s  worry=600s  ts=2026-10-12T20:48:06-0700
 cmd: T=/localdev/smarton/gstt2-t513 TB=/localdev/smarton/gstt2-t574b RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/land-t574/remote_ab.sh 0 dump new
