@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=7b7ace57 bin=6a6df52870bfae39 t655 7b7ace57 BLEND_SWAP_FILL default on (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t655-warm  timeout=400s  worry=600s  ts=2026-10-13T15:32:51-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/swapfill-land-t655/remote.sh 0 base new
+-----------------------------------------
+=== r0-base 7b7ace57 GSPLAT_TT_BLEND_SWAP_FILL=0 --back-to-back 22:32:53 load=1.71
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.221 fps=121.64 ms_frame_median=8.222 pass_ms_frame=8.220,8.222,8.220,8.225,8.219,8.222,8.222,8.219,8.222,8.226,8.221,8.233,8.222,8.227,8.225,8.230,8.221,8.222,8.226,8.173 check_pass_ms_frame=9.519 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.221
+TTW_TIMING b2b_ms_frame_median=8.222
+LEVER r0-base cache_defines=[define BLEND_SWAP_FILL 0 ]
+=== r0-new 7b7ace57  --back-to-back 22:33:25 load=1.74
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.060 fps=124.07 ms_frame_median=8.062 pass_ms_frame=8.067,8.061,8.062,8.059,8.062,8.068,8.064,8.060,8.062,8.056,8.059,8.072,8.063,8.059,8.057,8.062,8.071,8.063,8.059,8.009 check_pass_ms_frame=9.422 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.060
+TTW_TIMING b2b_ms_frame_median=8.062
+LEVER r0-new cache_defines=[define BLEND_SWAP_FILL 1 ]
+=== done 0 22:33:58
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t655/tmp/ttw-state/logs/t655-warm-20261013-153251.log
