@@ -1,6 +1,6 @@
 #!/bin/bash
 # t582 (L2, 2-chip alternate-frame rendering): device half of docs/l2-2chip/drive.sh. Runs ON the
-# 2-board p150 host (bh-50, IRD job 132945) under `ttp detach --remote`, inside drive.sh's
+# 2-board p150 host (bh-50, IRD job 132949) under `ttp detach --remote`, inside drive.sh's
 # `ttp lock p100`. Tree $T (synced by opt/sync_remote.sh), JIT cache $C, outputs in $S.
 #   A = one chip (PCIe id $DA), render/run.py --no-ref --back-to-back
 #   B = 2 chips, GSPLAT_TT_AFR=1 GSPLAT_TT_AFR_DEVICES=$DA,$DB, same command
@@ -10,14 +10,15 @@
 # A/B alternating (A B C, B A C, A B C); 3 single-chip latency runs (AFR has no latency mode).
 # Every step's rc goes to $S/steps.txt; the first non-zero one, or 0, goes to $S/DONE on exit.
 set -u
-export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal
+R=${R:-/localdev/smarton/nosync/t582}   # outside the user's mutagen sync (see drive.sh)
+export TT_METAL_HOME=$R/tt-metal TT_METAL_RUNTIME_ROOT=$R/tt-metal
 export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P150 TTW_DEVRUN=1 PYTHONDONTWRITEBYTECODE=1
 export GSPLAT_TT_DISPATCH=worker
 unset GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_STAGES \
   GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_MAT_EARLY_CULL GSPLAT_TT_MATCULL_PROF \
   GSPLAT_TT_B4A_FOLD GSPLAT_TT_STACK_CHECK GSPLAT_TT_AFR GSPLAT_TT_AFR_DEVICES GSPLAT_TT_AFR_VISIBLE \
   TT_VISIBLE_DEVICES GSPLAT_TT_DEVICE_ID
-T=${T:-/localdev/smarton/gstt2}; S=$T/tmp/t582; C=/localdev/smarton/.cache/ttmc-t582
+T=${T:-$R/gstt2}; S=$T/tmp/t582; C=$R/.cache/ttmc-t582
 DA=${DA:-5}; DB=${DB:-6}
 mkdir -p "$S"; rm -f "$S/DONE"
 first=0

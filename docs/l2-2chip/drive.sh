@@ -2,7 +2,7 @@
 # t582 (L2, 2-chip AFR on a 2-board p150 host): Mac-side driver.
 #   ttp detach t582drive -- docs/l2-2chip/drive.sh <rev>    (worktree root; O=<out dir>)
 # 1. waits (no lock) for the scene upload (local scene-up.rc) and the box setup
-#    (/localdev/smarton/viewer/setup.rc on $H), then checks the scene md5 and moves it into place;
+#    ($R/viewer/setup.rc on $H), then checks the scene md5 and moves it into place;
 # 2. under one `ttp lock p100`: ssh preflight, extends IRD job $JOB if less than 80 min are left,
 #    opt/sync_remote.sh <rev> into $T, starts docs/l2-2chip/remote_drive.sh on $H with
 #    `ttp detach --remote` (it survives an ssh drop), waits for it and fetches $T/tmp/t582;
@@ -13,7 +13,12 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
-H=${H:-bh-50}; JOB=${JOB:-132949}; T=${T:-/localdev/smarton/gstt2}; R=/localdev/smarton
+# Everything on $H lives under $R: the user's mutagen session "bh-50" two-way-syncs the Mac's ~/dev
+# with bh-50:/localdev/smarton (alpha wins conflicts) and ignores only /nosync. Attempts 2-3 built
+# a tt-metal tree that mutagen kept overwriting with the Mac's ~/dev/tt-metal, and a sync into
+# /localdev/smarton/gstt2 would reach the Mac's main checkout.
+H=${H:-bh-50}; JOB=${JOB:-132949}; R=${R:-/localdev/smarton/nosync/t582}; T=${T:-$R/gstt2}
+export REMOTE_TT_METAL_HOME=${REMOTE_TT_METAL_HOME:-$R/tt-metal}
 JOB_START=${JOB_START:-1791869991}   # 2026-10-12 22:39:51 PDT, from ird reserve's output
 # $T is the default BASE of opt/sync_remote.sh, which then links no .venv into it (the tracked
 # .venv symlink dangles there and is removed): point BASE at setup_box.sh's viewer dir instead.

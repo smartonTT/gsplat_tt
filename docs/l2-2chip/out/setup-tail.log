@@ -1,0 +1,27 @@
+1258:FAILED: ttnn/CMakeFiles/ttnncpp.dir/Unity/unity_3_cxx.cxx.o 
+1265:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:24:12: error: multiple definition of ‘enum class tt::DataFormat’
+1280:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:71:27: error: redefinition of ‘constexpr uint32_t tt::datum_size(const DataFormat&)’
+1287:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:80:26: error: ‘MxFp6P’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1291:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:81:26: error: ‘MxFp6R’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1295:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:82:26: error: ‘MxFp8R’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1299:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:83:26: error: ‘MxFp8P’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1304:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:113:27: error: redefinition of ‘constexpr uint32_t tt::tile_size(const DataFormat&)’
+1311:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:122:26: error: ‘MxFp6P’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1315:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:123:26: error: ‘MxFp6R’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1319:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:124:26: error: ‘MxFp8R’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+1323:/localdev/smarton/tt-metal/tt_metal/api/tt-metalium/tt_backend_api_types.hpp:125:26: error: ‘MxFp8P’ is not a member of ‘tt::DataFormat’; did you mean ‘MxFp4’?
+  498 | typename device_operation_t::tensor_return_value_t invoke(
+      |                                                    ^~~~~~
+/localdev/smarton/tt-metal/ttnn/api/ttnn/device_operation.hpp:494:52: note: ‘template<class device_operation_t>  requires  DeviceOperationConcept<device_operation_t> typename device_operation_t::tensor_return_value_t ttnn::device_operation::detail::invoke(const typename device_operation_t::operation_attributes_t&, const typename device_operation_t::tensor_args_t&)’ previously declared here
+  494 | 
+      |                                                    ^     
+cc1plus: note: unrecognized command-line option ‘-Wno-dangling-reference’ may have been intended to silence earlier diagnostics
+[929/1090] Building CXX object ttnn/CMakeFiles/ttnn_core.dir/Unity/unity_0_cxx.cxx.o
+[930/1090] Building CXX object ttnn/CMakeFiles/ttnncpp.dir/Unity/unity_0_cxx.cxx.o
+[931/1090] Building CXX object ttnn/CMakeFiles/ttnn_core.dir/Unity/unity_3_cxx.cxx.o
+[932/1090] Building CXX object tt_metal/fabric/CMakeFiles/fabric.dir/Unity/unity_0_cxx.cxx.o
+[933/1090] Building CXX object ttnn/CMakeFiles/ttnn_core.dir/Unity/unity_2_cxx.cxx.o
+[934/1090] Building CXX object tt_metal/fabric/CMakeFiles/fabric.dir/Unity/unity_5_cxx.cxx.o
+[935/1090] Building CXX object ttnn/CMakeFiles/ttnn_core.dir/Unity/unity_4_cxx.cxx.o
+ninja: build stopped: subcommand failed.
+[setup_box] rc=1

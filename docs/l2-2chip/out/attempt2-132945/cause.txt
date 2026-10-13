@@ -1,5 +1,11 @@
-Attempt 2 (IRD job 132945) setup failure, read from bh-50:/localdev/smarton/viewer/setup.log after re-reserving:
-FAILED: tt_metal/distributed/.../unity_2_cxx.cxx.o: cq_commands.hpp redefinition errors.
-Cause: /localdev/smarton/tt-metal (cloned by attempt 1's setup at 22:05 PDT, reflog: clone then checkout 437bc366)
-had HEAD at 437bc366 but 3401 tracked files still from the clone's main (the attempt-1 checkout was interrupted).
-Fix (22:41 PDT): git checkout -f 437bc366, git clean -fd, submodule update --force (0 modified files), rm -rf build, setup restarted.
+Attempts 2-3 setup failures (IRD jobs 132945, 132949) on bh-50: tt-metal build errors (cq_commands.hpp and
+tt_backend_api_types.hpp redefinitions, then umd::Cluster missing register_sim_fabric_node_id).
+Root cause (found 22:50 PDT): the user's mutagen session "bh-50" (two-way-resolved, alpha wins) syncs the
+Mac's /Users/smarton/dev with bh-50:/localdev/smarton and ignores only /nosync. It kept overwriting the
+tracked files of /localdev/smarton/tt-metal (checked out at 437bc366) with the Mac's ~/dev/tt-metal (8d901046,
+June mtimes): right after `git checkout -f` the tree had 0 modified files, minutes later 3829.
+Checked: no file in the Mac's ~/dev/tt-metal changed after 22:00 and none was deleted; ~/dev/gstt2/scenes and
+~/dev/viewer got none of our files. Beta-only files we had made in synced dirs (viewer/setup.log.1-3,
+gstt2/scenes/bicycle.ply.part) were moved to /localdev/smarton/nosync/t582 before the session finished staging.
+Fix: everything for t582 on bh-50 now lives under /localdev/smarton/nosync/t582 (own tt-metal clone at
+437bc366, setup, venv, gstt2 tree, JIT cache). The mutagen session itself was left alone (user's).
