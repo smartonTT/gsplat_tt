@@ -19,6 +19,14 @@ assert g.grid_from_log(LOG_E) == "12x10"
 assert g.grid_from_log(LOG_E11) == "11x10", "a capped stage grid wins"
 assert g.grid_from_log(LOG_OLD) == "11x10", "pre-#383 log line"
 assert g.grid_from_log("no device line") is None
+# #582: 2-chip AFR logs prefix each worker's lines with [afrN]; the workers must agree.
+LOG_AFR = ("[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10\n"
+           "[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10\n")
+assert g.grid_from_log(LOG_AFR) == "11x10"
+assert g.grid_from_log(LOG_AFR.replace("[afr1] [DEV] device 0 (card 1), dispatch worker (worker)",
+                                       "[afr1] [DEV] dispatch eth (eth), command queues 2, compute grid 12x10 x")) is None, \
+    "AFR workers on different grids have no single golden"
+assert g.grid_from_log("[afr] starting worker 0\n") is None
 
 assert g.list_md5(W11) == "906e0435" and g.list_md5(E12) == "39d84b28"
 # Each grid takes its own golden.
@@ -31,6 +39,7 @@ assert g.check(W11, LOG_E)[0] == 1
 # Grid with no golden, or no grid in the log: fail (never skip).
 assert g.check(W10, "[DEV] dispatch worker (worker), command queues 2, compute grid 10x10\n")[0] == 2
 assert g.check(W11, "")[0] == 2
+assert g.check(W11, LOG_AFR)[0] == 0
 rc, line = g.check(W11[:-10], LOG_W)
 assert rc == 1 and "MD5_GOLDEN_FAIL" in line, line
 print("test_md5_golden: OK")

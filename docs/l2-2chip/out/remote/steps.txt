@@ -1,0 +1,9 @@
+dumpA rc=1
+md5-dumpA rc=2
+dumpB rc=1
+dumpB-vis0 rc=1
+md5-dumpB rc=2
+dumpA rc=0
+md5-dumpA rc=0
+dumpB rc=0
+md5-dumpB rc=2

@@ -25,19 +25,24 @@ GOLDENS = {
     "12x10": "39d84b28",  # eth dispatch, p150 120 cores (docs/eth-dispatch-t397/out/md5-r1-E.txt)
 }
 
-_DEV = re.compile(r"^\[DEV\] .*?compute grid (\d+)x(\d+)(.*)$", re.M)
+# A 2-chip AFR run (#581) prefixes each worker's lines with "[afrN] ".
+_DEV = re.compile(r"^(\[afr\d+\] )?\[DEV\] .*?compute grid (\d+)x(\d+)(.*)$", re.M)
 _CAP = re.compile(r"stage grid capped to (\d+)x(\d+)")
 
 
 def grid_from_log(text: str) -> str | None:
-    """Stage grid "XxY" from the last [DEV] open line, or None."""
-    m = None
+    """Stage grid "XxY" from the last [DEV] open line, or None.
+
+    In an AFR log every worker's last open line counts; workers on different grids give None.
+    """
+    last: dict[str, re.Match] = {}
     for m in _DEV.finditer(text):
-        pass
-    if m is None:
-        return None
-    cap = _CAP.search(m.group(3))
-    return f"{cap.group(1)}x{cap.group(2)}" if cap else f"{m.group(1)}x{m.group(2)}"
+        last[m.group(1) or ""] = m
+    grids = set()
+    for m in last.values():
+        cap = _CAP.search(m.group(4))
+        grids.add(f"{cap.group(1)}x{cap.group(2)}" if cap else f"{m.group(2)}x{m.group(3)}")
+    return grids.pop() if len(grids) == 1 else None
 
 
 def list_md5(md5_list: bytes) -> str:
