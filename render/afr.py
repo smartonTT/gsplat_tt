@@ -265,9 +265,13 @@ def coordinate(cmds, n_passes, n_views, log=print, popen=subprocess.Popen, timeo
     first = None
     for p_i in range(n_passes):
         t_go = now()
-        for p in procs:
-            p.stdin.write(f"GO {p_i}\n")
-            p.stdin.flush()
+        try:
+            for p in procs:
+                p.stdin.write(f"GO {p_i}\n")
+                p.stdin.flush()
+        except (BrokenPipeError, OSError) as e:
+            log(f"[afr] worker stdin closed before GO {p_i}: {e}")
+            return fail()
         got = get("pass", list(range(n)), p_i)
         if got is None:
             return fail()

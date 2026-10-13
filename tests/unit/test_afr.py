@@ -12,6 +12,7 @@ import io
 import json
 import os
 import pathlib
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -160,8 +161,35 @@ def test_coordinator_two_fake_chips():
     assert kv["raw_md5"] == afr.raw_md5([_digest(i) for i in range(N_VIEWS)])
     assert kv["passes"] == "2" and kv["afr_chips"] == "2" and kv["afr_hero_equal"] == "yes"
     assert kv["identical_across_passes"] == "yes"
-    # Each chip renders 15 views at ~2 ms: ~30 ms a pass over 30 views -> ~1 ms/view.
-    assert 0.9 < med < 5.0, med
+    # AFR relation, not wall-clock bounds (host sleeps are coarse): two chips in parallel
+    # give a period of about half of one chip's time per own view.
+    chip = statistics.median(x for c in info["chip_ms"] for x in c)
+    assert abs(2 * med - chip) <= 0.1 * chip, (med, chip)
+
+
+def test_coordinator_broken_pipe_on_go_fails_cleanly():
+    class _DeadStdin:
+        def write(self, s):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            pass
+
+        def close(self):
+            pass
+
+    def popen(*a, **kw):
+        p = subprocess.Popen(*a, **kw)
+        p._real_stdin, p.stdin = p.stdin, _DeadStdin()  # worker stays alive, waiting for GO
+        return p
+
+    logs = []
+    with tempfile.TemporaryDirectory() as tmp:
+        cmds = _fake_cmds(tmp, 2)
+        rc, info = afr.coordinate(cmds, 2, N_VIEWS, log=logs.append, popen=popen, timeout_s=60)
+    assert rc == 8, (rc, info, logs)
+    assert info["periods"] == []
+    assert any("stdin closed" in l for l in logs)
 
 
 def test_coordinator_worker_crash_stops_the_other():
