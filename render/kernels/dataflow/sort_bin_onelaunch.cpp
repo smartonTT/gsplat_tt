@@ -928,7 +928,11 @@ void kernel_main() {
     const uint32_t twn = OL_CBP(tw::CB_TWN + cbo);
     volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(twn);
     volatile uint32_t* const tfl = reinterpret_cast<volatile uint32_t*>(twn + tw::FL_OFF);
+    #if defined(SIB_DBG) && SIB_DBG == 3u  // t571 debug: sort body without the PACK town
+    const bool town = false;
+#else
     const bool town = fast && fold && num_tiles <= tw::TILES && tile_cap <= (1u << 22);
+#endif
     twh[tw::H_NB] = town ? nbatch : 0u;
     twh[tw::H_READY] = 0u;
     twh[tw::H_CAP] = tile_cap;
@@ -1265,7 +1269,7 @@ void kernel_main() {
     EP_T0(ep_t_wbar);
     noc_async_write_barrier();
     EP_ADD(ep_wbar, ep_t_wbar);
-#if OL_EMIT_TOWN
+#if OL_EMIT_TOWN && !(defined(SIB_DBG) && SIB_DBG == 3u)  // arm 3: no TRISC acks
     {
         // Every TRISC is done with this stream: clear GO for the next launch.
         EP_T0(ep_t_fin);

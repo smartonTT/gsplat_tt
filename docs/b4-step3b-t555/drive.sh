@@ -46,7 +46,7 @@ step() {  # name script args...
   [ "$r" = 124 ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t555/*.log" "$O/"; exit 124; }
 }
 if [ "$PLAN" = triage ]; then  # t568: fuse dump; on a hang tt-triage callstacks before the reset
-  step triage ../b4-l1fit-t568/remote_triage.sh
+  step triage ../b4-l1fit-t568/remote_triage.sh ${DBG_ARMS:-}  # t571: DBG_ARMS="3 4"
 elif [ "$PLAN" = kcfg ]; then  # t565: solo sort at KCFG +48 KB, no sort in blend (30-view md5 dump)
   step dump remote_ab.sh 0 dump solo48
 elif [ "$PLAN" = check ]; then

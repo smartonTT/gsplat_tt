@@ -11,10 +11,11 @@ unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACH
   GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_OPACITY_PRUNE GSPLAT_TT_MAT_EARLY_CULL GSPLAT_TT_MATCULL_PROF GSPLAT_TT_BLEND_ALIAS_CUT GSPLAT_TT_KCFG_EXTRA_KB GSPLAT_TT_OL_TOWN_NT GSPLAT_TT_OL_SOLO GSPLAT_TT_SORT_IN_BLEND
 T=${T:-/localdev/smarton/gstt2-t513}; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t555; mkdir -p $S
-# DBG_ARMS (default "1 2"): GSPLAT_TT_SIB_DBG per arm (1 = barrier only, no sort/town;
-# 2 = full sort, result discarded so the standalone sort reruns). TRIAGE=1 adds callstacks.
+# Args or DBG_ARMS (default "1 2"): GSPLAT_TT_SIB_DBG per arm (1 = barrier only, no sort/town;
+# 2 = full sort, 3 = sort body without the PACK town, 4 = PACK town handshake only; all discard
+# the result so the standalone sort reruns). TRIAGE=1 adds callstacks.
 worst=0
-for dbg in ${DBG_ARMS:-1 2}; do
+for dbg in ${*:-${DBG_ARMS:-1 2}}; do
   tag=r0-sibdbg$dbg
   echo "=== $tag $(cut -c1-7 SHA) $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   rm -rf tmp/t555-dump-$tag

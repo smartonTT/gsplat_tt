@@ -107,7 +107,28 @@ void sib_run(F& poll) {
         poll();
         invalidate_l1_cache();
     }
-#if !defined(SIB_DBG) || SIB_DBG != 1u  // t568 debug: 1 = barrier only
+#if defined(SIB_DBG) && SIB_DBG == 4u
+    {  // t571 debug: 4 = PACK town handshake only (NB = 0 mailbox, no sort body)
+        namespace tw = sort_ol_town;
+        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(olk::g_ol_arena[tw::CB_TWN + 16u]);
+        twh[tw::H_NB] = 0u;
+        twh[tw::H_READY] = 0u;
+        for (uint32_t i = 0; i < tw::NT; i++) twh[tw::H_FIN + i] = 0u;
+        asm volatile("fence" ::: "memory");
+        twh[tw::H_GO2] = tw::MAGIC2;
+        asm volatile("fence" ::: "memory");
+        twh[tw::H_GO] = tw::MAGIC;
+        for (;;) {
+            invalidate_l1_cache();
+            if (twh[tw::H_FIN] == tw::MAGIC) break;
+            poll();
+        }
+        twh[tw::H_GO] = 0u;
+        twh[tw::H_GO2] = 0u;
+        twh[tw::H_FIN] = 0u;
+        asm volatile("fence" ::: "memory");
+    }
+#elif !defined(SIB_DBG) || SIB_DBG != 1u  // t568 debug: 1 = barrier only
     olk::kernel_main();
 #endif
     noc_async_write_barrier();

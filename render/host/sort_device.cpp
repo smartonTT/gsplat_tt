@@ -3671,12 +3671,13 @@ bool sort_in_blend_enabled() {
 
 namespace {
 // Task #568 debug (GSPLAT_TT_SIB_DBG, default 0): 1 = the fused BRISC runs only the global
-// barrier (no sort, no PACK town), 2 = the full sort; both discard sort(N+1), so the
+// barrier (no sort, no PACK town), 2 = the full sort, 3 (t571) = the sort body without the
+// PACK town, 4 (t571) = the PACK town handshake only (NB = 0); all discard sort(N+1), so the
 // standalone sort runs as usual (localises the t568 view-2 crash).
 uint32_t sib_dbg() {
     static const uint32_t v = [] {
         const char* e = std::getenv("GSPLAT_TT_SIB_DBG");
-        return (e != nullptr && (e[0] == '1' || e[0] == '2')) ? static_cast<uint32_t>(e[0] - '0') : 0u;
+        return (e != nullptr && (e[0] >= '1' && e[0] <= '4')) ? static_cast<uint32_t>(e[0] - '0') : 0u;
     }();
     return v;
 }
@@ -3806,7 +3807,7 @@ bool sort_in_blend_core_args(uint32_t core, const std::array<uint32_t, 8>& sems,
     n[n_base + 2] = ctx->sib_noc_xy[0] & 0xFFFFu;
     n[n_base + 3] = ctx->sib_noc_xy[0] >> 16;
     cp.resize(cp_idx + 1u, 0u);
-    cp[cp_idx] = sib_dbg() == 1u ? 0u : arena[11];  // town mailbox (id 30); 0 = no town
+    cp[cp_idx] = (sib_dbg() == 1u || sib_dbg() == 3u) ? 0u : arena[11];  // town mailbox (id 30); 0 = no town
     ctx->sib_used = true;
     return true;
 }
