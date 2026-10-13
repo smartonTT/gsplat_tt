@@ -58,7 +58,7 @@ void b4a_yield() {
 // mat(N) (NCRISC and BRISC) and K2(N+1) are done before any sort(N+1) write.
 // Runtime args at SIB_RTA_BASE: 0 run, 1 arrive sem (core 0), 2 release sem,
 // 3 cores, 4-5 core 0 NoC x/y, 6-19 arena placements (cb << 24 | byte offset)
-// of kSibIds, 20-49 the sort's args (core 0: 50- the NoC xy list).
+// in sib_cbp order, 20-49 the sort's args (core 0: 50- the NoC xy list).
 #include "sort_onelaunch_algo.h"
 // Task #565: the sort part at -Os. At -O3 it put the fused program at 122640 B,
 // needing a +51 KB kernel config buffer, where the static CBs fit only up to +34 KB.
@@ -66,6 +66,26 @@ void b4a_yield() {
 #pragma GCC optimize("Os")
 #include "sort_ol_town.h"
 #define OL_YIELD() b4a_yield()
+// L1 address of arena buffer id, from its placement arg (cb << 24 | byte offset):
+// ids 16-24 -> args 6-14, 28-30 -> 15-17, 10-11 -> 18-19, others 0. Task #573: computed
+// per use, not kept in a local-memory table (184 B of .data/.bss that pushed K2's
+// 4.5 KB stack frame into g_b4a_fn: wild PCs at the first folded view).
+inline uint32_t sib_cbp(uint32_t id) {
+    uint32_t s;
+    if (id - 16u <= 8u) {
+        s = id - 16u;
+    } else if (id - 28u <= 2u) {
+        s = id - 19u;
+    } else if (id - 10u <= 1u) {
+        s = id + 2u;
+    } else {
+        return 0u;
+    }
+    const uint32_t pk = ::get_arg_val<uint32_t>(SIB_RTA_BASE + 6u + s);
+    const auto& c = get_local_cb_interface(pk >> 24);
+    return ((c.fifo_limit - c.fifo_size) << cb_addr_shift) + (pk & 0xFFFFFFu);
+}
+#define OL_ARENA_CBP(id) sib_cbp(id)
 namespace olk {
 template <typename T>
 inline T get_arg_val(int arg_idx) {
@@ -74,16 +94,10 @@ inline T get_arg_val(int arg_idx) {
 #include "sort_bin_onelaunch.cpp"
 }  // namespace olk
 
-constexpr uint32_t kSibIds[14] = {16, 17, 18, 19, 20, 21, 22, 23, 24, 28, 29, 30, 10, 11};
 template <class F>
 void sib_run(F& poll) {
     constexpr uint32_t A = SIB_RTA_BASE;
     if (::get_arg_val<uint32_t>(A) == 0u) return;
-    for (uint32_t i = 0; i < 14u; i++) {
-        const uint32_t pk = ::get_arg_val<uint32_t>(A + 6u + i);
-        const auto& c = get_local_cb_interface(pk >> 24);
-        olk::g_ol_arena[kSibIds[i]] = ((c.fifo_limit - c.fifo_size) << cb_addr_shift) + (pk & 0xFFFFFFu);
-    }
     noc_async_write_barrier();
     noc_async_atomic_barrier();
     const uint32_t arrive_id = ::get_arg_val<uint32_t>(A + 1u), release_id = ::get_arg_val<uint32_t>(A + 2u);
@@ -110,7 +124,7 @@ void sib_run(F& poll) {
 #if defined(SIB_DBG) && SIB_DBG == 4u
     {  // t571 debug: 4 = PACK town handshake only (NB = 0 mailbox, no sort body)
         namespace tw = sort_ol_town;
-        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(olk::g_ol_arena[tw::CB_TWN + 16u]);
+        volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(sib_cbp(tw::CB_TWN + 16u));
         twh[tw::H_NB] = 0u;
         twh[tw::H_READY] = 0u;
         for (uint32_t i = 0; i < tw::NT; i++) twh[tw::H_FIN + i] = 0u;
@@ -140,7 +154,7 @@ void sib_run(F& poll) {
             return (c.fifo_limit - c.fifo_size) << cb_addr_shift;
         };
         const uint32_t twa = SIB_DBG == 6u ? cb_base(21) : SIB_DBG == 7u ? cb_base(5) + 8192u
-                                                                          : olk::g_ol_arena[tw::CB_TWN + 16u];
+                                                                          : sib_cbp(tw::CB_TWN + 16u);
         volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(twa);
         twh[tw::H_NB] = 0u;
         twh[tw::H_READY] = 0u;

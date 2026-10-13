@@ -1,0 +1,147 @@
+[ttw 2026-10-12T19:47:10-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T19:47:10-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T19:47:10-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T19:47:10-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T19:47:10-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T19:47:10-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T19:47:10-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T19:47:10-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T19:47:10-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T19:47:10-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T19:47:10-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T19:47:10-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=19c39d5e bin=1a1e347f6ea8b899 t555 19c39d5e arms solo (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t555-arm5  timeout=590s  worry=600s  ts=2026-10-12T19:47:11-0700
+cmd: T=/localdev/smarton/gstt2-t513 TRIAGE=0 RUN_TIMEOUT=150 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t573/remote_triage.sh 5
+-----------------------------------------
+=== r0-sibdbg5 19c39d5 02:47:11 load=10.36 
+HANG in r0-sibdbg5
+reset rc=0
+run rc=124
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.54 layout=0.10 pub_host=0.30 total=1.02ms
+[SORT] SORT_IN_BLEND=1 (needs B4A fold, OL early, OL_SOLO+TOWN_NT=1, REC32)
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.58 layout=0.14 pub_host=0.54 total=1.27ms
+[SORT] SORT_IN_BLEND arena placed (R=4)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+ELFS r0-sibdbg5 new=6
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc0/trisc0.elf.xip.elf
+  [ 3] .text             PROGBITS        00006950 0000a0 001d2c 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 05c128 0010f8 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00820 001dd0 000284 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00aa4 002054 000010 00  WA  0   0  4
+Entry point 0x6950
+  LOAD           0x0000a0 0x00006950 0x00006950 0x01d2c 0x01d2c R E 0x10
+  LOAD           0x001dd0 0xffb00820 0x0000867c 0x00284 0x00294 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc1/trisc1.elf.xip.elf
+  [ 3] .text             PROGBITS        00007130 0000a0 006cf8 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 5c1a58 0016f8 0c   I 26   3  4
+  [ 5] .data             PROGBITS        ffb00020 006da0 000280 00  WA  0   0  4
+  [ 6] .rela.data        RELA            00000000 5c3150 000168 0c   I 26   5  4
+  [ 7] .bss              NOBITS          ffb002a0 007020 000110 00  WA  0   0  4
+Entry point 0x7130
+  LOAD           0x0000a0 0x00007130 0x00007130 0x06cf8 0x06cf8 R E 0x10
+  LOAD           0x006da0 0xffb00020 0x0000de28 0x00280 0x00390 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc2/trisc2.elf.xip.elf
+  [ 3] .text             PROGBITS        00007d30 0000a0 001958 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 05057c 000f00 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00820 001a00 00001c 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb0083c 001a1c 000000 00  WA  0   0  4
+Entry point 0x7d30
+  LOAD           0x0000a0 0x00007d30 0x00007d30 0x01958 0x01958 R E 0x10
+  LOAD           0x001a00 0xffb00820 0x00009688 0x0001c 0x0001c RW  0x10
+   01     .text 
+   02     .data 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/3871147630932922492/brisc/brisc.elf
+  [ 3] .text             PROGBITS        00004ba0 0000a0 0074e8 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 15660c 003a98 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c30 007590 00013c 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00d6c 0076cc 000088 00  WA  0   0  4
+Entry point 0x4ba0
+  LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x074e8 0x074e8 R E 0x10
+  LOAD           0x007590 0xffb00c30 0x0000c088 0x0013c 0x001c4 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/3871147630932922492/brisc/brisc.elf.xip.elf
+  [ 3] .text             PROGBITS        00004ba0 0000a0 0074e8 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 15660c 003a98 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c30 007590 00013c 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00d6c 0076cc 000088 00  WA  0   0  4
+Entry point 0x4ba0
+  LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x074e8 0x074e8 R E 0x10
+  LOAD           0x007590 0xffb00c30 0x0000c088 0x0013c 0x001c4 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_ncrisc/12058879206701393990/ncrisc/ncrisc.elf.xip.elf
+  [ 3] .text             PROGBITS        00005fb0 0000a0 007014 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 1522c8 002c10 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c20 0070c0 000000 00  WA  0   0  1
+  [ 6] .bss              NOBITS          ffb00c20 0070c0 000020 00  WA  0   0  4
+Entry point 0x5fb0
+  LOAD           0x0000a0 0x00005fb0 0x00005fb0 0x07014 0x07014 R E 0x10
+  LOAD           0x0070c0 0xffb00c20 0x0000cfc4 0x00000 0x00020 RW  0x10
+   01     .text 
+   02     .data .bss 
+----- HANG/TIMEOUT (rc=124) -----
+Command exceeded 590s. Snapshotting non-destructive diagnostics.
+===== ttw diagnose host=bh-33 @ 2026-10-12T19:49:51-0700 =====
+--- device status (read-only) ---
+{
+    "time": "2026-10-13T02:49:53.202832",
+    "host_info": {
+        "OS": "Linux",
+        "Distro": "Ubuntu 22.04.5 LTS",
+        "Kernel": "6.8.0-57-generic",
+        "Hostname": "bh-33-special-smarton-for-reservation-138447",
+        "Platform": "x86_64",
+        "Python": "3.10.21",
+        "Memory": "503.72 GB",
+        "Driver": "TT-KMD 2.9.0"
+    },
+    "host_sw_vers": {
+        "tt_smi": "6.7.0",
+        "pyluwen": "0.10.0",
+        "tt_umd": "0.9.12"
+    },
+    "device_info": [
+        {
+            "smbus_telem": {
+                "BOARD_ID_HIGH": "0x432",
+                "BOARD_ID_LOW": "0x3191b040",
+                "ASIC_ID": null,
+                "HARVESTING_STATE": "0x0",
+                "UPDATE_TELEM_SPEED": "0x64",
+                "VCORE": "0x2cd",
+                "TDP": "0x10",
+                "TDC": "0x17",
+                "VDD_LIMITS": "0x38402bc",
+                "THM_LIMIT_SHUTDOWN": "0x6e",
+                "ASIC_TEMPERATURE": "0x279332",
+                "VREG_TEMPERATURE": "0x0",
+                "BOARD_TEMPERATURE": "0x0",
+                "AICLK": "0x320",
+                "AXICLK": "0x3c0",
+                "ARCCLK": "0x320",
+                "L2CPUCLK0": "0x0",
+                "L2CPUCLK1": "0x0",
+                "L2CPUCLK2": "0x0",
+                "L2CPUCLK3": "0x0",
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 02:49:53 up 17:20,  0 users,  load average: 10.60, 10.08, 9.47
+--- device processes ---
+--- JIT cache size ---
+no cache dir
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+Recovery beyond diagnosis is DESTRUCTIVE-GATED. See: recover.sh --help
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t573/tmp/ttw-state/logs/t555-arm5-20261012-194710.log

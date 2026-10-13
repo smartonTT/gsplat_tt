@@ -189,8 +189,9 @@ constexpr uint32_t WIN_PAGES = OL_WIN_PAGES;
 constexpr uint32_t CB_ROW = 10, CB_PFX = 11;
 // Task #555 (B4' step 3b): OL_ARENA=1 (the fused mat+blend program) places the
 // sort's scratch in that program's alias-cut L1 arena instead of CBs of its
-// own: g_ol_arena[id] is the L1 address of scratch buffer id (the CB ids
-// above, + 16 for mover 0), filled by the host kernel before kernel_main.
+// own: OL_ARENA_CBP(id), defined by the host kernel, is the L1 address of
+// scratch buffer id (the CB ids above, + 16 for mover 0). Task #573: no table
+// in local memory (BRISC's stack shares its 8 KB with K2's 4 KB count row).
 // Every scratch buffer is reached through OL_CBP; none is used as a FIFO.
 #ifndef OL_ARENA
 #define OL_ARENA 0
@@ -201,8 +202,7 @@ constexpr uint32_t CB_ROW = 10, CB_PFX = 11;
 #define OL_CTA_BASE 0
 #endif
 #if OL_ARENA
-uint32_t g_ol_arena[32];
-#define OL_CBP(id) g_ol_arena[(id)]
+#define OL_CBP(id) OL_ARENA_CBP(id)
 #else
 #define OL_CBP(id) get_write_ptr(id)
 #endif

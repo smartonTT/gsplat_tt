@@ -59,6 +59,27 @@ inline void seg_table(volatile uint32_t* tab, uint32_t nseg, uint32_t num_tiles,
     *P = p;
 }
 
+// Low 32 bits of (a * b) / d, without a 64-bit division (task #573). On BRISC a
+// uint64_t division links libgcc's __udivdi3, whose 256 B __clz_tab lands in the
+// kernel's 8 KB local memory, next to K2's 4 KB count row on the stack: in the
+// fused mat+blend BRISC with sort-in-blend that pushed the stack into .bss (wild
+// PCs at the first folded view). Exact for every input (d != 0).
+inline uint32_t muldiv_lo32(uint32_t a, uint32_t b, uint32_t d) {
+    const uint64_t n = static_cast<uint64_t>(a) * b;
+    const uint32_t hi = static_cast<uint32_t>(n >> 32), lo = static_cast<uint32_t>(n);
+    uint32_t r = hi % d, q = 0;
+    for (int i = 31; i >= 0; i--) {  // r < d throughout: one quotient bit per step
+        const uint32_t top = r >> 31;
+        r = (r << 1) | ((lo >> i) & 1u);
+        q <<= 1;
+        if (top != 0u || r >= d) {
+            r -= d;
+            q |= 1u;
+        }
+    }
+    return q;
+}
+
 // Page range [*start, *start + *count) of mover `mover` on K2 core k: the
 // (P_pub + 15) / 16 pages split contiguously over the cores (tile_assign
 // split_pages), then a core's range split BRISC (mover 0) first by permille
@@ -69,8 +90,7 @@ inline void k2_range(uint32_t P_pub, uint32_t ncores, uint32_t k, uint32_t mover
     const uint32_t base = pages / ncores, rem = pages % ncores;
     const uint32_t s = k * base + (k < rem ? k : rem);
     const uint32_t n = base + (k < rem ? 1u : 0u);
-    const uint32_t n0 =
-        dual ? static_cast<uint32_t>((static_cast<uint64_t>(n) * permille) / 1000u) : 0u;
+    const uint32_t n0 = dual ? muldiv_lo32(n, permille, 1000u) : 0u;
     if (mover == 0) {
         *start = s;
         *count = n0;
@@ -86,9 +106,9 @@ inline void k2_range(uint32_t P_pub, uint32_t ncores, uint32_t k, uint32_t mover
 // counts exactly the one-launch sort's emit range of that mover.
 inline void k2_range_speed(uint32_t P_pub, uint32_t acc_lo, uint32_t acc_hi, uint32_t tot,
                            uint32_t* start, uint32_t* count) {
-    const uint64_t pages = (P_pub + PAGE_WORDS - 1) / PAGE_WORDS;
-    const uint32_t lo = static_cast<uint32_t>(pages * acc_lo / tot);
-    const uint32_t hi = static_cast<uint32_t>(pages * acc_hi / tot);
+    const uint32_t pages = (P_pub + PAGE_WORDS - 1) / PAGE_WORDS;
+    const uint32_t lo = muldiv_lo32(pages, acc_lo, tot);
+    const uint32_t hi = muldiv_lo32(pages, acc_hi, tot);
     *start = lo;
     *count = hi - lo;
 }

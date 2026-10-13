@@ -3686,7 +3686,7 @@ uint32_t sib_dbg() {
 }
 constexpr uint32_t kSibRing = 4u;
 constexpr std::size_t kSibRtaLen = 170;  // 50 + 120 core NoC words (core 0)
-// Scratch buffer ids in matblend_brisc.cpp kSibIds order (mover 0 = id + 16).
+// Scratch buffer ids in the arg order of matblend_brisc.cpp sib_cbp (mover 0 = id + 16).
 constexpr uint32_t kSibIds[14] = {16, 17, 18, 19, 20, 21, 22, 23, 24, 28, 29, 30, 10, 11};
 uint32_t sib_brec_half() { return std::max(gsplat_tt::env_config::ol_pair_batch() * 16u, 256u); }
 }  // namespace

@@ -1,0 +1,92 @@
+[ttw 2026-10-12T19:50:16-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T19:50:16-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T19:50:16-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T19:50:16-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T19:50:16-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T19:50:16-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T19:50:16-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T19:50:16-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T19:50:16-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T19:50:16-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T19:50:16-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T19:50:16-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=19c39d5e bin=1a1e347f6ea8b899 t555 19c39d5e arms solo (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t555-arm6  timeout=590s  worry=600s  ts=2026-10-12T19:50:16-0700
+cmd: T=/localdev/smarton/gstt2-t513 TRIAGE=0 RUN_TIMEOUT=150 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t573/remote_triage.sh 6
+-----------------------------------------
+=== r0-sibdbg6 19c39d5 02:50:16 load=9.97 
+run rc=0
+[SORT] stage=ONELAUNCH P=2502433 P_kept=2502433 num_tiles=1024 max_tile_n=20113 onelaunch=0.61 layout=0.09 pub_host=0.35 total=1.05ms
+[SORT] stage=ONELAUNCH P=2324571 P_kept=2324571 num_tiles=1024 max_tile_n=18871 onelaunch=0.44 layout=0.08 pub_host=0.32 total=0.84ms
+[SORT] stage=ONELAUNCH P=2188463 P_kept=2188463 num_tiles=1024 max_tile_n=21416 onelaunch=0.42 layout=0.08 pub_host=0.34 total=0.85ms
+[SORT] stage=ONELAUNCH P=2100242 P_kept=2100242 num_tiles=1024 max_tile_n=21340 onelaunch=0.45 layout=0.08 pub_host=0.31 total=0.85ms
+[SORT] stage=ONELAUNCH P=2052961 P_kept=2052961 num_tiles=1024 max_tile_n=21713 onelaunch=0.45 layout=0.08 pub_host=0.31 total=0.84ms
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+[SORT] stage=ONELAUNCH P=2050213 P_kept=2050213 num_tiles=1024 max_tile_n=20666 onelaunch=0.42 layout=0.08 pub_host=0.32 total=0.83ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.6 p50_ms=10.8 min_ms=7.5 max_ms=13.6 n_views=30 warmup_s=4.6 out=/localdev/smarton/gstt2-t513/tmp/t555-r0-sibdbg6
+ELFS r0-sibdbg6 new=6
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc0/trisc0.elf.xip.elf
+  [ 3] .text             PROGBITS        00006950 0000a0 001d2c 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 05c128 0010f8 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00820 001dd0 000284 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00aa4 002054 000010 00  WA  0   0  4
+Entry point 0x6950
+  LOAD           0x0000a0 0x00006950 0x00006950 0x01d2c 0x01d2c R E 0x10
+  LOAD           0x001dd0 0xffb00820 0x0000867c 0x00284 0x00294 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc1/trisc1.elf.xip.elf
+  [ 3] .text             PROGBITS        00007130 0000a0 006cf8 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 5c1a58 0016f8 0c   I 26   3  4
+  [ 5] .data             PROGBITS        ffb00020 006da0 000280 00  WA  0   0  4
+  [ 6] .rela.data        RELA            00000000 5c3150 000168 0c   I 26   5  4
+  [ 7] .bss              NOBITS          ffb002a0 007020 000110 00  WA  0   0  4
+Entry point 0x7130
+  LOAD           0x0000a0 0x00007130 0x00007130 0x06cf8 0x06cf8 R E 0x10
+  LOAD           0x006da0 0xffb00020 0x0000de28 0x00280 0x00390 RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc2/trisc2.elf.xip.elf
+  [ 3] .text             PROGBITS        00007d30 0000a0 001958 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 05057c 000f00 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00820 001a00 00001c 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb0083c 001a1c 000000 00  WA  0   0  4
+Entry point 0x7d30
+  LOAD           0x0000a0 0x00007d30 0x00007d30 0x01958 0x01958 R E 0x10
+  LOAD           0x001a00 0xffb00820 0x00009688 0x0001c 0x0001c RW  0x10
+   01     .text 
+   02     .data 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/16057650345975166822/brisc/brisc.elf
+  [ 3] .text             PROGBITS        00004ba0 0000a0 007494 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 156164 003a2c 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c30 007540 000104 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00d34 007644 000008 00  WA  0   0  4
+Entry point 0x4ba0
+  LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x07494 0x07494 R E 0x10
+  LOAD           0x007540 0xffb00c30 0x0000c034 0x00104 0x0010c RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/16057650345975166822/brisc/brisc.elf.xip.elf
+  [ 3] .text             PROGBITS        00004ba0 0000a0 007494 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 156164 003a2c 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c30 007540 000104 00  WA  0   0  4
+  [ 6] .bss              NOBITS          ffb00d34 007644 000008 00  WA  0   0  4
+Entry point 0x4ba0
+  LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x07494 0x07494 R E 0x10
+  LOAD           0x007540 0xffb00c30 0x0000c034 0x00104 0x0010c RW  0x10
+   01     .text 
+   02     .data .bss 
+ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_ncrisc/12058879206701393990/ncrisc/ncrisc.elf.xip.elf
+  [ 3] .text             PROGBITS        00005fb0 0000a0 007014 00  AX  0   0  4
+  [ 4] .rela.text        RELA            00000000 1522c8 002c10 0c   I 25   3  4
+  [ 5] .data             PROGBITS        ffb00c20 0070c0 000000 00  WA  0   0  1
+  [ 6] .bss              NOBITS          ffb00c20 0070c0 000020 00  WA  0   0  4
+Entry point 0x5fb0
+  LOAD           0x0000a0 0x00005fb0 0x00005fb0 0x07014 0x07014 R E 0x10
+  LOAD           0x0070c0 0xffb00c20 0x0000cfc4 0x00000 0x00020 RW  0x10
+   01     .text 
+   02     .data .bss 
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t573/tmp/ttw-state/logs/t555-arm6-20261012-195016.log
