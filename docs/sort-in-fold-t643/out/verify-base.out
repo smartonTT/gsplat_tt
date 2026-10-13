@@ -12,7 +12,7 @@
 [ttw 2026-10-13T13:10:00-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=098d2bd6 bin=7b7e644f30b13340 t643 098d2bd6 SORT_IN_FOLD A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t643-verify-base  timeout=480s  worry=600s  ts=2026-10-13T13:10:06-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/sort-in-fold-t643/remote_ab.sh 0 dump base
@@ -22,7 +22,7 @@ run rc=0
 [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.6 p50_ms=8.7 min_ms=6.0 max_ms=11.3 n_views=30 warmup_s=20.0 out=/localdev/smarton/gstt2-t513/tmp/t643-r0-dump-base
 TTW_TIMING ms_view=8.636
-HOOK 0 lines, last: 
+HOOK 0 lines, last:
 MD5_GOLDEN_OK grid 11x10: list 077caaba = golden (30/30 views)
 MD5 golden rc=0 (base)
 === done 0 dump 20:10:43

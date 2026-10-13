@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=098d2bd6 bin=7b7e644f30b13340 t643 098d2bd6 SORT_IN_FOLD A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t643-r1-b2b  timeout=300s  worry=600s  ts=2026-10-13T13:13:40-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/sort-in-fold-t643/remote_ab.sh 1 b2b base new
@@ -10,7 +10,7 @@ run rc=0
 [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
 B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.456 fps=118.25 ms_frame_median=8.457 pass_ms_frame=8.445,8.453,8.468,8.465,8.459,8.466,8.462,8.449,8.455,8.459,8.449,8.460,8.462,8.455,8.442,8.493,8.455,8.475,8.453,8.403 check_pass_ms_frame=9.806 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.456 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
 TTW_TIMING b2b_ms_frame=8.456
-HOOK 0 lines, last: 
+HOOK 0 lines, last:
 === r1-b2b-new 098d2bd6 SORT_IN_FOLD=1 cache=/localdev/smarton/.cache/ttmc-t643new 20:13:55 load=1.68
 run rc=0
 [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10

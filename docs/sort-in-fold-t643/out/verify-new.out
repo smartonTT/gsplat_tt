@@ -12,7 +12,7 @@
 [ttw 2026-10-13T13:10:56-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=098d2bd6 bin=7b7e644f30b13340 t643 098d2bd6 SORT_IN_FOLD A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t643-verify-new  timeout=480s  worry=600s  ts=2026-10-13T13:11:02-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/sort-in-fold-t643/remote_ab.sh 0 dump new
