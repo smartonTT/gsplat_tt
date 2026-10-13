@@ -1,0 +1,13 @@
+================ BUILD ID ================
+  cpp : #124 sha=c8af2579 bin=2b081f7383a0748e t608 ac51095c pfwc window profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t608-base  timeout=380s  worry=600s  ts=2026-10-13T03:05:07-0700
+cmd: T=/localdev/smarton/gstt2-t513 TRACY_TIMEOUT=330 bash /localdev/smarton/gstt2-t513/docs/pfwc-bundle-t606/profile/remote_prof.sh base 0 5
+-----------------------------------------
+=== tracy base-0 ac51095c 0:5 [GSPLAT_TT_B4A_FOLD=0 GSPLAT_TT_PFWC_RECFAST=0 GSPLAT_TT_PFWC_VIS_FAST=0] 10:05:08 card=p100a load=2.28 1.21 0.82
+tracy base-0 rc=0 10:05:34
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=8.365 render=8.365 py_resid=0.069 project=2.116 sort=1.301 blend=4.749 d2h=0.010 tail=0.004 xview=0.104 view_total=8.296 project_pfwc_rtargs=0.105 project_pfwc_enqueue=0.041 project_gather_wait=2.063 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=174.325 fps=5.74 ms_frame_median=174.325 pass_ms_frame=174.325 check_pass_ms_frame=8.365 raw_md5=57fe026f gap_ms=0.00 render_ms_frame=174.325 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t6
+device csv base-0 rows 240722
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t608/tmp/ttw-state/logs/t608-base-20261013-030506.log

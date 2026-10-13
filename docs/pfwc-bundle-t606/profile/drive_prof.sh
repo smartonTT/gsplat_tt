@@ -6,6 +6,7 @@
 # One `ttp lock p100` around: ssh preflight, sync + build of <rev>, then one short devrun ssh
 # session per capture (each <= 380 s), so an ssh drop loses one step only.
 #   ttp detach t608 -- docs/pfwc-bundle-t606/profile/drive_prof.sh <rev>
+#   CHUNKS="5 10 15 20 25" ... drive_prof.sh <rev>: the other 25 views, plain captures, all four arms
 # Restrictions: only the existing measurement reservation (no ird reserve/extend/release), never
 # the viewer box bh-30; every ssh/scp goes through shims forcing StrictHostKeyChecking=yes.
 set -u
@@ -47,12 +48,21 @@ step() {  # name remote_prof args...
   [ "$s" = 124 ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t608/*.*" "$O/"; exit 124; }
   return 0
 }
+if [ -n "${CHUNKS:-}" ]; then  # coverage run: CHUNKS="5 10 15 20 25" (views a:a+5), arm order flips per chunk
+  i=0
+  for a in $CHUNKS; do
+    arms=${ARMS:-base new vis rec}; [ $((i % 2)) = 1 ] && arms=$(echo $arms | tr ' ' '\n' | tail -r | tr '\n' ' ')
+    for arm in $arms; do step $arm-$a $arm $a $((a + 5)); done
+    i=$((i + 1))
+  done
+else
 step base base 0 5
 step new new 0 5
 step vis vis 0 5
 step rec rec 0 5
 step base-sc base 0 5 stepcyc
 step new-sc new 0 5 stepcyc
+fi
 scp -q -o BatchMode=yes "$H:$T/tmp/t608/*.*" "$O/" || rc=4
 echo "=== drive t608 done rc=$rc $(TZ=America/Los_Angeles date)"
 exit $rc

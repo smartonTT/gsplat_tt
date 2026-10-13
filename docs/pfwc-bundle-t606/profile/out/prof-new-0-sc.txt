@@ -1,0 +1,47 @@
+# new-0-sc out/dev-new-0-sc.csv.gz: 110 cores, 44 programs/core, last 5 views, pfwc only
+view  window | slowest core |  TRISC_0  TRISC_1  TRISC_2   NCRISC    BRISC | setter
+   0   1.479 |       (2, 3) |    1.412    1.418    1.408    1.478    1.430 | NCRISC
+         end |              |    1.413    1.419    1.409    1.479    1.431
+   1   1.356 |      (15, 3) |    1.292    1.299    1.288    1.354    1.304 | NCRISC
+         end |              |    1.294    1.300    1.290    1.355    1.305
+   2   1.357 |      (15, 3) |    1.293    1.299    1.288    1.355    1.305 | NCRISC
+         end |              |    1.294    1.300    1.290    1.356    1.307
+   3   1.358 |      (15, 3) |    1.293    1.299    1.289    1.356    1.306 | NCRISC
+         end |              |    1.295    1.300    1.290    1.358    1.307
+   4   1.383 |       (3, 3) |    1.327    1.333    1.323    1.381    1.336 | NCRISC
+         end |              |    1.329    1.334    1.324    1.383    1.338
+MEAN window 1.386 ms; setter per view: [('NCRISC', 5)]
+slowest-core busy  TRISC_0=1.323 TRISC_1=1.330 TRISC_2=1.319 NCRISC=1.385 BRISC=1.336
+slowest-core kernel end (from window start) TRISC_0=1.325 TRISC_1=1.331 TRISC_2=1.321 NCRISC=1.386 BRISC=1.338
+mean-core busy     TRISC_0=1.273 TRISC_1=1.279 TRISC_2=1.269 NCRISC=1.300 BRISC=1.304
+last KERNEL to end, all cores x views: TRISC_0=0% TRISC_1=0% TRISC_2=0% NCRISC=36% BRISC=64% (n=550, views=5)
+STEPCYC (ms; slowest core per view, mean over the 5 views | mean core):
+  BRISC  wall  1.332 | 1.300
+  BRISC  wait  0.253 | 0.354
+  BRISC  cls   0.411 | 0.405
+  BRISC  pfx   0.006 | 0.006
+  BRISC  rec   0.630 | 0.497
+  BRISC  opn   0.019 | 0.024
+  BRISC  tail  0.012 | 0.013
+  BRISC  rd    0.199 | 0.265
+  BRISC  fl    0.187 | 0.110
+  BRISC  survivors/launch slowest core 7793
+  NCRISC wall  1.381 | 1.296
+  NCRISC wait  0.367 | 0.374
+  NCRISC cls   0.401 | 0.388
+  NCRISC pfx   0.019 | 0.012
+  NCRISC rec   0.517 | 0.485
+  NCRISC opn   0.065 | 0.024
+  NCRISC tail  0.013 | 0.013
+  NCRISC rd    0.339 | 0.310
+  NCRISC fl    0.109 | 0.103
+  NCRISC survivors/launch slowest core 6936
+  TRISC_0 wall     1.323 | 1.272
+  TRISC_0 in_wait  0.031 | 0.026
+  TRISC_0 vis+pops 0.273 | 0.270
+  TRISC_1 wall     1.329 | 1.279
+  TRISC_1 in_wait  0.001 | 0.001
+  TRISC_1 vis+pops 0.509 | 0.502
+  TRISC_2 wall     1.319 | 1.268
+  TRISC_2 in_wait  0.001 | 0.001
+  TRISC_2 vis+pops 0.007 | 0.006
