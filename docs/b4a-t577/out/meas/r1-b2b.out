@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=a0478ed6 bin=14cabfbc511670a1 t577m a0478ed6 B4a fold K2_CNT16 vs 90268457 (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t577m-r1-b2b  timeout=300s  worry=600s  ts=2026-10-12T21:59:50-0700
 cmd: T=/localdev/smarton/gstt2-t513 TB=/localdev/smarton/gstt2-t574b RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/b4a-t577/meas/remote_ab.sh 1 b2b base new
