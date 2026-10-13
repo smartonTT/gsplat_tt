@@ -21,9 +21,13 @@ from pathlib import Path
 
 # list md5 (8 hex) per stage grid; the full lists are in the files named alongside.
 GOLDENS = {
-    "11x10": "906e0435",  # worker dispatch, p100a and p150 (docs/matblend-ready-t273/t289/md5-golden-906e0435.txt)
-    "12x10": "39d84b28",  # eth dispatch, p150 120 cores (docs/eth-dispatch-t397/out/md5-r1-E.txt)
+    # worker dispatch, p100a and p150; iter 227 BLEND_EXP1 default (docs/exp1-t584/md5-golden-077caaba.txt)
+    "11x10": "077caaba",
+    # eth dispatch, p150 120 cores: not yet captured with BLEND_EXP1=1 (fails as "no golden" until then)
 }
+# Goldens before iter 227 (GSPLAT_TT_BLEND_EXP1=0): 11x10 906e0435
+# (docs/matblend-ready-t273/t289/md5-golden-906e0435.txt), 12x10 39d84b28 (docs/eth-dispatch-t397/out/md5-r1-E.txt).
+GOLDENS_EXP1_OFF = {"11x10": "906e0435", "12x10": "39d84b28"}
 
 _DEV = re.compile(r"^\[DEV\] .*?compute grid (\d+)x(\d+)(.*)$", re.M)
 _CAP = re.compile(r"stage grid capped to (\d+)x(\d+)")

@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=2e0d8462 bin=b59e928091f71166 t584 2e0d8462 BLEND_EXP1 A/B (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t584-r2-b2b  timeout=300s  worry=600s  ts=2026-10-12T22:55:45-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/exp1-t584/remote_ab.sh 2 b2b new base
+-----------------------------------------
+=== r2-b2b-new 2e0d8462 EXP1=1 cache=/localdev/smarton/.cache/ttmc-t584new 05:55:46 load=1.16
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.452 fps=118.32 ms_frame_median=8.453 pass_ms_frame=8.455,8.461,8.454,8.448,8.447,8.452,8.456,8.455,8.448,8.453,8.454,8.452,8.460,8.462,8.457,8.465,8.446,8.451,8.453,8.404 check_pass_ms_frame=9.729 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.452 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.452
+=== r2-b2b-base 2e0d8462 EXP1=0 cache=/localdev/smarton/.cache/ttmc-t584base 05:56:00 load=1.28
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.602 fps=116.25 ms_frame_median=8.605 pass_ms_frame=8.614,8.602,8.604,8.610,8.608,8.601,8.600,8.594,8.602,8.597,8.607,8.608,8.609,8.599,8.606,8.606,8.618,8.607,8.603,8.553 check_pass_ms_frame=9.932 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=8.602 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.602
+=== done 2 b2b 05:56:14
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t584/tmp/ttw-state/logs/t584-r2-b2b-20261012-225544.log
