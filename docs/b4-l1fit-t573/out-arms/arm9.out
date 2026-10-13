@@ -12,12 +12,12 @@
 [ttw 2026-10-12T19:49:55-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=19c39d5e bin=1a1e347f6ea8b899 t555 19c39d5e arms solo (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t555-arm9  timeout=590s  worry=600s  ts=2026-10-12T19:49:55-0700
 cmd: T=/localdev/smarton/gstt2-t513 TRIAGE=0 RUN_TIMEOUT=150 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t573/remote_triage.sh 9
 -----------------------------------------
-=== r0-sibdbg9 19c39d5 02:49:55 load=10.47 
+=== r0-sibdbg9 19c39d5 02:49:55 load=10.47
 run rc=0
 [SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.53 layout=0.08 pub_host=0.31 total=0.93ms
 [SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.55 layout=0.10 pub_host=0.38 total=1.03ms
@@ -36,8 +36,8 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x6950
   LOAD           0x0000a0 0x00006950 0x00006950 0x01d2c 0x01d2c R E 0x10
   LOAD           0x001dd0 0xffb00820 0x0000867c 0x00284 0x00294 RW  0x10
-   01     .text 
-   02     .data .bss 
+   01     .text
+   02     .data .bss
 ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc1/trisc1.elf.xip.elf
   [ 3] .text             PROGBITS        00007130 0000a0 006cf8 00  AX  0   0  4
   [ 4] .rela.text        RELA            00000000 5c1a58 0016f8 0c   I 26   3  4
@@ -47,8 +47,8 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x7130
   LOAD           0x0000a0 0x00007130 0x00007130 0x06cf8 0x06cf8 R E 0x10
   LOAD           0x006da0 0xffb00020 0x0000de28 0x00280 0x00390 RW  0x10
-   01     .text 
-   02     .data .bss 
+   01     .text
+   02     .data .bss
 ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/18351959174493595787/trisc2/trisc2.elf.xip.elf
   [ 3] .text             PROGBITS        00007d30 0000a0 001958 00  AX  0   0  4
   [ 4] .rela.text        RELA            00000000 05057c 000f00 0c   I 25   3  4
@@ -57,8 +57,8 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x7d30
   LOAD           0x0000a0 0x00007d30 0x00007d30 0x01958 0x01958 R E 0x10
   LOAD           0x001a00 0xffb00820 0x00009688 0x0001c 0x0001c RW  0x10
-   01     .text 
-   02     .data 
+   01     .text
+   02     .data
 ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/332243719221360245/brisc/brisc.elf
   [ 3] .text             PROGBITS        00004ba0 0000a0 0050a4 00  AX  0   0  4
   [ 4] .rela.text        RELA            00000000 0fc824 0022bc 0c   I 25   3  4
@@ -67,8 +67,8 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x4ba0
   LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x050a4 0x050a4 R E 0x10
   LOAD           0x005150 0xffb00c30 0x00009c44 0x00038 0x000b8 RW  0x10
-   01     .text 
-   02     .data .bss 
+   01     .text
+   02     .data .bss
 ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_brisc/332243719221360245/brisc/brisc.elf.xip.elf
   [ 3] .text             PROGBITS        00004ba0 0000a0 0050a4 00  AX  0   0  4
   [ 4] .rela.text        RELA            00000000 0fc824 0022bc 0c   I 25   3  4
@@ -77,8 +77,8 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x4ba0
   LOAD           0x0000a0 0x00004ba0 0x00004ba0 0x050a4 0x050a4 R E 0x10
   LOAD           0x005150 0xffb00c30 0x00009c44 0x00038 0x000b8 RW  0x10
-   01     .text 
-   02     .data .bss 
+   01     .text
+   02     .data .bss
 ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_ncrisc/12058879206701393990/ncrisc/ncrisc.elf.xip.elf
   [ 3] .text             PROGBITS        00005fb0 0000a0 007014 00  AX  0   0  4
   [ 4] .rela.text        RELA            00000000 1522c8 002c10 0c   I 25   3  4
@@ -87,6 +87,6 @@ ELF /localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/k
 Entry point 0x5fb0
   LOAD           0x0000a0 0x00005fb0 0x00005fb0 0x07014 0x07014 R E 0x10
   LOAD           0x0070c0 0xffb00c20 0x0000cfc4 0x00000 0x00020 RW  0x10
-   01     .text 
-   02     .data .bss 
+   01     .text
+   02     .data .bss
 [ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t573/tmp/ttw-state/logs/t555-arm9-20261012-194955.log

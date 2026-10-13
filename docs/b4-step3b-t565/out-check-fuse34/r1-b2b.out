@@ -12,7 +12,7 @@
 [ttw 2026-10-12T17:34:17-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #126 sha=d1977c17 bin=12a579c0b48c5def t555 d1977c17 check fuse34 (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t555-r1-b2b  timeout=590s  worry=600s  ts=2026-10-12T17:34:17-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/remote_ab.sh 1 b2b base fuse34

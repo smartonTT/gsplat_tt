@@ -12,10 +12,10 @@
 [ttw 2026-10-12T18:40:04-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #126 sha=f6546891 bin=01898e5c3c417b65 t555 f6546891 triage solo (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t555-triage  timeout=590s  worry=600s  ts=2026-10-12T18:40:05-0700
-cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t568/remote_triage.sh 
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/../b4-l1fit-t568/remote_triage.sh
 -----------------------------------------
 === r0-sibdbg1 f654689 01:40:05 load=10.00
 run rc=0
