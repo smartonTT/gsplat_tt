@@ -218,6 +218,14 @@ inline bool mat_cq1() {
     static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_MAT_CQ1", 1u) != 0u;
     return v;
 }
+// Task #628 (L-A): with the B4a fold, the blend's after-hook enqueues the next
+// view's early sort and proj_M read right behind this view's mat+blend, so the
+// device does not idle while the next view's host work reaches the sort.
+// Default off; 1 = on.
+inline bool la_prefetch() {
+    static const bool v = env_uint("GSPLAT_TT_LA_PREFETCH", 0u) != 0u;
+    return v;
+}
 // Task #355: read the fold K2's count rows on CQ1 through a 4 KB-page view
 // of the same DRAM address (220 page reads, not 14,080 of 64 B), then
 // unshuffle on the host. Default on; 0 = the 64 B-page read.
