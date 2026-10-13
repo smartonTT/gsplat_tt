@@ -495,6 +495,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             d["K2_CTA_BASE"] = std::to_string(ct.size());
             d["K2_RTA_BASE"] = std::to_string(kB4aRtaBase);
             for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+            // Task #633: the #538 ellipse probe (profiling only) also runs in the
+            // folded K2, else b2b views 1..N skip it. Unset: no define.
+            if (const char* e = std::getenv("GSPLAT_TT_ELLIPSE_PROBE"); e != nullptr && std::atoi(e) != 0)
+                d["K2_ELLIPSE_PROBE"] = "1";
         }
         ctx.fz_brisc = CreateKernel(
             program,
