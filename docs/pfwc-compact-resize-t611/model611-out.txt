@@ -1,0 +1,18 @@
+core-launches 6600; survival per core mean 0.276 max 0.399
+measured: base 1.523 gains rec 0.071 vis 0.022 bundle 0.07
+
+== M1 (no floor): L +0.0375 o -0.0075 dV 0.000 F 0.000  sum|err| 0.024
+   fit: base 1.524  rec +0.070  vis +0.000  bundle +0.070
+   A' = RECFAST + compaction (split movers): gain vs best-iter-227 | incremental over RECFAST
+     rep   0 cyc/surv: +0.625 | +0.555
+     rep  30 cyc/surv: +0.421 | +0.351
+     rep  40 cyc/surv: +0.353 | +0.283
+     rep  50 cyc/surv: +0.284 | +0.214
+
+== M2 (window floor F): L +0.0375 o -0.0075 dV 0.000 F 1.290  sum|err| 0.024
+   fit: base 1.524  rec +0.070  vis +0.000  bundle +0.070
+   A' = RECFAST + compaction (split movers): gain vs best-iter-227 | incremental over RECFAST
+     rep   0 cyc/surv: +0.234 | +0.164
+     rep  30 cyc/surv: +0.231 | +0.161
+     rep  40 cyc/surv: +0.218 | +0.148
+     rep  50 cyc/surv: +0.192 | +0.122

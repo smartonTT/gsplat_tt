@@ -1,0 +1,47 @@
+core-launches 6600; survival per core mean 0.276 p95 0.348 max 0.399
+calibrated: lead +0.0375 ms, TRISC offset -0.0100 ms (slowest-core T 1.408), base 1.523 (meas 1.523), RECFAST gain 0.072 (meas 0.071)
+mover busy max after RECFAST: B 1.299 N 1.225; before: B 1.644 N 1.577
+mover floor after RECFAST (TRISC free): 1.170
+
+== TRISC cut dT on top of RECFAST (gain vs best-iter-227 base, RECFAST included)
+   dT    no RECFAST   with RECFAST
+  0.00   +0.000       +0.072
+  0.05   +0.017       +0.122
+  0.10   +0.032       +0.172
+  0.15   +0.045       +0.218
+  0.20   +0.054       +0.260
+  0.25   +0.058       +0.292
+  0.30   +0.058       +0.311
+  0.40   +0.058       +0.342
+  0.50   +0.058       +0.353
+
+== spec A on top of RECFAST: TRISC slowest core 1.408 -> 0.790
+   rep cyc/surv   NCRISC only   split both movers
+       0          +0.624        +0.624
+      20          +0.405        +0.488
+      30          +0.272        +0.420
+      40          +0.138        +0.352
+      50          +0.003        +0.283
+      67          -0.226        +0.167
+      95          -0.606        -0.025
+
+== spec A over a RECFAST + TRISC-cut 0.10 bundle (bundle window 1.351, TRISC slowest 0.748): incremental gain
+   rep   0 cyc/surv: NCRISC only +0.452   split +0.452
+   rep  30 cyc/surv: NCRISC only +0.100   split +0.249
+   rep  40 cyc/surv: NCRISC only -0.034   split +0.180
+   rep  50 cyc/surv: NCRISC only -0.168   split +0.112
+   rep  67 cyc/surv: NCRISC only -0.398   split -0.005
+
+== spec A over a RECFAST + TRISC-cut 0.15 bundle (bundle window 1.304, TRISC slowest 0.727): incremental gain
+   rep   0 cyc/surv: NCRISC only +0.405   split +0.405
+   rep  30 cyc/surv: NCRISC only +0.053   split +0.202
+   rep  40 cyc/surv: NCRISC only -0.081   split +0.133
+   rep  50 cyc/surv: NCRISC only -0.215   split +0.065
+   rep  67 cyc/surv: NCRISC only -0.445   split -0.051
+
+== spec A over a RECFAST + TRISC-cut 0.20 bundle (bundle window 1.263, TRISC slowest 0.707): incremental gain
+   rep   0 cyc/surv: NCRISC only +0.364   split +0.364
+   rep  30 cyc/surv: NCRISC only +0.011   split +0.160
+   rep  40 cyc/surv: NCRISC only -0.123   split +0.092
+   rep  50 cyc/surv: NCRISC only -0.257   split +0.023
+   rep  67 cyc/surv: NCRISC only -0.486   split -0.093
