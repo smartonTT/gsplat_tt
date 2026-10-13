@@ -43,9 +43,11 @@ step() {  # name script args...
   $DEVRUN --host "$H" --no-verify --timeout 590 --tag t555-$n -- \
     "T=$T bash $T/$D/$s $*" 2>&1 | tee "$O/$n.out" | grep -E "$pat"
   local r=${PIPESTATUS[0]}; [ "$r" = 0 ] || { echo "=== step $n rc=$r"; rc=$r; }
-  [ "$r" = 124 ] && exit 124
+  [ "$r" = 124 ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t555/*.log" "$O/"; exit 124; }
 }
-if [ "$PLAN" = kcfg ]; then  # t565: solo sort at KCFG +48 KB, no sort in blend (30-view md5 dump)
+if [ "$PLAN" = triage ]; then  # t568: fuse dump; on a hang tt-triage callstacks before the reset
+  step triage ../b4-l1fit-t568/remote_triage.sh
+elif [ "$PLAN" = kcfg ]; then  # t565: solo sort at KCFG +48 KB, no sort in blend (30-view md5 dump)
   step dump remote_ab.sh 0 dump solo48
 elif [ "$PLAN" = check ]; then
   step dump remote_ab.sh 0 dump $ARM
