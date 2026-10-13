@@ -1010,6 +1010,10 @@ static double process_frame_mb_devcull_resident(
             const auto h0 = std::chrono::steady_clock::now();
             {
                 GSPLAT_HTL_ZONE("fold_hook");
+                // Task #614 slack probe (profiling only): host delay just before the
+                // next view's pfwc enqueue (slope ~1 = device idle waiting on the host).
+                static const double pre_spin = gsplat_tt::htl::env_us("GSPLAT_TT_HTL_PRE_SPIN_US");
+                gsplat_tt::htl::spin_us(pre_spin);
                 before_hook();
                 // Task #614 slack probe (profiling only): host delay between the
                 // next view's pfwc enqueue and this mat+blend enqueue.
