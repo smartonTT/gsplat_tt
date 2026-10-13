@@ -646,7 +646,19 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     // compute kernel (same config as the tile_l1_cull compute).
     const bool fuse_cull = sort_matcull_fused();
     if (fuse_cull) {
+        namespace mf = gsplat_tt::matblend_fuse;
         auto tile_cb = [&](uint32_t id) {
+            // Task #565: blend CB_DA_RING (65 x 64 B) / CB_T_RB (2 bf16 tiles) share these.
+            if (fused && mf::sib_cb_alias() && (id == 8u || id == 24u)) {
+                const uint32_t bid = mf::kBlendCbBase + (id == 8u ? mf::kAliasDaRing : mf::kAliasTRb);
+                CircularBufferConfig c(mat_cull_depth() * 4096u,
+                                       {{id, DataFormat::Float32},
+                                        {bid, id == 8u ? DataFormat::UInt32 : DataFormat::Float16_b}});
+                c.set_page_size(id, 4096u);
+                c.set_page_size(bid, id == 8u ? 64u : mf::kOutPageBytes);
+                CreateCircularBuffer(program, cores, c);
+                return;
+            }
             CircularBufferConfig c(mat_cull_depth() * 4096u, {{id, DataFormat::Float32}});
             c.set_page_size(id, 4096u);
             CreateCircularBuffer(program, cores, c);
@@ -3634,6 +3646,11 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
 // K2(N+1); needs the B4a fold, the early one-launch sort and OL_SOLO (town on
 // PACK, OL_TOWN_NT=1). The fused run ring is R = D = 4: the town needs a power
 // of two and R = 8 (266,240 B) fits no alias tail (t555 finding).
+bool matblend_fuse::sib_cb_alias() {
+    // 65 x 64 B DA ring and 2 bf16 tiles both fit the default 2-tile coefficient CBs.
+    return sort_in_blend_enabled() && b4a_k2_in_blend() && sort_matcull_fused() && mat_cull_depth() >= 2u;
+}
+
 bool sort_in_blend_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_SORT_IN_BLEND");

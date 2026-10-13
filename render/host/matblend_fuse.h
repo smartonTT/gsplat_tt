@@ -58,6 +58,13 @@ constexpr uint32_t kAliasOut = 16;       // on mat CB 6 (CB_SLAB)
 // put the fused program 14.7 KB over L1).
 constexpr uint32_t kB4aCb = 62;
 constexpr uint32_t kB4aBytes = (128u + 6u + 128u) * 64u + 64u;
+// Task #565 (sort in blend): the program needs +46 KB of kernel config, 12 KB more than
+// the fused CBs leave. Two compute-only blend CBs go onto the mat cull coefficient CBs,
+// which UNPACK has drained before its blend part starts (and PACK before it packs
+// CB_T_RB), and the ramps drop to depth 1 (one push, one pop per launch).
+constexpr uint32_t kAliasTRb = 2;     // on mat CB 24 (BRISC CB_COEFF)
+constexpr uint32_t kAliasDaRing = 10; // on mat CB 8 (NCRISC CB_COEFF)
+bool sib_cb_alias();  // sort_device.cpp: sort in blend with the fused SFPU cull
 constexpr uint32_t kOutPageBytes = 32u * 32u * 2u;  // bf16 tile
 constexpr uint32_t kImgU8Bytes = 32u * 32u * 3u;    // 32 rows x 96 B RGB
 

@@ -222,6 +222,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     static_assert(CB_MB_COUNTS == mbf::kAliasMbCounts && CB_IMG_U8 == mbf::kAliasImgU8 &&
                   CB_OUT == mbf::kAliasOut && TILE_BYTES_BF16 == mbf::kOutPageBytes &&
                   IMG_ROW_BYTES * TILE_H == mbf::kImgU8Bytes);
+    static_assert(CB_T_RB == mbf::kAliasTRb);
+    const bool sib_cbs = fused && mbf::sib_cb_alias();
 
     auto cb_cfg = [&](uint32_t id0, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
         // Task #289: these share a mat CB's storage (add_mat_part creates them).
@@ -229,6 +231,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
                       id0 == mbf::kAliasImgU8 || id0 == mbf::kAliasOut)) {
             return;
         }
+        if (sib_cbs && (id0 == mbf::kAliasTRb || id0 == mbf::kAliasDaRing)) return;  // Task #565
         const uint32_t id = id0 + cb_base;
         CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
         c.set_page_size(id, page_bytes);
@@ -246,8 +249,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     // the compute derives the conic on the SFPU.
     constexpr uint32_t kBucketFit = 8192u;
 
-    cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
-    cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+    // Task #565: one push and one pop per launch, so sort in blend takes depth 1 (8 KB back).
+    cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, sib_cbs ? 1u : 2u, DataFormat::Float32);
+    cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, sib_cbs ? 1u : 2u, DataFormat::Float32);
     // Depth must cover max subchunks per tile (overflow tiles can be >>2);
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, MB_COUNTS_DEPTH, DataFormat::UInt32);
@@ -308,6 +312,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
     if (blend_da != "0") {
         constexpr uint32_t CB_DA_RING = 10;
+        static_assert(CB_DA_RING == mbf::kAliasDaRing);
         cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
     }
 
