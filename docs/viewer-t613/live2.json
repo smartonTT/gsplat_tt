@@ -1,0 +1,1 @@
+{"deployed_sha": "2346ba3194564ab1449079c2ac93bec49e90b496", "page_fps": 119.02, "device_ms": 8.05, "rc": 0, "page_fps_runs": [119.02, 64.81, 121.5], "device_ms_runs": [8.09, 8.05, 8.01], "interval_ms_p50": [7.75, 7.7, 7.8], "link_mbs": [12.34, 5.23, 12.47], "rev": "best-iter-227", "ready": "page 200, websocket 101"}

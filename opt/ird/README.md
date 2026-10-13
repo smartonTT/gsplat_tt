@@ -124,3 +124,29 @@ non-strict ssh opened checks no key at all (#496). The script, `opt/viewer/viewe
 Run `ttp detach renew-<role> -- opt/ird/renew.sh <role>` in your worktree (the role's designated reserver only) and report its JSON line; exit 4 -> hand off waiting with retry_when `ttp detach --check <rc path>` then rerun, 10 -> blocked "HIGH SEVERITY ALERT: ssh host key changed", other non-zero -> failed with the note.
 If box_changed is true, record the new host/job/expiry in memory (viewer: tell the user to change the Mac forward to 8091 -> <host>:8080; measure: A/B both arms on the new box).
 ```
+
+## Per-landing viewer deploy + page FPS (`opt/viewer/deploy_and_measure.sh`, task #613)
+
+The standing duty after each landing (user msg #293: the viewer shows the current best, with its
+end-to-end page FPS next to the bench b2b FPS) is one command, run in a worktree on the Mac (not
+inside `ttp lock viewer`; renew.sh and each sweep take that lock themselves):
+
+    opt/viewer/deploy_and_measure.sh <N>    # best-iter-<N>; --rev REF, --runs 3, --secs 23, --force, --no-deploy
+
+It runs `opt/ird/renew.sh viewer --rev best-iter-<N>` (if the viewer already runs a descendant of
+the tag, e.g. newer viewer-only commits, it keeps that commit and says so in `deploy_note`;
+`--force` deploys the tag anyway), waits for page 200 + websocket 101 on localhost:8091, then runs
+3 `opt/viewer/ws_sweep_t532.py --no-decode` sweeps through the tunnel with the Mac venv
+`venv-macos` (or `VIEWER_SWEEP_PY`). One JSON line on stdout: `deployed_sha`, `page_fps` (median
+of runs), `device_ms` (median HUD device render), `rc`, `error` on failure, plus per-run
+`page_fps_runs`, `device_ms_runs`, `link_mbs`. rc 0 ok; renew.sh's codes unchanged; 20 viewer not
+up; 21 sweep failed; 22 no python with the sweep deps; 75 viewer lock busy. Tests:
+`python3 -m pytest -q opt/viewer/test_deploy_and_measure.py` (offline).
+
+The VPN link is noisy: a run with `link_mbs` far below ~12 MB/s is link-bound (#613 saw 3.8 and
+5.2 MB/s runs at 105 and 65 page FPS while device ms stayed 8.0); the median of 3 drops one such run.
+
+Spec template for light-tier viewer tasks:
+```
+Run `opt/viewer/deploy_and_measure.sh <N>` in your worktree (resource 'viewer'; never the measurement reservation or the p100 lock) and report its JSON line next to the bench b2b FPS of best-iter-<N>. rc 4 -> hand off waiting and rerun; rc 10 -> blocked "HIGH SEVERITY ALERT: ssh host key changed"; other non-zero -> failed with the error field. If host differs from bh-30, follow the viewer-box-change steps (launchd agent com.tt-project.tunnel.gsplat-viewer).
+```

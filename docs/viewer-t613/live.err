@@ -1,0 +1,10 @@
+[deploy_and_measure] deployed 2346ba31 already contains 445f9e40: kept
+[deploy_and_measure] renew.sh viewer --rev 2346ba3194564ab1449079c2ac93bec49e90b496
+[renew viewer] our reservations: 1 tt_aus bh-30 13:56:06 138278 46483;2 tt_aus bh-33 13:55:54 138447 46483;
+[renew viewer] run: ird change-timeout 1 14:00:00 (job on bh-30, 13:56:06 left)
+2026-10-13 12:32:12,910 INFO     - 138278 on bh-30: Changing your container's timeout to 14 hours...
+2026-10-13 12:32:13,631 INFO     - 138278 on bh-30: Changing your reservations's timeout to 14 hours...
+2026-10-13 12:32:13,790 INFO     - 138278 on bh-30: Timeout modified!
+[deploy_and_measure] sweep r1/3
+[deploy_and_measure] sweep r2/3
+[deploy_and_measure] sweep r3/3
