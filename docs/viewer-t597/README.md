@@ -23,13 +23,19 @@ host work on the critical path. Not a pose-upload wait and not ETH dispatch seri
 3. opt/viewer/viewer.sh: fold on by default in the viewer (VIEWER_B4A_FOLD=0 turns it off).
 
 ## Live A/B p2 (fix 2, bh-30, same 30-view pose stream, arms 0 1 0 1; out/p2/)
-| arm | Mac page FPS (localhost:8091) | box rendered FPS | call ms | dev ms |
+| arm | page FPS (box ws sweep, 240 Hz) | box rendered FPS | call ms | dev ms |
 |---|---|---|---|---|
 | fold off 1 | 120.35 | 120.30 | 8.27 | 8.09 |
 | fold on 2  | 121.60 | 121.52 | 8.19 | 7.99 |
 | fold off 3 | 119.91 | 119.83 | 8.30 | 8.13 |
 | fold on 4  | 121.90 | 122.01 | 8.15 | 7.96 |
 
-Fold on beats fold off by ~1.6 page FPS and beats #587's 120.7 off baseline.
+Fold on beats fold off by ~1.6 page FPS in every pair and beats #587's 120.7 off baseline.
+(The p2 driver's Mac sweeps failed: the Mac python3 has no msgspec; the box sweeps are page FPS at
+the viewer's websocket without the VPN link.)
+
+Through the Mac tunnel (localhost:8091, out/final/, tmp venv with msgspec/zstandard), after the
+fold-on default was deployed: default (on) 122.46, explicit off 120.82, default (on) 120.32 page
+FPS. The tunnel adds noise of about +-1 FPS; the box A/B above is the cleaner comparison.
 Output: device path unchanged from p1, where pipeline_probe gave raw md5 c194c715, golden list
 84695855 and hero PSNR 42.845 dB vs benchmarks/reference_v2/hero.png for both folds (out/p1/probe).
