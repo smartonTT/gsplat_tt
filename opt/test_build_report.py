@@ -1,4 +1,5 @@
 """python3 opt/test_build_report.py — ms_per_view uses measured view total."""
+import json
 import sys
 from pathlib import Path
 
@@ -180,3 +181,26 @@ def test_b2b_headline_newest_not_minimum():
     assert ms == 9.5 and "iter-218" in label and "passes 9.260-10.070" in label, (ms, label)
     assert "9.500 ms/view b2b" in sec and "(passes 9.260-10.070)" in sec, sec
     assert "9.100 ms/view b2b" not in sec and "published, not measured" in sec, sec
+
+
+def test_two_chip_line_next_to_headline(tmp_path):
+    # #582: the 2-chip AFR result sits next to the single-chip headline, never as an iteration.
+    orig = b.TWO_CHIP_JSON
+    try:
+        b.TWO_CHIP_JSON = tmp_path / "missing.json"
+        assert b.two_chip_line() == ""
+        p = tmp_path / "result.json"
+        p.write_text(json.dumps({
+            "board": "bh-50 (2x Blackhole p150)", "commit": "abc12345", "doc": "docs/l2-2chip/RESULT.md",
+            "ms_view_b2b": 4.3, "ms_view_b2b_passes": [4.29, 4.3, 4.31],
+            "single_ms_view_b2b": 8.4, "md5": "906e0435", "md5_views": "30/30",
+            "hero_psnr_vs_ref": 42.51, "gpu_g1_ms": 10.75}), encoding="utf-8")
+        b.TWO_CHIP_JSON = p
+        line = b.two_chip_line()
+        sec = b.b2b_headline_section()
+    finally:
+        b.TWO_CHIP_JSON = orig
+    assert "2 chips (AFR)" in line and "4.300 ms/view b2b (232.6 FPS)" in line, line
+    assert "single chip 8.400" in line and "1.95&times;" in line, line
+    assert "Not an iteration" in line and "published, not measured" in line, line
+    assert line in sec, sec

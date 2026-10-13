@@ -1766,6 +1766,27 @@ def b2b_best() -> dict[str, dict]:
     return best
 
 
+# 2-chip alternate-frame rendering (task #582): shown next to the single-chip headline, not an
+# iteration row, no tag; single-chip b2b stays the headline.
+TWO_CHIP_JSON = OPT_DIR.parent / "docs" / "l2-2chip" / "result.json"
+
+
+def two_chip_line() -> str:
+    """One '2 chips (AFR)' line (b2b ms/view, FPS, single chip and published G1 next to it), if measured."""
+    if not TWO_CHIP_JSON.exists():
+        return ""
+    d = json.loads(TWO_CHIP_JSON.read_text(encoding="utf-8"))
+    ms, one = d["ms_view_b2b"], d["single_ms_view_b2b"]
+    passes = ", ".join(f"{x:.3f}" for x in d.get("ms_view_b2b_passes", []))
+    return (
+        f"<li><b>2 chips (AFR), {html_escape(d['board'])}: {ms:.3f} ms/view b2b ({1000.0 / ms:.1f} FPS)</b>"
+        f" (passes {passes}) @ <code>{html_escape(d['commit'])}</code>; single chip {one:.3f} on the same host"
+        f" = <b>{one / ms:.2f}&times;</b>; md5 {html_escape(d['md5'])} {html_escape(d['md5_views'])},"
+        f" hero {d['hero_psnr_vs_ref']:.2f} dB. vs GPU G1 {d['gpu_g1_ms']} ms/view (published, not measured):"
+        f" {d['gpu_g1_ms'] / ms:.2f}&times;. Not an iteration (no tag; the headline above stays single-chip;"
+        f" <a href='{_opt_href(d['doc'])}' target='_blank'>{html_escape(d['doc'])}</a>).</li>")
+
+
 def b2b_headline_section() -> str:
     """Headline: back-to-back ms/view, best per board, GPU G1 (published), keep gate."""
     rows = b2b_rows()
@@ -1813,7 +1834,7 @@ def b2b_headline_section() -> str:
   <h3>Current b2b per board</h3>
   <p>Per board: the newest kept or re-baseline row (not the lowest value, which on a noisy
   board picks noise), with the min-max spread of its passes.</p>
-  <ul>{''.join(best_lines) or '<li>none measured yet</li>'}</ul>
+  <ul>{''.join(best_lines) or '<li>none measured yet</li>'}{two_chip_line()}</ul>
   {table}
   <p><b>Keep gate:</b> {html_escape(KEEP_GATE_TEXT)}</p>
 </section>
