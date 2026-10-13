@@ -1,7 +1,7 @@
 #!/bin/bash
 # t569 step 3 (remote, bh-30 = p150, ETH dispatch, viewer stopped by drive.sh): with the fix, fold verify,
 # the 30-view md5 sweep + device hero (fold on), then back-to-back A/B fold off/on (2 rounds, ABBA).
-#   bench.sh <out dir> <tree>       on = GSPLAT_TT_B4A_FOLD unset (default), off = GSPLAT_TT_B4A_FOLD=0
+#   bench.sh <out dir> <tree>       on = GSPLAT_TT_B4A_FOLD=1 (forced: ETH default is off), off = GSPLAT_TT_B4A_FOLD=0
 set -u
 O=$1; T=$2; rc=0
 P=/localdev/smarton/p150bench; V=/localdev/smarton/viewer
@@ -27,11 +27,11 @@ run() {  # tag timeout env... -- run.py args...
   return $r
 }
 chk_fold() { grep -q "^\[B4A\] fold: view K2 from the previous blend" $O/run-$1.log || { echo "FOLD_NOT_RUN $1"; rc=9; }; }
-run vlat 200 GSPLAT_TT_B4A_VERIFY=3 -- ; chk_fold vlat
+run vlat 200 GSPLAT_TT_B4A_FOLD=1 GSPLAT_TT_B4A_VERIFY=3 -- ; chk_fold vlat
 grep -q "^\[B4A\] fold verify view .* OK" $O/run-vlat.log && ! grep -q MISMATCH $O/run-vlat.log || { echo "B4A_VERIFY_FAIL vlat"; rc=8; exit 8; }
-run vb2b 400 GSPLAT_TT_B4A_VERIFY=3 -- --back-to-back; chk_fold vb2b
+run vb2b 400 GSPLAT_TT_B4A_FOLD=1 GSPLAT_TT_B4A_VERIFY=3 -- --back-to-back; chk_fold vb2b
 grep -q "^\[B4A\] fold verify view .* OK" $O/run-vb2b.log && ! grep -q MISMATCH $O/run-vb2b.log || { echo "B4A_VERIFY_FAIL vb2b"; rc=8; exit 8; }
-run dump 300 -- --dump-views t569-dump-dump; chk_fold dump
+run dump 300 GSPLAT_TT_B4A_FOLD=1 -- --dump-views t569-dump-dump; chk_fold dump
 d=$(find tmp -maxdepth 2 -type d -name t569-dump-dump | head -1)
 if [ -n "$d" ]; then (cd "$d" && md5sum * | sort -k2) > $O/md5-dump.txt; rm -rf "$d"
   echo "VIEWS=$(wc -l < $O/md5-dump.txt) SWEEP_MD5=$(md5sum < $O/md5-dump.txt | cut -c1-8)"
@@ -40,6 +40,6 @@ cp tmp/t569-dump/hero_clean.png $O/hero.png || { echo NO_HERO; rc=5; }
 for a in off on on off; do
   n=$(( ${n:-0} + 1 ))
   if [ $a = off ]; then run b2b$n-$a 400 GSPLAT_TT_B4A_FOLD=0 -- --back-to-back
-  else run b2b$n-$a 400 -- --back-to-back; chk_fold b2b$n-$a; fi
+  else run b2b$n-$a 400 GSPLAT_TT_B4A_FOLD=1 -- --back-to-back; chk_fold b2b$n-$a; fi
 done
 rm -rf tmp/t569-*
