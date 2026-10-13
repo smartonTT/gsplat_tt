@@ -150,3 +150,16 @@ Spec template for light-tier viewer tasks:
 ```
 Run `opt/viewer/deploy_and_measure.sh <N>` in your worktree (resource 'viewer'; never the measurement reservation or the p100 lock) and report its JSON line next to the bench b2b FPS of best-iter-<N>. rc 4 -> hand off waiting and rerun; rc 10 -> blocked "HIGH SEVERITY ALERT: ssh host key changed"; other non-zero -> failed with the error field. If host differs from bh-30, follow the viewer-box-change steps (launchd agent com.tt-project.tunnel.gsplat-viewer).
 ```
+
+## Viewer AFR mode on N chips (task #620, off by default)
+
+Alternate-frame rendering in the live viewer (`gsplat/afr_pool.py`). Unset = single-chip viewer.
+
+- `GSPLAT_VIEWER_AFR_DEVICES=0,1`: PCIe ids. The viewer opens no device itself; it starts one
+  worker process per chip (one after the other, so JIT compiles do not collide) and sends
+  frame N to chip N % len(devices). Images come back through a shared-memory slot per worker.
+- `GSPLAT_VIEWER_AFR_INFLIGHT`: frames in flight (default one per chip). Frames leave in order.
+- `GSPLAT_VIEWER_AFR_MAX_WH`: largest render size a slot holds, `WxH` (default `2048x2048`).
+- `opt/viewer/viewer.sh`: set `VIEWER_AFR_DEVICES=0,1` (and optionally `VIEWER_AFR_INFLIGHT`)
+  when starting; they are forwarded as the env vars above. Needs a 2-board host (resource
+  'p150-2board', never bh-30's viewer reservation). Offline tests: `tests/unit/test_viewer_afr.py`.
