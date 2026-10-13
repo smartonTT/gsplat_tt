@@ -1050,8 +1050,13 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const bool rec32 = gsplat_tt::env_config::pfwc_rec32();
     if (rec32 && (!town || !brec_bulk))
         throw std::runtime_error("[gsplat_tt::sort] GSPLAT_TT_PFWC_REC32=1 needs OL_EMIT_TOWN and OL_BREC_BULK");
+    // Task #568: under OL_SOLO NCRISC (mover 1) returns at once, so only BRISC's
+    // private CBs (id + 16) are made; this frees ~0.5 MB of L1, so the larger
+    // kernel config buffer of GSPLAT_TT_SORT_IN_BLEND=1 fits (t565: 14,208 B over).
+    const bool solo = town && ol_solo_active();  // OL_SOLO is defined only with the town
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
+        if (solo && off == 0u) continue;
         mover_bytes = 0;
         auto mcb = [&](uint32_t id, uint32_t bytes) {
             cb(id + off, bytes);
@@ -1077,9 +1082,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         logged = true;
         std::fprintf(stderr,
                      "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_RING_DEPTH=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
-                     "OL_BREC_BULK=%u OL_EMIT_TOWN=%u OL_TOWN_NT=%u cb_bytes/mover=%u shared=%u\n",
+                     "OL_BREC_BULK=%u OL_EMIT_TOWN=%u OL_TOWN_NT=%u cb_bytes/mover=%u movers=%u shared=%u\n",
                      pb, ring, depth, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
-                     town ? 1u : 0u, gsplat_tt::env_config::ol_town_nt(), mover_bytes,
+                     town ? 1u : 0u, gsplat_tt::env_config::ol_town_nt(), mover_bytes, solo ? 1u : 2u,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
