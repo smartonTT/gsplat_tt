@@ -8,7 +8,7 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}; PROBE=${2:?probe}; N=${3:?out name}
-D=docs/b4a-t577; P=/localdev/smarton/p150bench; T=$P/tree577; O=$P/out577-$N; V=/localdev/smarton/viewer
+D=docs/b4a-t577; P=/localdev/smarton/p150bench; T=${T_REMOTE:-$P/tree577}; O=$P/out577-$N; V=/localdev/smarton/viewer
 SSHO=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20); SSH=(ssh "${SSHO[@]}" bh-30)
 L=$D/out/$N; mkdir -p $L
 "${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight" bh-30 || { echo "preflight failed: viewer untouched"; exit 3; }
