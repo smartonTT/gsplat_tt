@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=558bff20 bin=59b9af93eb80fae7 t646 1da40a62 BLEND_SWAP_FILL A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t646-r4-b2b  timeout=300s  worry=600s  ts=2026-10-13T13:40:07-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/blend-swapfill-t646/remote_ab.sh 4 b2b new base
