@@ -262,10 +262,10 @@ int main() {
     const bool pfwcrec = std::getenv("MB_SUITE") && std::string(std::getenv("MB_SUITE")) == "pfwcrec";
     const uint32_t NREC = 64, NBK = std::getenv("MB_NB") ? std::atoi(std::getenv("MB_NB")) : 8;
     const std::vector<Spec> specs = pfwcrec ? std::vector<Spec>{
-        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}}, {{BRISC, NREC}}, NBK, 3},
-        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}}, {{BRISC, NREC}}, NBK, 3},
-        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
-        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
+        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}, {"MB_DATA_PAGE", "64u"}}, {{BRISC, NREC}}, NBK, 3},
+        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}, {"MB_DATA_PAGE", "64u"}}, {{BRISC, NREC}}, NBK, 3},
+        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}, {"MB_DATA_PAGE", "64u"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
+        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}, {"MB_DATA_PAGE", "64u"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
     } : std::vector<Spec>{
         {"p0_loop_overhead", "p0_clock.cpp", {}, {{NCRISC, N}}},
         {"p1_l1_store_volatile", "p1_l1_store_volatile.cpp", {}, {{NCRISC, N}}},
