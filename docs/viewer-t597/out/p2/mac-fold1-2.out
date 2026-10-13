@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t597/opt/viewer/ws_sweep_t532.py", line 197, in <module>
+    raise SystemExit(main())
+  File "/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t597/opt/viewer/ws_sweep_t532.py", line 190, in main
+    r = asyncio.run(sweep(args))
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/asyncio/runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/asyncio/base_events.py", line 642, in run_until_complete
+    return future.result()
+  File "/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t597/opt/viewer/ws_sweep_t532.py", line 87, in sweep
+    import msgspec
+ModuleNotFoundError: No module named 'msgspec'

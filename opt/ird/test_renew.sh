@@ -273,27 +273,27 @@ bad=$(grep -vE 'ControlMaster=no' "$T/opts"; grep -vE 'ControlPath=none' "$T/opt
 c() { [ -s "$T/opts" ] && [ -z "$bad" ]; }; check "all $(grep -c . "$T/opts") ssh/scp calls are mux-free, strict and bounded" c
 [ -z "$bad" ] || sort -u <<<"$bad" | head -5 | sed 's/^/     bad: /'
 
-# 11. Viewer deploy passes VIEWER_B4A_FOLD through (empty by default: viewer.sh keeps the fold
-# off, #577); VIEWER_B4A_FOLD in the caller's env overrides. viewer.sh status runs for real
+# 11. Viewer deploy passes VIEWER_B4A_FOLD through (empty by default: viewer.sh's default, fold
+# on since #597); VIEWER_B4A_FOLD in the caller's env overrides. viewer.sh status runs for real
 # here; its ssh must run under renew.sh's outer `timeout 60` (#564).
 : > "$T/opts"
 new_case viewer_fold_off; run viewer --rev HEAD
 c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD= opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "deploy runs viewer.sh with the viewer's fold default" c
-new_case viewer_fold_env; VIEWER_B4A_FOLD=1 run viewer --rev HEAD
-c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=1 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "VIEWER_B4A_FOLD=1 in the env wins" c
+new_case viewer_fold_env; VIEWER_B4A_FOLD=0 run viewer --rev HEAD
+c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=0 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "VIEWER_B4A_FOLD=0 in the env wins" c
 # 12. Every bh-30 ssh in case 11, viewer.sh status included, runs under an outer timeout (#564).
 CASE=viewer_status_timeout; OUT=
 st=$(grep -c '^ssh bh-30 ' "$T/opts"); unb=$(grep '^ssh bh-30 ' "$T/opts" | grep -vc ' T=1 ')
 c() { [ "$st" -ge 2 ] && [ "$unb" = 0 ]; }; check "viewer.sh status ssh runs under timeout ($st calls, $unb unbounded)" c
 
-# 13. viewer.sh keeps the B4a fold off unless VIEWER_B4A_FOLD=1 (#577: on cost page FPS on bh-30).
+# 13. viewer.sh turns the B4a fold on unless VIEWER_B4A_FOLD=0 (#597: on beats off in page FPS on bh-30).
 vstart() { PATH="$T/bin:$PATH" HOME="$T/home" timeout 30 bash "$HERE/../viewer/viewer.sh" start >/dev/null 2>&1; }
 new_case viewer_sh_fold_default; VIEWER_B4A_FOLD= vstart
-c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=0 bash -s')" = 1 ]; }; check "viewer.sh start: fold off when VIEWER_B4A_FOLD is empty" c
+c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=1 bash -s')" = 1 ]; }; check "viewer.sh start: fold on when VIEWER_B4A_FOLD is empty" c
 new_case viewer_sh_fold_unset; (unset VIEWER_B4A_FOLD; vstart)
-c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=0 bash -s')" = 1 ]; }; check "viewer.sh start: fold off when VIEWER_B4A_FOLD is unset" c
-new_case viewer_sh_fold_on; VIEWER_B4A_FOLD=1 vstart
-c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=1 bash -s')" = 1 ]; }; check "viewer.sh start: VIEWER_B4A_FOLD=1 turns it on" c
+c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=1 bash -s')" = 1 ]; }; check "viewer.sh start: fold on when VIEWER_B4A_FOLD is unset" c
+new_case viewer_sh_fold_off; VIEWER_B4A_FOLD=0 vstart
+c() { [ "$(calls '^ssh bh-30 .*GSPLAT_TT_B4A_FOLD=0 bash -s')" = 1 ]; }; check "viewer.sh start: VIEWER_B4A_FOLD=0 turns it off" c
 
 echo "$((N - FAILS))/$N passed"
 [ "$FAILS" = 0 ]
