@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=098d2bd6 bin=7b7e644f30b13340 t643 098d2bd6 SORT_IN_FOLD A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t643-warm  timeout=300s  worry=600s  ts=2026-10-13T13:13:07-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=270 bash /localdev/smarton/gstt2-t513/docs/sort-in-fold-t643/remote_ab.sh 0 b2b base new
+-----------------------------------------
+=== r0-b2b-base 098d2bd6 SORT_IN_FOLD=0 cache=/localdev/smarton/.cache/ttmc-t643base 20:13:09 load=1.88
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.487 fps=117.83 ms_frame_median=8.484 pass_ms_frame=8.482,8.479,8.481,8.494,8.540,8.479,8.530,8.491,8.473,8.486,8.484,8.483,8.501,8.463,8.501,8.468,8.464,8.495,8.507,8.427 check_pass_ms_frame=9.796 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.487 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.487
+HOOK 0 lines, last: 
+=== r0-b2b-new 098d2bd6 SORT_IN_FOLD=1 cache=/localdev/smarton/.cache/ttmc-t643new 20:13:23 load=1.69
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.293 fps=120.58 ms_frame_median=8.294 pass_ms_frame=8.273,8.260,8.284,8.294,8.280,8.294,8.268,8.358,8.308,8.295,8.294,8.268,8.318,8.308,8.286,8.308,8.297,8.309,8.304,8.252 check_pass_ms_frame=9.612 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.293 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.293
+HOOK 23 lines, last: [B4A] sort_in_fold: next view's sort enqueued=1 (630 hooks)
+=== done 0 b2b 20:13:37
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t643/tmp/ttw-state/logs/t643-warm-20261013-131307.log
