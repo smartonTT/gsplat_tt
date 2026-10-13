@@ -598,18 +598,9 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     } else {
         page_cb(20, m0_cap * 32u);       // CB_BUCKET (PACK2, m0_cap recs)
     }
-    if (fused && gsplat_tt::b4a_k2_in_blend()) {  // CB_BSORT + BRISC's B4a K2 scratch
-        static_assert(mf::kB4aBytes <= (2u * kMatMover0Cap + 256u) * 4u);
-        CircularBufferConfig c((2u * m0_cap + 256u) * 4u,
-                               {{21u, DataFormat::UInt32}, {mf::kB4aCb, DataFormat::UInt32}});
-        c.set_page_size(21u, (2u * m0_cap + 256u) * 4u);
-        // One page spanning the whole CB: tt-metal requires the total size to be
-        // divisible by every index's page size; the kernel only uses get_write_ptr.
-        c.set_page_size(mf::kB4aCb, (2u * m0_cap + 256u) * 4u);
-        CreateCircularBuffer(program, cores, c);
-    } else {
-        page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
-    }
+    // CB_BSORT; when fused with B4a K2 in blend it doubles as BRISC's K2 scratch (#569).
+    static_assert(mf::kB4aCb == 21u && mf::kB4aBytes <= (2u * kMatMover0Cap + 256u) * 4u);
+    page_cb(21, (2u * m0_cap + 256u) * 4u);
     page_cb(22, m0_cap * 32u);           // CB_SLAB
 
     // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-item Tracy zones

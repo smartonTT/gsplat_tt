@@ -55,8 +55,10 @@ constexpr uint32_t kAliasImgU8 = 8;      // on mat CB 20 (BRISC CB_BUCKET)
 constexpr uint32_t kAliasOut = 16;       // on mat CB 6 (CB_SLAB)
 // Task #542 (B4a shadow): BRISC's K2 scratch CB, aliased onto mat CB 21 (BRISC
 // CB_BSORT, 50 KB), which is dead once BRISC's mat body returned (a CB of its own
-// put the fused program 14.7 KB over L1).
-constexpr uint32_t kB4aCb = 62;
+// put the fused program 14.7 KB over L1). Task #569: K2 now uses CB 21 itself (it only
+// takes get_write_ptr, same address) instead of a second index 62 on the same CB; the
+// extra index stretched the local CB config to 63 entries and the fold hung under ETH.
+constexpr uint32_t kB4aCb = 21;
 constexpr uint32_t kB4aBytes = (128u + 6u + 128u) * 64u + 64u;
 constexpr uint32_t kOutPageBytes = 32u * 32u * 2u;  // bf16 tile
 constexpr uint32_t kImgU8Bytes = 32u * 32u * 3u;    // 32 rows x 96 B RGB
