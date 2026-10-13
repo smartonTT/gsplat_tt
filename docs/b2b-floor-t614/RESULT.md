@@ -61,7 +61,70 @@ runs layout + pub_host + log/mat setup + pfwc rtargs (~0.5-0.6 ms/view) unless t
 materialize program is still running. If the device idles there, that time is on the
 critical path and pfwc(N+2) could run under it. The gN and psN arms (out-b, out-c) size it.
 
-<!-- RESULTS-B-C -->
+## Results, out-b (view-gap arms gN) and out-c (pre-pfwc-enqueue spin psN)
+
+b2b median ms/view, 20 passes each (analyze.py). Deltas against the htl arm of the same round.
+
+| round | htl | base | g3 (+0.3 ms) | g7 (+0.7 ms) | g15 (+1.5 ms) |
+|---|---|---|---|---|---|
+| r4 | 8.465 | — | 8.798 (**+0.333**) | 9.165 (**+0.700**) | 10.004 (**+1.539**) |
+| r5 | 8.465 | 8.451 | 8.766 (**+0.301**) | 9.162 (**+0.697**) | — |
+
+| round | htl | base | ps150 (+0.15 ms) | ps400 (+0.40 ms) |
+|---|---|---|---|---|
+| r6 | 8.447 | 8.451 | 8.504 (+0.057) | 8.714 (**+0.267**) |
+| r7 | 8.504 (noisy, one 9.37 pass) | — | 8.467 (+0.020 vs r6 htl) | 8.615 (+0.168 vs r6 htl) |
+
+- **The view boundary has zero slack.** Every µs of host time between blend(N+1)'s output
+  and the next view's first enqueue costs 1.00 µs of b2b (g3 -> g15 slope 1.005). The device
+  has no queued work there: it sits idle while the host takes the blend completion, runs
+  python (G = 0.055 ms) and enqueues gather(N+2), and again while the host takes gather's D2H
+  and enqueues TA/sort. Upper bound of that idle: G + A = 0.055 + 0.246 = **≤0.30 ms/view**
+  (A also holds gather's own device time, which the current marks do not split out).
+- **The device is NOT idle before the pfwc enqueue.** A host spin there is hidden up to
+  ~0.13-0.23 ms (ps150 +0.02..0.06; ps400 +0.17..0.27, slope ~1 past the slack). So when the
+  host enqueues pfwc(N+2), sort(N+1) still has ~0.13-0.23 ms of device work queued. Enqueuing
+  pfwc earlier gains nothing: **the "early pfwc enqueue" lever sizes at ~0 and is killed.**
+- Host timeline per view (r6-htl, phases.py): A 0.246, B 1.141, C 0.141, D 6.969, G 0.055.
+
+## Floor attribution (ms/view b2b, bh-33, best-iter-227 code, FOLD=1)
+
+| cause | measured by | b2b cost |
+|---|---|---|
+| pfwc program length (movers set it, #608) | ds150/ds400: slope 1, less 0.026 | 1:1 with the program end (~1.45 ms window) |
+| DRAM/NoC contention pfwc vs folded K2 | single in-order CQ, K2 runs after pfwc ends | **0** (ruled out by construction) |
+| host after pfwc enqueue (fold hook, rtargs) | hs300/hs700 | ≤0.03 |
+| host before pfwc enqueue (layout, pub_host, spans) | ps150/ps400 | ~0 (hidden by 0.13-0.23 ms of queued sort work) |
+| device idle at the view boundary (blend done -> gather(N+2) -> TA/sort enqueue) | g3/g7/g15: slope 1.00 | **≤0.30** (G 0.055 + A 0.246; exact share pending a split of A) |
+
+So the ~1.45 ms "floor" is not a stall: it is pfwc's own program length, and it counts 1:1.
+TRISC cuts did not move b2b because the NCRISC/BRISC movers set the program end. The one
+idle gap found on the device is at the view boundary.
+
+## Levers ≥0.1 ms/view b2b (proposed, with kill rules)
+
+1. **L-A: enqueue gather(N+2) right behind mat+blend(N+1)** in the fold hook (same CQ,
+   no persistent kernel), and its D2H with it, so the device runs gather straight after
+   blend and the view boundary has queued work. Size: ≤0.30 ms/view (bound above).
+   Kill rule: first add two HTL marks (gather enqueue end, gather result) and split A; if
+   host-only + dispatch idle at the boundary is <0.10 ms/view, kill. Else prototype behind an
+   env switch; kill if b2b gain <0.10 ms/view over 2 interleaved rounds, or md5 != 077caaba.
+   Shelved-list check: not L4 (#579, persistent per-view program) and not B4 (#591,
+   cross-frame persistent overlap); it only reorders enqueues on the existing in-order CQ.
+2. **pfwc program end** remains 1:1 on the path; any mover cut moves b2b. Only mover-side
+   cuts count (TRISC cuts do not). Not sized here: see the unsized list.
+
+## Ideas not yet sized
+
+- pfwc movers: split DRAM reads across both NoCs / larger bursts / fewer per-row barriers in
+  reader_pfwc and the BRISC writer (compaction variants A/A' are shelved, #596/#611; this
+  is about the transfer pattern, not survivor count).
+- Overlap TA/sort(N+2) host prep with blend(N+1) (host is blocked in D for 6.97 ms).
+- Fold gather into the pfwc program (one program less per view, removes one dispatch).
+- Sort device tail: the ps arms show 0.13-0.23 ms of sort work still queued at the pfwc
+  enqueue; sort's device time is on the path and was not profiled in the FOLD=1 build.
+
+No stop conclusion here (update #332): the independent ledger review decides that.
 
 ## Correctness and screenshot
 

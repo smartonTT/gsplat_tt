@@ -1,0 +1,65 @@
+================ BUILD ID ================
+  cpp : #126 sha=03c4032d bin=45ea145ff10fd819 t614 c6930850 b2b floor probes (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t614-r4a  timeout=400s  worry=600s  ts=2026-10-13T10:35:32-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 4 htl g3 g7 g15
+-----------------------------------------
+=== r4-htl c6930850 GSPLAT_TT_HTL=1  17:35:36 load=1.74
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r4-g3 c6930850 GSPLAT_TT_HTL=1 --view-gap-ms 0.3 17:36:08 load=3.25
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r4-g7 c6930850 GSPLAT_TT_HTL=1 --view-gap-ms 0.7 17:36:22 load=2.97
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r4-g15 c6930850 GSPLAT_TT_HTL=1 --view-gap-ms 1.5 17:36:37 load=2.68
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== done 4 17:36:51
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-r4a-20261013-103531.log
