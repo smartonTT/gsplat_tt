@@ -50,6 +50,7 @@
 #include "matblend_fuse.h"
 #include "out_ring.h"
 #include "pair_guard.h"
+#include "sort.h"
 #include "tile_assign.h"
 
 #include <cstdio>
@@ -77,6 +78,13 @@ using gsplat_tt::b4a_fold_enabled;
 using gsplat_tt::b4a_k2_in_blend;
 using gsplat_tt::tile_assign_b4a_args;
 using gsplat_tt::tile_assign_b4a_end_view;
+// Task #565 (GSPLAT_TT_SORT_IN_BLEND=1): sort(N+1) on the fused BRISC. Its
+// args sit after the K2 block (BRISC), past the blend reader's (NCRISC) and
+// after eps/floor (compute: the PACK town mailbox).
+static constexpr uint32_t kSibRtaBase = kB4aRtaBase + 42u;  // 90
+static constexpr uint32_t kSibNRta = 72;
+static constexpr uint32_t kSibTownRta = gsplat_tt::matblend_fuse::kCpRtaBase + 2u;  // 6
+static bool sib_active() { return b4a_k2_in_blend() && gsplat_tt::sort_in_blend_enabled(); }
 
 // Tasks #367/#374: one pinned output image. The caller's lease is the host
 // memory only; the pin (NoC mapping) belongs to the ring slot, so a frame the
@@ -115,6 +123,7 @@ struct DeviceContext {
     KernelHandle fz_brisc{};
     KernelHandle fz_compute{};
     uint32_t fz_claim_sem = 0;
+    std::array<uint32_t, 8> fz_sib_sem{};  // task #565: 6 sort + arrive + release
     bool fz_built = false;
 
     // RESIDENT blend scratch (GSPLAT_TT_RESIDENT_BLEND): persistent per-context
@@ -367,6 +376,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         for (const auto& kv : reader_defines) d[kv.first] = kv.second;
         for (const auto& kv : fz_common) d[kv.first] = kv.second;
         d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
+        if (sib_active()) {
+            d["SORT_IN_BLEND"] = "1";
+            d["SIB_N_RTA"] = std::to_string(kSibNRta);
+        }
         ctx.fz_ncrisc = CreateKernel(
             program,
             OVERRIDE_KERNEL_PREFIX "kernels/dataflow/matblend_ncrisc.cpp",
@@ -482,6 +495,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             }
         }
     }
+    std::map<std::string, std::string> sib_dm;
+    if (fused && sib_active()) {
+        gsplat_tt::sort_in_blend_defines(sib_dm, compute_defines);
+        compute_defines["SORT_IN_BLEND"] = "1";
+        compute_defines["SIB_TOWN_RTA"] = std::to_string(kSibTownRta);
+        for (uint32_t& sem : ctx.fz_sib_sem) sem = CreateSemaphore(program, cores, 0);
+    }
     (fused ? ctx.fz_compute : ctx.compute) = CreateKernel(
         program,
         fused ? OVERRIDE_KERNEL_PREFIX "kernels/compute/matblend_compute.cpp"
@@ -516,6 +536,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             d["K2_CTA_BASE"] = std::to_string(ct.size());
             d["K2_RTA_BASE"] = std::to_string(kB4aRtaBase);
             for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+            if (sib_active()) {
+                // Task #565: the solo sort(N+1), its 9 accessors in sort_bin_onelaunch's
+                // order (gids, tids, keep, depth, blendrec, bucket, rows, bases, totals).
+                for (const auto& kv : sib_dm) d[kv.first] = kv.second;
+                d["SORT_IN_BLEND"] = "1";
+                d["SIB_RTA_BASE"] = std::to_string(kSibRtaBase);
+                d["OL_CTA_BASE"] = std::to_string(ct.size());
+                for (int i = 0; i < 9; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+            }
         }
         ctx.fz_brisc = CreateKernel(
             program,
@@ -738,7 +767,7 @@ static double process_frame_mb_devcull_resident(
 
     // Task #552: fused BRISC args kept to add the next view's K2 args once the
     // before-enqueue hook has prepared them.
-    struct FoldBrisc { CoreCoord core; uint32_t kc; std::vector<uint32_t> m0; };
+    struct FoldBrisc { CoreCoord core; uint32_t kc; std::vector<uint32_t> m0, n, cp; };
     std::vector<FoldBrisc> fold_brisc;
     if (!launch_only) {
     // Post-sort subchunk meta: device-written at sort publish (iter 55 / step B).
@@ -951,14 +980,20 @@ static double process_frame_mb_devcull_resident(
                         cp.resize(mbf::kCpRtaBase, 0u);
                         cp.push_back(blend_eps_bits);
                         cp.push_back(floor_bits);
+                        const bool sib = sib_active();
+                        if (sib) {  // task #565: fixed sizes; zeros = no sort(N+1) here
+                            n.resize(kSibNRta + 4u, 0u);
+                            cp.resize(kSibTownRta + 1u, 0u);
+                        }
                         SetRuntimeArgs(*fz_program, ctx.fz_ncrisc, core, n);
                         if (b4a_k2_in_blend()) {
                             m0.resize(kB4aRtaBase, 0u);
                             const uint32_t kc = static_cast<uint32_t>(x) +
                                                 static_cast<uint32_t>(y) * static_cast<uint32_t>(ctx.grid.x);
                             if (b4a_fold_enabled()) {
-                                fold_brisc.push_back({core, kc, m0});
+                                fold_brisc.push_back({core, kc, m0, n, cp});
                                 m0.resize(kB4aRtaBase + 42u, 0u);
+                                if (sib) m0.resize(kSibRtaBase + 170u, 0u);
                             } else if (!tile_assign_b4a_args(kc, m0)) {
                                 m0.resize(kB4aRtaBase + 42u, 0u);
                             }
@@ -1035,14 +1070,40 @@ static double process_frame_mb_devcull_resident(
             before_hook();
             gsplat_tt::stagetimers::acc().xview +=
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
-            for (auto& fb : fold_brisc) {
-                fb.m0.resize(kB4aRtaBase);
-                if (!tile_assign_b4a_args(fb.kc, fb.m0)) continue;
-                SetRuntimeArgs(ctx.fz_workload.get_programs()
-                                   .find(distributed::MeshCoordinateRange(ctx.mesh_device->shape()))
-                                   ->second,
-                               ctx.fz_brisc, fb.core, fb.m0);
+            auto& fzp = ctx.fz_workload.get_programs()
+                            .find(distributed::MeshCoordinateRange(ctx.mesh_device->shape()))
+                            ->second;
+            // Task #565: sort(N+1) runs on every core or none (core 0's barrier
+            // counts every core's BRISC and NCRISC), so all args are built first.
+            std::vector<char> k2_ok(fold_brisc.size(), 0);
+            bool sib = sib_active() && fold_brisc.size() == ctx.all_cores.num_cores();
+            for (std::size_t i = 0; i < fold_brisc.size(); i++) {
+                fold_brisc[i].m0.resize(kB4aRtaBase);
+                k2_ok[i] = tile_assign_b4a_args(fold_brisc[i].kc, fold_brisc[i].m0) ? 1 : 0;
+                sib = sib && k2_ok[i];
             }
+            if (sib_active()) {
+                for (std::size_t i = 0; i < fold_brisc.size(); i++) {
+                    auto& fb = fold_brisc[i];
+                    fb.m0.resize(kSibRtaBase, 0u);
+                    sib = sib && gsplat_tt::sort_in_blend_core_args(fb.kc, ctx.fz_sib_sem, fb.m0, kSibRtaBase, fb.n,
+                                                                    kSibNRta, fb.cp, kSibTownRta);
+                }
+                for (auto& fb : fold_brisc) {
+                    if (!sib) fb.m0.resize(kSibRtaBase);  // run word 0 everywhere
+                    fb.m0.resize(kSibRtaBase + 170u, 0u);
+                }
+            }
+            for (std::size_t i = 0; i < fold_brisc.size(); i++) {
+                auto& fb = fold_brisc[i];
+                if (!k2_ok[i]) continue;
+                if (sib) {
+                    SetRuntimeArgs(fzp, ctx.fz_ncrisc, fb.core, fb.n);
+                    SetRuntimeArgs(fzp, ctx.fz_compute, fb.core, fb.cp);
+                }
+                SetRuntimeArgs(fzp, ctx.fz_brisc, fb.core, fb.m0);
+            }
+            if (!sib) gsplat_tt::sort_in_blend_cancel();
         }
         pend.clear();
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.fz_workload, /*blocking=*/false);

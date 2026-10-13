@@ -36,6 +36,10 @@ int main() {
     // Explicit override wins either way.
     check(kcfg_extra_kb("40", true, true, true, true), 40, "override 40");
     check(kcfg_extra_kb("0", true, true, true, false), 0, "override 0");
+    // Task #565: sort in blend raises the default to 45 KB; an override still wins.
+    check(kcfg_extra_kb(nullptr, true, true, true, false, true), 45, "sort in blend, untraced");
+    check(kcfg_extra_kb(nullptr, true, true, true, true, true), 45, "sort in blend, profiler");
+    check(kcfg_extra_kb("32", true, true, true, false, true), 32, "sort in blend, override 32");
     // Profiler detection.
     check(gsplat_tt::kcfg_profiler_on(nullptr), 0, "profiler unset");
     check(gsplat_tt::kcfg_profiler_on(""), 0, "profiler empty");

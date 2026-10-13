@@ -59,6 +59,11 @@ int main() {
     std::vector<Buf> r7 = solo;
     for (auto& b : r7) if (b.id == 29) b.bytes = 1024 * (7 * 32 + 4);
     bad += check(more, r7, true, "solo-R7+cb21+cb22");
+    // Task #565: the fused sort runs at R = OL_RING_DEPTH = 4 (sort_device.cpp
+    // sib_arena: the town needs a power of two), with the same five regions.
+    std::vector<Buf> r4 = solo;
+    for (auto& b : r4) if (b.id == 29) b.bytes = 1024 * (4 * 32 + 4);
+    bad += check(more, r4, true, "solo-R4+cb21+cb22");
     bad += check({{6, 100, 1 << 20}}, solo, false, "unaligned-skip");
     bad += check({{6, 0, 1 << 20}}, solo, true, "one-region");
     std::printf(bad == 0 ? "PASS\n" : "FAIL (%d)\n", bad);

@@ -95,7 +95,8 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             std::getenv("GSPLAT_TT_KCFG_EXTRA_KB"),
             env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1,
             env_config::pfwc_rd_brisc(), env_config::pfwc_covcam_sfpu(),
-            kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
+            kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")),
+            [] { const char* e = std::getenv("GSPLAT_TT_SORT_IN_BLEND"); return e != nullptr && e[0] == '1'; }());
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
         // Task #383 (GSPLAT_TT_DISPATCH=worker|eth|auto): Ethernet dispatch frees the Tensix
