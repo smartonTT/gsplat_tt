@@ -1,0 +1,56 @@
+================ BUILD ID ================
+  cpp : #126 sha=03c4032d bin=45ea145ff10fd819 t614 c6930850 b2b floor probes (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t614-r5  timeout=400s  worry=600s  ts=2026-10-13T10:38:19-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 5 base g3 htl g7
+-----------------------------------------
+=== r5-base c6930850   17:38:22 load=1.49
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.451 fps=118.33 ms_frame_median=8.451 pass_ms_frame=8.467,8.481,8.459,8.469,8.476,8.444,8.436,8.442,8.448,8.454,8.441,8.442,8.447,8.454,8.456,8.467,8.440,8.452,8.449,8.396 check_pass_ms_frame=9.921 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.451
+TTW_TIMING b2b_ms_frame_median=8.451
+=== r5-g3 c6930850 GSPLAT_TT_HTL=1 --view-gap-ms 0.3 17:38:35 load=1.64
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r5-htl c6930850 GSPLAT_TT_HTL=1  17:38:49 load=1.64
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== r5-g7 c6930850 GSPLAT_TT_HTL=1 --view-gap-ms 0.7 17:39:03 load=1.66
+run rc=0
+HTL wrote 1490 marks
+HTL wrote 2930 marks
+HTL wrote 4370 marks
+HTL wrote 5810 marks
+HTL wrote 7250 marks
+HTL wrote 8690 marks
+HTL wrote 10130 marks
+HTL wrote 11570 marks
+HTL wrote 13010 marks
+HTL wrote 14450 marks
+HTL wrote 15890 marks
+HTL wrote 17330 marks
+=== done 5 17:39:18
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t614/tmp/ttw-state/logs/t614-r5-20261013-103814.log
