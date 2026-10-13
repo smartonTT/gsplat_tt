@@ -5,7 +5,9 @@
 # then per arm: viewer.sh restart (VIEWER_B4A_FOLD=<arm>, VIEWER_TIMELINE on), a 23 s sweep
 # from the Mac through localhost:8091 and a 23 s sweep on the box (ws://127.0.0.1:8080, no
 # link). Then the viewer is stopped for pipeline_probe (fold 0 and 1), and restarted with
-# FINAL_FOLD (default 0). Holds resource 'viewer' only: no reserve/extend/release, never the
+# FINAL_FOLD (default 0). SWEEP_HZS (default 240): box sweep rates, one timeline burst each;
+# MAC_PY: python with msgspec for the Mac sweep; SKIP_PROBE=1 skips pipeline_probe.
+# Holds resource 'viewer' only: no reserve/extend/release, never the
 # p100 lock or the measurement box. Strict host-key checking.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
@@ -32,13 +34,15 @@ for arm in $ARMS; do
   wait_ready || { echo "viewer not READY"; "${SSH[@]}" "tail -20 $V/viewer.log"; }
   "${SSH[@]}" "grep -E 'SELFTEST|READY' $V/viewer.log | tail -2; tr '\0' '\n' < /proc/\$(cat $V/viewer.pid)/environ | grep -E 'B4A_FOLD|TIMELINE'"
   sleep 5
-  .venv/bin/python opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8091 --subprotocol viser-v1.0.27 --no-decode --secs 23 \
-    > "$L/mac-$tag.out" 2>&1 || python3 opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8091 --subprotocol viser-v1.0.27 --no-decode --secs 23 > "$L/mac-$tag.out" 2>&1
+  "${MAC_PY:-python3}" opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8091 --subprotocol viser-v1.0.27 --no-decode --secs 23 \
+    > "$L/mac-$tag.out" 2>&1
   grep -o '"decoded_fps": [0-9.]*\|"link_mbs": [0-9.]*\|"interval_ms_p50": [0-9.]*' "$L/mac-$tag.out" | tr '\n' ' '; echo " (mac $tag)"
   sleep 3
-  "${SSH[@]}" "cd $V/tree && $V/venv/bin/python opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8080 --subprotocol viser-v1.0.27 --no-decode --secs 23" > "$L/box-$tag.out" 2>&1
-  grep -o '"decoded_fps": [0-9.]*\|"link_mbs": [0-9.]*\|"interval_ms_p50": [0-9.]*' "$L/box-$tag.out" | tr '\n' ' '; echo " (box $tag)"
-  sleep 2
+  for hz in ${SWEEP_HZS:-240}; do
+    "${SSH[@]}" "cd $V/tree && $V/venv/bin/python opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8080 --subprotocol viser-v1.0.27 --no-decode --secs 23 --hz $hz" > "$L/box-$tag-$hz.out" 2>&1
+    grep -o '"decoded_fps": [0-9.]*\|"link_mbs": [0-9.]*\|"interval_ms_p50": [0-9.]*' "$L/box-$tag-$hz.out" | tr '\n' ' '; echo " (box $tag ${hz}Hz)"
+    sleep 2
+  done
   "${SSH[@]}" "cd $V/tree && python3 opt/viewer/timeline_stats.py $B/tl-$tag.jsonl" | tee "$L/tl-$tag.txt"
 done
 if [ -z "${SKIP_PROBE:-}" ]; then

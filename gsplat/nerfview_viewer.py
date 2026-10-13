@@ -316,8 +316,13 @@ class FastRenderer(Renderer):
             # te: render_once entered, t0/t1: render_fn call, dev: its C++ total ms,
             # drop: an unsent older frame was replaced.
             dev = getattr(getattr(self.viewer.render_fn, "__self__", None), "_render_ms", None)
+            # v: the rendered pose's camera position (mm), so per-view costs compare across
+            # arms whose pacing samples different subsets of a cycled sweep.
+            c2w = getattr(cs, "c2w", None)
+            v = ",".join(str(int(round(1000.0 * float(c2w[i][3])))) for i in range(3)) \
+                if c2w is not None else None
             self.timeline.add(k="r", te=te, t0=t0, t1=t1, a=task.action, h=nxt is not None,
-                              drop=dropped, dev=dev[-1] if dev else None)
+                              drop=dropped, dev=dev[-1] if dev else None, v=v)
 
     def _frame_pending(self) -> bool:
         """True while the last frame handed to viser still sits unsent in its buffer."""

@@ -75,6 +75,16 @@ def summarize(burst, sends, skip_s=2.0):
         pace_wait_ms_mean=round(statistics.mean(wait), 3) if wait else None,
         encode_ms_mean=round(statistics.mean(enc), 3) if enc else None,
     )
+    # Per-view: a cycled sweep paced near 2x the render rate renders an aliased subset of
+    # its views, different per arm; the unweighted mean over views compares like with like.
+    per = {}
+    for x in r:
+        if x.get("v") is not None:
+            per.setdefault(x["v"], []).append(1000.0 * (x["t1"] - x["t0"]))
+    if per:
+        out["views"] = len(per)
+        out["call_ms_view_mean"] = round(statistics.mean(statistics.mean(c) for c in per.values()), 3)
+        out["per_view_call_ms"] = {k: [len(c), round(statistics.mean(c), 3)] for k, c in sorted(per.items())}
     return out
 
 

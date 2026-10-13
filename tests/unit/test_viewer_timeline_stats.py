@@ -44,7 +44,23 @@ def test_summarize_rates_and_gap():
     assert out["dev_ms_mean"] == 7.0 and out["dropped"] == 0
 
 
+def test_per_view_mean_is_unweighted():
+    # View "a" costs 6 ms and is rendered 3x as often as view "b" at 10 ms: the frame mean
+    # leans to "a" (7 ms), the per-view mean does not (8 ms).
+    r, s, _ = _burst(0.0, 1000)
+    for i, x in enumerate(r):
+        slow = i % 4 == 3
+        x["v"] = "b" if slow else "a"
+        x["t1"] = x["t0"] + (0.010 if slow else 0.006)
+    out = ts.summarize(r, s, skip_s=0.0)
+    assert out["views"] == 2
+    assert abs(out["call_ms_mean"] - 7.0) < 1e-6
+    assert abs(out["call_ms_view_mean"] - 8.0) < 1e-6
+    assert out["per_view_call_ms"]["b"] == [250, 10.0]
+
+
 if __name__ == "__main__":
     test_bursts_split_on_idle_gap()
     test_summarize_rates_and_gap()
+    test_per_view_mean_is_unweighted()
     print("ok")
