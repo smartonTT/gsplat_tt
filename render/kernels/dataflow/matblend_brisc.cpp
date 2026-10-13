@@ -128,10 +128,12 @@ void sib_run(F& poll) {
         twh[tw::H_FIN] = 0u;
         asm volatile("fence" ::: "memory");
     }
-#elif defined(SIB_DBG) && (SIB_DBG == 5u || SIB_DBG == 6u || SIB_DBG == 7u)
-    {  // t571 debug: 5 = the arm-4 mailbox writes, PACK town off (no handshake, no FIN wait);
-       // 6 = the same writes at CB21's base (BRISC's dead mat CB_BSORT), 7 = at CB5's base + 8192
-       // (the start of the CB5 arena region past the blend alias cut)
+#elif defined(SIB_DBG) && SIB_DBG >= 5u && SIB_DBG <= 9u
+    // t571 debug: 5 = the arm-4 mailbox writes, PACK town off (no handshake, no FIN wait);
+    // 6 = the same writes at CB21's base (BRISC's dead mat CB_BSORT), 7 = at CB5's base + 8192
+    // (the start of the CB5 arena region past the blend alias cut); t573: 8 = arm 5 compiled in
+    // but skipped at runtime (code size only), 9 = arm 5 with K2(N+1) skipped (b4a_run_k2)
+    if (SIB_DBG != 8u || ::get_arg_val<uint32_t>(A + 3u) == 0xD0D0u) {  // nc never 0xD0D0
         namespace tw = sort_ol_town;
         auto cb_base = [](uint32_t cb) {
             const auto& c = get_local_cb_interface(cb);
@@ -163,6 +165,9 @@ void b4a_run_k2(F& poll) {
     g_b4a_ctx = &poll;
     g_b4a_fn = [](void* p) { (*static_cast<F*>(p))(); };
     for (uint32_t m = 0; m < 2u; m++) {
+#if defined(SORT_IN_BLEND) && SORT_IN_BLEND && defined(SIB_DBG) && SIB_DBG == 9u
+        break;  // t573 debug arm 9: no K2(N+1) in this blend
+#endif
         k2k::g_rta = K2_RTA_BASE + m * K2_NARGS;
         if (::get_arg_val<uint32_t>(k2k::g_rta + 7) != 0) k2k::kernel_main();  // nseg != 0
     }

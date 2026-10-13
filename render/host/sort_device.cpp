@@ -3674,12 +3674,13 @@ namespace {
 // barrier (no sort, no PACK town), 2 = the full sort, 3 (t571) = the sort body without the
 // PACK town, 4 (t571) = the PACK town handshake only (NB = 0), 5 (t571) = arm 4's mailbox
 // writes with the PACK town off (no handshake), 6 / 7 (t571) = those writes at CB21's base /
-// CB5's base + 8192 instead of the mailbox; all discard sort(N+1), so the
+// CB5's base + 8192 instead of the mailbox, 8 / 9 (t573) = arm 5 skipped at runtime / arm 5
+// without K2(N+1) (t571 accepted only 1-5, so its arms 6 / 7 ran the full sort); all discard sort(N+1), so the
 // standalone sort runs as usual (localises the t568 view-2 crash).
 uint32_t sib_dbg() {
     static const uint32_t v = [] {
         const char* e = std::getenv("GSPLAT_TT_SIB_DBG");
-        return (e != nullptr && (e[0] >= '1' && e[0] <= '5')) ? static_cast<uint32_t>(e[0] - '0') : 0u;
+        return (e != nullptr && (e[0] >= '1' && e[0] <= '9')) ? static_cast<uint32_t>(e[0] - '0') : 0u;
     }();
     return v;
 }

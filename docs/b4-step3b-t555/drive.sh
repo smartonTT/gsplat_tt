@@ -43,10 +43,12 @@ step() {  # name script args...
   $DEVRUN --host "$H" --no-verify --timeout 590 --tag t555-$n -- \
     "T=$T TRIAGE=${TRIAGE:-0} RUN_TIMEOUT=${RUN_TIMEOUT:-150} bash $T/$D/$s $*" 2>&1 | tee "$O/$n.out" | grep -E "$pat"
   local r=${PIPESTATUS[0]}; [ "$r" = 0 ] || { echo "=== step $n rc=$r"; rc=$r; }
-  [ "$r" = 124 ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t555/*.log" "$O/"; exit 124; }
+  [ "$r" = 124 ] && [ "$PLAN" != arms ] && { scp -q -o BatchMode=yes "$H:$T/tmp/t555/*.log" "$O/"; exit 124; }
 }
 if [ "$PLAN" = triage ]; then  # t568: fuse dump; on a hang tt-triage callstacks before the reset
-  step triage ../b4-l1fit-t568/remote_triage.sh ${DBG_ARMS:-}  # t571: DBG_ARMS="3 4"
+  step triage ${TRI_SH:-../b4-l1fit-t568/remote_triage.sh} ${DBG_ARMS:-}  # t571: DBG_ARMS="3 4"; t573: TRI_SH
+elif [ "$PLAN" = arms ]; then  # t573: one step per SIB_DBG arm (TRI_SH), a hang does not stop the rest
+  for a in ${DBG_ARMS:?}; do step arm$a ${TRI_SH:?} $a; done
 elif [ "$PLAN" = kcfg ]; then  # t565: solo sort at KCFG +48 KB, no sort in blend (30-view md5 dump)
   step dump remote_ab.sh 0 dump solo48
 elif [ "$PLAN" = check ]; then
