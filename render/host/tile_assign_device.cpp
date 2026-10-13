@@ -156,7 +156,7 @@ struct TileAssignDeviceContext {
     std::vector<uint64_t> la_acc;
     std::optional<distributed::MeshEvent> la_done;
     bool la_fold = false, la_early = false, la_cq1 = false;
-    uint32_t la_row_pages = 0, la_permille = 0, la_p_cap = 0, la_views = 0;
+    uint32_t la_row_pages = 0, la_permille = 0, la_p_cap = 0, la_views = 0, la_overflows = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
 
@@ -979,10 +979,10 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
     if (ctx == nullptr) return false;
     const std::array<uint32_t, 4> la_key{nseg, num_tiles, tiles_x, screen_tiles};
     if (prefetch) {
-        // Task #628 (L-A): only behind a run fold, host-free P and the early
-        // sort, with the B4a verify and shadow off.
+        // Task #628 (L-A): only behind a run fold and the early sort, with the
+        // B4a verify and shadow off. A pair overflow is handled at the wait.
         if (ctx->la_pending || !b4a_fold_enabled() || !ctx->fold_ran ||
-            !env_config::host_free_mp_enabled() || !env_config::sort_ol_early() ||
+            !env_config::sort_ol_early() ||
             ctx->b4a_verify_pending || ctx->b4a_verified < b4a_verify_views() ||
             b4a_shadow_enabled())
             return false;
@@ -1004,6 +1004,19 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
             }
             ctx->la_done.reset();
             bool early = ctx->la_early;
+            if (ctx->la_mread[2] != 0 && !env_config::host_free_mp_enabled()) {
+                // Task #639: pair overflow. Drain the prefetched sort, then take
+                // the normal path: pass 0 skips the folded K2 and reads the
+                // overflow, the buffers regrow and pass 1 reruns the K2.
+                distributed::Finish(*ctx->cq);
+                if (ctx->la_cq1) distributed::Finish(*device_state::command_queue1());
+                ctx->la_overflows++;
+                std::fprintf(stderr, "[LA] pair overflow: P=%u, normal K2 path (%u views)\n",
+                             ctx->la_mread[1], ctx->la_overflows);
+                ctx->fold_ran = true;
+                return fused_k2_impl(nseg, num_tiles, tiles_x, screen_tiles, M, P,
+                                     /*prepare=*/false);
+            }
             if (early && ctx->la_mread[2] != 0) {
                 distributed::Finish(*ctx->cq);
                 early = false;
