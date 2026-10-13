@@ -46,9 +46,12 @@ step() {  # name timeout round mode arms...
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
-step verify 900 0 dump abl raw
+# devrun refuses a --timeout over the 600 s reservation ceiling: one arm per dump/warm step.
+step verify-abl 450 0 dump abl
+step verify-raw 450 0 dump raw
 [ $rc = 0 ] || { echo "=== dump failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t647/*" "$O/"; exit 8; }
-step warm 600 0 b2b abl raw
+step warm-abl 450 0 b2b abl
+step warm-raw 450 0 b2b raw
 for r in 1 2 3 4; do
   case $r in 1|3) arms="abl raw" ;; *) arms="raw abl" ;; esac
   step r$r-b2b 300 $r b2b $arms
