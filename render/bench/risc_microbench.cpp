@@ -63,6 +63,7 @@ struct Sample {
     uint32_t ops;
     uint64_t total, a, b;
     uint32_t x = 0, y = 0, risc = 0;  // logical core, RISC
+    uint32_t chk = 0;
 };
 
 std::shared_ptr<distributed::MeshBuffer> make_dram(distributed::MeshDevice* dev, uint64_t bytes, uint32_t page) {
@@ -139,7 +140,7 @@ std::vector<Sample> run(Env& e, const Spec& s, CoreCoord hi, double* host_s = nu
                     continue;
                 }
                 auto u64 = [&](int i) { return static_cast<uint64_t>(r[i]) | (static_cast<uint64_t>(r[i + 1]) << 32); };
-                out.push_back({r[1], u64(2), u64(4), u64(6), x, y, static_cast<uint32_t>(risc)});
+                out.push_back({r[1], u64(2), u64(4), u64(6), x, y, static_cast<uint32_t>(risc), r[8]});
             }
     return out;
 }
@@ -172,7 +173,7 @@ void emit_suite(Env& e, double mhz) {
         {{BRISC, 4096}}, {{NCRISC, 4096}}, {{BRISC, 4096}, {NCRISC, 4096}}};
     for (const auto& p : probes)
         for (const auto& movers : mover_sets)
-            for (int scope = 0; scope < 2; scope++) {
+            for (int scope = 0; scope < (pfwcrec ? 1 : 2); scope++) {
                 Spec s{p.name, "p10_emit_noc.cpp",
                        {{"MB_DATA_PAGE", std::to_string(p.mode == 0 ? P64_PAGE : BKT_PAGE) + "u"},
                         {"MB_XFER", std::to_string(p.xfer) + "u"},
@@ -257,7 +258,15 @@ int main() {
         e.dev->close();
         return 0;
     }
-    const std::vector<Spec> specs = {
+    // Task #599: the pfwc REC32 record loop, production vs register cursors, one core.
+    const bool pfwcrec = std::getenv("MB_SUITE") && std::string(std::getenv("MB_SUITE")) == "pfwcrec";
+    const uint32_t NREC = 64, NBK = std::getenv("MB_NB") ? std::atoi(std::getenv("MB_NB")) : 8;
+    const std::vector<Spec> specs = pfwcrec ? std::vector<Spec>{
+        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}}, {{BRISC, NREC}}, NBK, 3},
+        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}}, {{BRISC, NREC}}, NBK, 3},
+        {"p11_pfwc_rec_v0", "p11_pfwc_rec.cpp", {{"MB_V", "0"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
+        {"p11_pfwc_rec_v1", "p11_pfwc_rec.cpp", {{"MB_V", "1"}}, {{NCRISC, NREC}}, NBK | 16u, 3},
+    } : std::vector<Spec>{
         {"p0_loop_overhead", "p0_clock.cpp", {}, {{NCRISC, N}}},
         {"p1_l1_store_volatile", "p1_l1_store_volatile.cpp", {}, {{NCRISC, N}}},
         {"p1_l1_store_volatile", "p1_l1_store_volatile.cpp", {}, {{BRISC, N}}},
@@ -284,7 +293,7 @@ int main() {
     };
 
     for (const auto& s : specs) {
-        for (int scope = 0; scope < 2; scope++) {
+        for (int scope = 0; scope < (pfwcrec ? 1 : 2); scope++) {
             const CoreCoord hi = scope == 0 ? one : all;
             run(e, s, hi);  // JIT compile + warm, discarded
             double host_s = 0;
@@ -307,6 +316,7 @@ int main() {
                         s.movers[0].second, med(tpo), *std::min_element(tpo.begin(), tpo.end()),
                         *std::max_element(tpo.begin(), tpo.end()), med(a), med(b), (unsigned long long)tmax,
                         tmax / (mhz * 1e3), host_s * 1e3);
+            if (pfwcrec) std::printf(" cyc_per_surv=%.2f chk=%08x", med(tpo) - med(a), v[0].chk);
             if (s.buf == 2)
                 std::printf(" per_core_GBps_med=%.2f agg_GBps=%.1f", BW_PAGE / med(tpo) * mhz * 1e6 / 1e9,
                             double(bytes) / (tmax / (mhz * 1e6)) / 1e9);

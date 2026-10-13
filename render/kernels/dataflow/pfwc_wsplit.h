@@ -87,6 +87,11 @@ struct ChunkPages {
         cd[slot] = dep;
         co[slot] = offs;
         ca[slot] = aabb;
+        advance(flush);
+    }
+    // put() after its stores: the next slot, the head -> staging switch or a flush.
+    template <class Flush>
+    inline void advance(Flush&& flush) {
         if (++slot == PW) {
             if (in_head) {
                 in_head = false;
@@ -242,5 +247,90 @@ struct Rec32Stage {
     uint32_t open_page() const { return rs.G0 + rs.rl * rs.nb + rs.rb; }
     uint32_t open_word() const { return rs.slot() * PW; }
 };
+
+// Task #599: one chunk's PFWC_REC32 record loop (writer_pfwc_split.cpp) with
+// the page and record cursors in registers. Same staged words and flushes as
+// the per-survivor ChunkPages::put + Rec32Stage::next loop (rec32_chunk_ref in
+// tests/unit/test_pfwc_rec_fast.cpp); a full dep / offs / aabb page is flushed
+// after that survivor's record stores instead of before them (other staging,
+// same bytes). Needs each page set PW words apart: co = cd + PW, ca = cd + 2 PW.
+// The ten loads of a survivor are issued before its stores (volatile, so in
+// this order), so the stores do not wait on the L1 load latency.
+struct RecSrc {
+    const volatile uint32_t *dep, *aabb, *tpg, *a, *b, *c, *mx, *my, *u01, *u23;
+};
+template <class FP, class FR, class Poll>
+inline uint32_t rec32_chunk(const volatile uint32_t* mw, uint32_t mask_words, const RecSrc& s,
+                            uint32_t payload, uint32_t pr, ChunkPages& pg, Rec32Stage& rs,
+                            volatile uint32_t* w_hrec, volatile uint32_t* w_rec, FP&& flush_pg,
+                            FR&& flush_rec, Poll&& poll) {
+    constexpr uint32_t ST0 = RW, ST1 = RL * PW - RW;  // next half page; next bank's page
+    // Page cursor: pd = cd + slot, pleft slots to the page's end.
+    volatile uint32_t* pd = pg.cd + pg.slot;
+    uint32_t pleft = PW - pg.slot;
+    // Record cursor: r, the step to the next record, and rleft records to the
+    // next event (the head record, or the bank row's end: rb = nb - 1, half).
+    volatile uint32_t* r;
+    uint32_t st, rleft;
+    const uint32_t row = 2u * rs.rs.nb;
+    auto rload = [&] {
+        if (rs.in_head()) {
+            r = w_hrec + RW;
+            st = 0;
+            rleft = 1;
+        } else {
+            r = w_rec + rs.stage_word();
+            st = rs.half ? ST1 : ST0;
+            rleft = row - (2u * rs.rs.rb + (rs.half ? 1u : 0u));
+        }
+    };
+    rload();
+    for (uint32_t w = 0; w < mask_words; w++) {
+        if ((w & 7u) == 7u) poll();
+        const uint32_t base = w * 32u;
+        for (uint32_t bits = mw[w]; bits != 0; bits &= bits - 1) {
+            const uint32_t il = base + static_cast<uint32_t>(__builtin_ctz(bits));
+            const uint32_t dep = s.dep[il], aabb = s.aabb[il], tpg = s.tpg[il];
+            const uint32_t a = s.a[il], b = s.b[il], c = s.c[il], mx = s.mx[il], my = s.my[il];
+            const uint32_t u01 = s.u01[il], u23 = s.u23[il];
+            pd[0] = dep;
+            pd[PW] = pr;
+            pd[2 * PW] = aabb & payload;
+            pr += tpg & payload;
+            r[0] = a;
+            r[1] = b;
+            r[2] = c;
+            r[3] = mx;
+            r[4] = my;
+            r[5] = u01;
+            r[6] = u23;
+            r[7] = dep;
+            ++pd;
+            r += st;
+            st ^= ST0 ^ ST1;
+            if (--pleft == 0) {
+                pg.slot = PW - 1;
+                pg.advance(flush_pg);
+                pd = pg.cd;
+                pleft = PW;
+            }
+            if (--rleft == 0) {
+                if (!rs.in_head()) {
+                    rs.half = true;
+                    rs.rs.rb = rs.rs.nb - 1;
+                }
+                rs.next(flush_rec);
+                rload();
+            }
+        }
+    }
+    pg.slot = PW - pleft;
+    if (!rs.in_head()) {
+        const uint32_t pos = row - rleft;
+        rs.rs.rb = pos >> 1;
+        rs.half = (pos & 1u) != 0;
+    }
+    return pr;
+}
 
 }  // namespace pfwc_wsplit
