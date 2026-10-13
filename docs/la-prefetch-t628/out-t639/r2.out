@@ -1,0 +1,58 @@
+================ BUILD ID ================
+  cpp : #124 sha=9c273710 bin=acaf283b17af67f4 t628 9c273710 L-A prefetch (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t628-r2  timeout=400s  worry=600s  ts=2026-10-13T12:58:00-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-prefetch-t628/remote.sh 2 la base lah htl
+-----------------------------------------
+=== r2-la 9c273710 GSPLAT_TT_LA_PREFETCH=1  19:58:04 load=2.58
+run rc=0
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (60 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (90 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (120 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (150 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (180 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (210 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (240 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (270 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (300 views, cq1 1)
+LA prefetch lines=23 overflow lines=0
+=== r2-base 9c273710   19:58:18 load=2.46
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.441 fps=118.47 ms_frame_median=8.443 pass_ms_frame=8.452,8.445,8.440,8.443,8.442,8.439,8.442,8.442,8.440,8.448,8.445,8.444,8.436,8.444,8.433,8.469,8.447,8.448,8.441,8.387 check_pass_ms_frame=9.605 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.441
+TTW_TIMING b2b_ms_frame_median=8.443
+=== r2-lah 9c273710 GSPLAT_TT_LA_PREFETCH=1 GSPLAT_TT_HTL=1  19:58:32 load=2.54
+run rc=0
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+HTL wrote 1610 marks
+[LA] prefetch: next view's sort + proj_M read behind the blend (60 views, cq1 1)
+HTL wrote 3170 marks
+[LA] prefetch: next view's sort + proj_M read behind the blend (90 views, cq1 1)
+HTL wrote 4730 marks
+[LA] prefetch: next view's sort + proj_M read behind the blend (120 views, cq1 1)
+HTL wrote 6290 marks
+[LA] prefetch: next view's sort + proj_M read behind the blend (150 views, cq1 1)
+HTL wrote 7850 marks
+LA prefetch lines=23 overflow lines=0
+=== r2-htl 9c273710 GSPLAT_TT_HTL=1  19:58:45 load=2.42
+run rc=0
+HTL wrote 1521 marks
+HTL wrote 2991 marks
+HTL wrote 4461 marks
+HTL wrote 5931 marks
+HTL wrote 7401 marks
+HTL wrote 8871 marks
+HTL wrote 10341 marks
+HTL wrote 11811 marks
+HTL wrote 13281 marks
+HTL wrote 14751 marks
+HTL wrote 16221 marks
+HTL wrote 17691 marks
+=== done 2 19:58:59
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t639/tmp/ttw-state/logs/t628-r2-20261013-125800.log
