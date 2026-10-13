@@ -1,0 +1,126 @@
+[run] AFR: 2 chips (devices [5, 6]), 30 views, 22 passes
+[afr] starting worker 0: TT_VISIBLE_DEVICES= GSPLAT_TT_DEVICE_ID=5
+[afr0] [eth] GSPLAT_TT_DISPATCH=worker: worker dispatch (override)
+[afr0] [run] AFR worker 0/2: sweep positions [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
+[afr0] [run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=17
+[afr0] [run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[afr0] 2026-10-13 06:05:16.014 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-13 06:05:16.015 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-13 06:05:16.018 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.019 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+[afr0] 2026-10-13 06:05:16.022 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.023 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-13 06:05:16.025 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+[afr0] 2026-10-13 06:05:16.025 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+[afr0] 2026-10-13 06:05:16.026 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-13 06:05:16.026 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-13 06:05:16.029 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.030 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+[afr0] 2026-10-13 06:05:16.033 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.034 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-13 06:05:16.034 | info     |             UMD | Harvesting masks for Chip 1: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+[afr0] 2026-10-13 06:05:16.034 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+[afr0] 2026-10-13 06:05:16.034 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+[afr0] 2026-10-13 06:05:16.068 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+[afr0] 2026-10-13 06:05:16.068 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+[afr0] 2026-10-13 06:05:16.068 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+[afr0] 2026-10-13 06:05:16.102 | info     |             UMD | Opening local chip ids/PCIe ids: {0, 1}/[6, 5] and remote chip ids {} (cluster.cpp:153)
+[afr0] 2026-10-13 06:05:16.102 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+[afr0] 2026-10-13 06:05:16.102 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+[afr0] 2026-10-13 06:05:16.102 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+[afr0] 2026-10-13 06:05:16.103 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+[afr0] 2026-10-13 06:05:16.104 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+[afr0] 2026-10-13 06:05:16.105 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+[afr0] 2026-10-13 06:05:16.195 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+[afr0] 2026-10-13 06:05:16.494 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+[afr0] 2026-10-13 06:05:16.494 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+[afr0] 2026-10-13 06:05:16.494 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-13 06:05:16.494 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-13 06:05:16.495 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.496 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+[afr0] 2026-10-13 06:05:16.497 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-13 06:05:16.498 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-13 06:05:16.500 | warning  |          Fabric | TopologyMapper auto-discovery: Downgrading to mesh shape 1x1 (1 total nodes) for 2 physical chips. Some physical chips may not be used. This may indicate connectivity issues, topology mismatches, or insufficient fabric links between chips. Verify your physical chip connectivity and ensure that the fabric links are correctly configured. (topology_mapper.cpp:1708)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | 
+[afr0] === Logical Mesh-Level Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | 
+[afr0] === Logical Mesh 0 Internal Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | 
+[afr0] === Physical Mesh-Level Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | 
+[afr0] === Physical Mesh 0 Internal Graph Adjacency Map ===
+[afr0] Total nodes: 2
+[afr0] Degree histogram: {0:2}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+[afr0] 2026-10-13 06:05:16.500 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+[afr0] 2026-10-13 06:05:16.500 | critical |          Always | TT_FATAL: Physical chip id 5 not found in control plane chip mapping. You are calling for a chip outside of the fabric cluster. Check that your mesh graph descriptor specifies the correct topology (assert.hpp:104)
+[afr0] Traceback (most recent call last):
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 977, in main
+[afr0]     _main()
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 726, in _main
+[afr0]     warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 303, in render_clean_view_timed
+[afr0]     res = pipeline.render(gauss, extr, K, H, W)
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/gsplat/pipeline.py", line 151, in render
+[afr0]     image, stats = self.backend.render_fused(
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 160, in render_fused
+[afr0]     means, cov3d, opac, colors = self._pruned_scene(means, cov3d, opac, colors)
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 184, in _pruned_scene
+[afr0]     ncores = int(self._clean.pfwc_num_cores())
+[afr0] RuntimeError: TT_FATAL @ /localdev/smarton/nosync/t582/tt-metal/tt_metal/fabric/control_plane.cpp:1262: false
+[afr0] info:
+[afr0] Physical chip id 5 not found in control plane chip mapping. You are calling for a chip outside of the fabric cluster. Check that your mesh graph descriptor specifies the correct topology
+[afr0] backtrace:
+[afr0]  --- tt::tt_fabric::ControlPlane::get_fabric_node_id_from_physical_chip_id(int) const
+[afr0]  --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+[afr0]  --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+[afr0]  --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+[afr0]  --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+[afr0]  --- gsplat_tt::device_state::get_device()
+[afr0]  --- /localdev/smarton/nosync/t582/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x63d79) [0x7f0ba5989d79]
+[afr0]  --- /localdev/smarton/nosync/t582/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x4e9e3) [0x7f0ba59749e3]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(+0x17ec7f) [0x562ef9f75c7f]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x56d3) [0x562ef9f71cd3]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x562ef9f6ce07]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x562ef9f6ce07]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x562ef9f6ce07]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x562ef9f6ccc0]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x562ef9f6ccc0]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x562ef9f82aec]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x562ef9f6ccc0]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(+0x25b036) [0x562efa052036]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(PyEval_EvalCode+0x86) [0x562efa051f06]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(+0x281a88) [0x562efa078a88]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(+0x27c0df) [0x562efa0730df]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(+0x281825) [0x562efa078825]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x562efa077d68]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x562efa077a47]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(Py_RunMain+0x2be) [0x562efa06beae]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(Py_BytesMain+0x2d) [0x562efa045f4d]
+[afr0]  --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f0beacfed90]
+[afr0]  --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f0beacfee40]
+[afr0]  --- /localdev/smarton/nosync/t582/viewer/venv/bin/python3(_start+0x25) [0x562efa045e45]
+[afr0] 
+[afr] worker 0 ended while waiting for 'ready'
+[run] AFR: no pass completed (rc 1, workers [1, None])

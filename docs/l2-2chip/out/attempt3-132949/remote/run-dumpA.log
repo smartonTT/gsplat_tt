@@ -1,0 +1,58 @@
+[eth] GSPLAT_TT_DISPATCH=worker: worker dispatch (override)
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+Traceback (most recent call last):
+  File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 977, in main
+    _main()
+  File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 726, in _main
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 303, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/nosync/t582/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 160, in render_fused
+    means, cov3d, opac, colors = self._pruned_scene(means, cov3d, opac, colors)
+  File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 184, in _pruned_scene
+    ncores = int(self._clean.pfwc_num_cores())
+RuntimeError: Invalid device ID in TT_VISIBLE_DEVICES: 5.  Valid device identifiers are either integers or part of the BDF string. Valid integer IDs are between 0 and 1.
+Location: /localdev/smarton/nosync/t582/tt-metal/tt_metal/third_party/umd/device/pcie/pci_device.cpp:316
+ 1. tt::umd::PCIDevice::enumerate_devices_info()
+ 2. tt::umd::TopologyDiscovery::create_topology_discovery(tt::umd::TopologyDiscoveryOptions const&, tt::umd::IODeviceType, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ 3. tt::umd::TopologyDiscovery::discover(tt::umd::TopologyDiscoveryOptions const&, tt::umd::IODeviceType, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ 4. tt::umd::Cluster::create_cluster_descriptor(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::umd::IODeviceType, tt::umd::TopologyDiscoveryOptions const&)
+ 5. tt::Cluster::get_cluster_type_from_cluster_desc(tt::llrt::RunTimeOptions const&, tt::umd::ClusterDescriptor const*)
+ 6. tt::tt_metal::MetalEnvImpl::initialize_base_objects()
+ 7. tt::tt_metal::MetalEnvImpl::MetalEnvImpl(tt::tt_metal::MetalEnvDescriptor)
+ 8. tt::tt_metal::MetalEnv::MetalEnv(tt::tt_metal::MetalEnvDescriptor)
+ 9. tt::tt_metal::MetalContext::create_default_instance_implicit_locked()
+10. tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+11. tt::tt_metal::hal::get_max_worker_l1_unreserved_size()
+12. gsplat_tt::device_state::get_device()
+13. /localdev/smarton/nosync/t582/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x63d79) [0x7f3f10189d79]
+14. /localdev/smarton/nosync/t582/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x4e9e3) [0x7f3f101749e3]
+15. python3(+0x17ec7f) [0x561a2b3a2c7f]
+16. _PyEval_EvalFrameDefault
+17. _PyFunction_Vectorcall
+18. _PyEval_EvalFrameDefault
+19. _PyFunction_Vectorcall
+20. _PyEval_EvalFrameDefault
+21. _PyFunction_Vectorcall
+22. _PyEval_EvalFrameDefault
+23. _PyFunction_Vectorcall
+24. _PyEval_EvalFrameDefault
+25. _PyFunction_Vectorcall
+26. _PyEval_EvalFrameDefault
+27. _PyFunction_Vectorcall
+28. _PyEval_EvalFrameDefault
+29. python3(+0x25b036) [0x561a2b47f036]
+30. PyEval_EvalCode
+31. python3(+0x281a88) [0x561a2b4a5a88]
+32. python3(+0x27c0df) [0x561a2b4a00df]
+33. python3(+0x281825) [0x561a2b4a5825]
+34. _PyRun_SimpleFileObject
+35. _PyRun_AnyFileObject
+36. Py_RunMain
+37. Py_BytesMain
+38. /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f3f554f1d90]
+39. __libc_start_main
+40. _start
+
