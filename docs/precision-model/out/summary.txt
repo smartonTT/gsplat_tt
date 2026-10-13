@@ -1,0 +1,33 @@
+Modelled PSNR (8-bit, vs benchmarks/reference_v2/hero.png) and saving, hero view.
+inputs cpu = cpu_cpp projection, all rows (~ device with the landed L6 Newton step).
+pred = 42.51 (measured device, best-iter-226) + (variant - base) on cpu inputs.
+
+variant                     vs_ref  d_base   pred vs_gold vs_base  mb_evals     live  scanned    rb  save lo..hi ms gate
+base                         42.50   +0.00  42.51   57.69   99.00   6486865  2308987  2658298  4676  +0.000..+0.000 -
+base_exact                   42.49   -0.00  42.51   57.58   67.34   6487403  2309382  2658298  4676  -0.001..-0.000 -
+base_nochk                   42.50   +0.00  42.51   57.73   75.08   7902830  2658298  2658298     0  -1.955..-1.135 -
+exp1                         42.85   +0.35  42.86   54.30   54.63   6475469  2305547  2658298  4675  +0.048..+0.139 maybe
+exp1ls                       42.43   -0.06  42.45   55.05   56.20   6486725  2309078  2658298  4677  +0.044..+0.131 maybe
+teps128                      42.49   -0.01  42.50   57.58   73.65   6357346  2269549  2658298  4663  +0.055..+0.095 no
+per1024                      42.50   +0.00  42.51   57.71   79.26   6648547  2342313  2658298  2140  -0.624..-0.358 no
+per2048                      42.50   +0.00  42.51   57.72   76.95   6851629  2386205  2658298   883  -1.019..-0.587 no
+floor2                       37.73   -4.77  37.74   42.88   42.99   5588741  2132210  2457402  4286  +0.418..+0.651 no
+teps128_per2048_floor2       37.73   -4.77  37.74   42.88   42.99   5842429  2184081  2457402   807  -0.227..-0.086 no
+all                          38.01   -4.48  38.02   43.34   43.44   5834254  2181591  2457402   807  -0.103..-0.043 no
+
+L6 (Newton step on device 1/z + conic): device-dumped pfwc rows (pre-#266, iter 199) vs the
+same rows with CPU projection values (= exact 1/z; #266 measured the device Newton at ~1 ulp).
+Same-row sets lose ~5 dB vs ref to dump matching (t260), so only the deltas mean anything.
+
+variant                        dev   dev+N  L6 gain d_base dev d_base dev+N
+base                         37.01   37.47    +0.45      +0.00        +0.00
+base_exact                   37.01   37.46    +0.45      -0.00        -0.00
+base_nochk                   37.01   37.47    +0.45      +0.00        +0.00
+exp1                         37.16   37.62    +0.46      +0.15        +0.16
+exp1ls                       36.99   37.44    +0.45      -0.02        -0.02
+teps128                      37.01   37.46    +0.45      -0.00        -0.00
+per1024                      37.01   37.47    +0.45      +0.00        +0.00
+per2048                      37.01   37.47    +0.45      +0.00        +0.00
+floor2                       35.04   35.34    +0.29      -1.97        -2.13
+teps128_per2048_floor2       35.04   35.34    +0.29      -1.97        -2.13
+all                          35.22   35.53    +0.31      -1.79        -1.94
