@@ -1,0 +1,8 @@
+views 24  M mean 1.675  P mean 2.614 (millions)
+| program | fit (ms, M and P in millions) | r | fixed part of the mean |
+|---|---|---|---|
+| pfwc | 1.063 + 0.274 x M | 0.972 | 70% |
+| k2 | -0.012 + 0.250 x P | 0.992 | -2% |
+| sort | 0.329 + 0.424 x P | 0.995 | 23% |
+| mat+blend | 1.421 + 1.443 x P | 0.998 | 27% |
+| sum of windows | 2.754 + 2.310 x P | 0.998 | 31% |

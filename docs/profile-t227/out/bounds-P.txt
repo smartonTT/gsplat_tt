@@ -1,0 +1,22 @@
+views 30, big cores/view 9.7
+
+Spec B (bound508 equivalent from fz_*; mat makespan ms)
+  base 2.040  no-waits+big-free(comb) 1.592  no-waits(jobs) 2.040
+  comb  gain 0.448 model ms -> frame x0.28 0.125, x0.40 0.179
+  jobs  gain 0.000 model ms -> frame x0.28 0.000, x0.40 0.000
+  balanced (freed mat time spread over all cores by pick_job): gain <= 0.129 ms/view
+  direct mat+blend makespan (comb): 5.235 -> 5.215 (gain 0.020 ms/view)
+  direct mat+blend makespan (jobs): 5.235 -> 5.227 (gain 0.009 ms/view)
+
+Spec C (band_batch on the FPU; ms)
+  mat+blend makespan 5.235; critical core is a big core in 47% of views
+  t1       critical 1.684  mean 1.420  max 2.040
+  band     critical 1.008  mean 1.077  max 1.237
+  mov      critical 1.647  mean 1.350  max 2.040
+  dw_n     critical 0.003  mean 0.010  max 0.086
+  dw_b     critical 0.182  mean 0.183  max 0.408
+  mvsort   critical 0.705  mean 0.867  max 1.010
+  t1_mbw   critical 0.000  mean 0.000  max 0.000
+  mat_end  critical 1.684  mean 1.420  max 2.040
+  saving on critical core min(band, t1 - mover) = 0.037; mean over cores 0.071
+  makespan bound: 5.235 -> 5.227 (gain 0.009)

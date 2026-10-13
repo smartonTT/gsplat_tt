@@ -98,6 +98,9 @@ def main():
         # mat ends d earlier ends mat+blend at most d earlier
         R["mb_make_B"].append(max(mbe[c] - max(0.0, base[c] - comb[c]) for c in mbe))
         R["mb_make_J"].append(max(mbe[c] - max(0.0, base[c] - jobs[c]) for c in mbe))
+        # balanced form: blend jobs are picked dynamically, so freed mat time spreads over all cores;
+        # makespan gain <= mean over cores of the per-core saving
+        R["B_bal"].append(np.mean([max(0.0, base[c] - comb[c]) for c in base]))
         for k in ("t1", "band", "mov", "dw_n", "dw_b", "mvsort", "t1_mbw", "mat_end"):
             R[f"crit_{k}"].append(rows[crit][k])
             R[f"mean_{k}"].append(np.mean([r[k] for r in rows.values()]))
@@ -112,6 +115,7 @@ def main():
     for k in ("comb", "jobs"):
         g = m["base"] - m[k]
         print(f"  {k:5s} gain {g:.3f} model ms -> frame x0.28 {g * 0.28:.3f}, x0.40 {g * 0.40:.3f}")
+    print(f"  balanced (freed mat time spread over all cores by pick_job): gain <= {m['B_bal']:.3f} ms/view")
     for k, n_ in (("B", "comb"), ("J", "jobs")):
         print(f"  direct mat+blend makespan ({n_}): {m['mb_make']:.3f} -> {m['mb_make_' + k]:.3f} "
               f"(gain {m['mb_make'] - m['mb_make_' + k]:.3f} ms/view)")

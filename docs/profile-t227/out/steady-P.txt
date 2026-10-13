@@ -1,0 +1,30 @@
+# steady506: stitched-P.csv.gz  views=30 cores=110  ms at 1350 MHz
+steady periods (pfwc N -> pfwc N+1, same chunk, N not first of chunk): 18
+
+## Programs (mean over views; window = first core start -> last core end)
+
+prog        window core mean core max start spr  end spr idle/core
+pfwc         1.525     1.422    1.525     0.000    0.103     0.104
+k2           0.650     0.555    0.650     0.000    0.095     0.095
+sort         1.447     1.364    1.447     0.000    0.083     0.083
+mat+blend    5.235     5.078    5.235     0.000    0.157     0.157
+
+## Boundaries (steady views; ms)
+
+boundary                   all-core    max per-core  pc max   n
+pfwc -> k2                    0.006  0.007    0.108   0.181  24
+k2 -> sort                    0.013  0.014    0.108   0.243  30
+sort -> mat+blend             0.008  0.033    0.091   0.220  30
+mat+blend -> pfwc N+1         0.013  0.014    0.171   0.278  24
+sum                           0.041           0.479
+
+## Steady period: mean 8.831 median 9.042 min 7.546 max 10.238 ms (n=18)
+  windows: pfwc 1.523  k2 0.643  sort 1.436  mat+blend 5.189  all-core gaps 0.040
+  mean core busy: pfwc 1.419  k2 0.549  sort 1.351  mat+blend 5.033  sum 8.353  -> per-core idle per period 0.478
+
+## Bounds (ms/view, upper)
+
+(a) pfwc N+1 into the mat+blend N tail: mean end spread 0.157 + all-core gap 0.013 = 0.171  (per-core idle at that boundary 0.171)
+(b) summed all-core inter-program idle: 0.041; summed per-core boundary idle (spread, needs program overlap to reclaim): 0.479
+
+gantt: gantt-P.png
