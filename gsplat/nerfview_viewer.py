@@ -1,6 +1,8 @@
 """Gsplat-specific nerfview integration."""
 from __future__ import annotations
 
+import collections
+import json
 import os
 import sys
 import threading
@@ -85,6 +87,34 @@ def adaptive_quality_from_env() -> bool:
 def pipeline_frames_from_env() -> bool:
     """GSPLAT_VIEWER_PIPELINE (default on; "0" turns the next-pose hint off, task #457)."""
     return os.environ.get("GSPLAT_VIEWER_PIPELINE", "1").strip() not in ("0", "off", "false")
+
+
+def timeline_path_from_env() -> Optional[str]:
+    """GSPLAT_VIEWER_TIMELINE=<path> (task #587; off when unset): append one JSON line per
+    rendered and per sent frame (perf_counter seconds), for the host/device timeline."""
+    return os.environ.get("GSPLAT_VIEWER_TIMELINE", "").strip() or None
+
+
+class FrameTimeline:
+    """Per-frame records from the render and sender threads (deque appends are thread-safe),
+    written out by the sender thread every ``flush_every`` records."""
+
+    def __init__(self, path: str, flush_every: int = 1000) -> None:
+        self.path, self.flush_every = path, flush_every
+        self._q: collections.deque = collections.deque()
+
+    def add(self, **rec) -> None:
+        self._q.append(rec)
+
+    def maybe_flush(self, force: bool = False) -> None:
+        if not force and len(self._q) < self.flush_every:
+            return
+        lines = []
+        while self._q:
+            lines.append(json.dumps(self._q.popleft(), separators=(",", ":")))
+        if lines:
+            with open(self.path, "a") as f:
+                f.write("\n".join(lines) + "\n")
 
 
 def make_jpeg_encoder(name: str) -> Callable[[np.ndarray, int], bytes]:
@@ -207,6 +237,8 @@ class FastRenderer(Renderer):
         self.motion_quality = MotionQuality(adaptive_quality_from_env())
         self._last_msg = None  # last frame message handed to viser (pacing, task #532)
         self._latched = None  # pose hinted to the device with the last frame
+        tl = timeline_path_from_env()
+        self.timeline = FrameTimeline(tl) if tl else None
         self._out = None
         self._out_cv = threading.Condition()
         self._sender = threading.Thread(target=self._send_loop, name="gsplat-send", daemon=True)
@@ -251,6 +283,7 @@ class FastRenderer(Renderer):
 
     def render_once(self, task: RenderTask) -> None:
         """Render one task under the viewer lock and queue it for sending."""
+        te = time.perf_counter()
         cs, nxt = task.camera_state, None
         get_cs = getattr(self.viewer, "get_camera_state", None)
         if self.pipeline_frames and task.action in ("move", "rerender") and get_cs is not None:
@@ -276,8 +309,15 @@ class FastRenderer(Renderer):
         img, depth = rendered if isinstance(rendered, tuple) else (rendered, None)
         quality = MotionQuality.STILL if task.action in ("static", "update") else MotionQuality.MAX
         with self._out_cv:
+            dropped = self._out is not None
             self._out = (img, depth, quality, t0, t1, cs)
             self._out_cv.notify()
+        if self.timeline is not None:
+            # te: render_once entered, t0/t1: render_fn call, dev: its C++ total ms,
+            # drop: an unsent older frame was replaced.
+            dev = getattr(getattr(self.viewer.render_fn, "__self__", None), "_render_ms", None)
+            self.timeline.add(k="r", te=te, t0=t0, t1=t1, a=task.action, h=nxt is not None,
+                              drop=dropped, dev=dev[-1] if dev else None)
 
     def _frame_pending(self) -> bool:
         """True while the last frame handed to viser still sits unsent in its buffer."""
@@ -300,6 +340,7 @@ class FastRenderer(Renderer):
                     break
                 img, depth, quality, t0, t1, cs = self._out
                 self._out = None
+            t_take = time.perf_counter()
             backlogged = self._frame_pending()
             if backlogged:
                 # The link is slower than the device: wait (bounded) until viser takes the
@@ -334,6 +375,12 @@ class FastRenderer(Renderer):
             if self.on_frame_sent is not None:
                 t_sent = time.perf_counter()
                 self.on_frame_sent(t0, t1, t_sent, t_sent - te)
+            if self.timeline is not None:
+                # tt: taken by the sender, bl: last frame still unsent (paced), te/ts: encode
+                # start / queued to viser, q/sc: JPEG quality and scale.
+                self.timeline.add(k="s", t0=t0, tt=t_take, bl=backlogged, te=te,
+                                  ts=time.perf_counter(), q=quality, sc=scale)
+                self.timeline.maybe_flush()
 
 
 class GsplatViewer(nerfview.Viewer):

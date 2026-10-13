@@ -90,8 +90,12 @@ def main() -> int:
     frames: list[np.ndarray] = []
     orig_fn = v.render_fn
 
+    calls: list[tuple[float, float]] = []  # (render call start, end), task #587
+
     def rec_fn(cs, ts):
+        t_in = time.perf_counter()
         img = orig_fn(cs, ts)
+        calls.append((t_in, time.perf_counter()))
         frames.append(np.ascontiguousarray(img))
         return img
     v.render_fn = rec_fn
@@ -128,6 +132,24 @@ def main() -> int:
     print(f"PIPE K_view==K_bench {bool(np.array_equal(np.asarray(K_view), np.asarray(K_bench)))}",
           flush=True)
 
+    def stage_snap():
+        return {k: float(v) for k, v in clean.stage_timings().items() if isinstance(v, (int, float))}
+
+    def timeline(st0, st1):
+        """Task #587: per-view host stage ms (C++ stage timers) and the render call / gap
+        between calls (host time outside the C++ call, where only a queued pfwc keeps the
+        device busy) over the timed passes."""
+        nv = max(1.0, st1.get("views", 0.0) - st0.get("views", 0.0))
+        keys = ("view_total", "project", "project_gather_wait", "tile_assign", "sort",
+                "sort_bin_hist_d2h", "sort_publish_wait", "blend", "d2h", "tail", "xview")
+        stages = {k: round((st1[k] - st0.get(k, 0.0)) / nv, 3) for k in keys if k in st1}
+        call = [b - a for a, b in calls]
+        gap = [calls[i + 1][0] - calls[i][1] for i in range(len(calls) - 1)]
+        q = lambda xs, f: sorted(xs)[min(len(xs) - 1, int(f * len(xs)))] * 1000.0 if xs else 0.0
+        return dict(stage_ms=stages, call_ms_mean=round(statistics.mean(call) * 1000.0, 3) if call else 0.0,
+                    gap_ms_mean=round(statistics.mean(gap) * 1000.0, 3) if gap else 0.0,
+                    gap_ms_p50=round(q(gap, 0.5), 3), gap_ms_p90=round(q(gap, 0.9), 3))
+
     def report(mode, ms, digests, h, m, u8_0, **extra):
         raw = hashlib.md5("".join(digests[0]).encode()).hexdigest()[:8]
         golden = golden_list_md5(u8_0, order)
@@ -140,6 +162,9 @@ def main() -> int:
               f"fps={1000.0 / results[mode]['ms_view']:.1f} passes_ms={results[mode]['passes_ms']} "
               f"raw_md5={raw} golden_list_md5={golden} identical_across_passes={results[mode]['identical_across_passes']} "
               f"xview_hits={h} xview_misses={m}", flush=True)
+        if "stage_ms" in extra:
+            print(f"PIPE_TL mode={mode} " + json.dumps({k: extra[k] for k in (
+                "call_ms_mean", "gap_ms_mean", "gap_ms_p50", "gap_ms_p90", "stage_ms")}), flush=True)
 
     def viewer_loop(mode, pipelined):
         """FastRenderer.render_once("move") over the bench views (the live path)."""
@@ -153,6 +178,9 @@ def main() -> int:
             frames.clear()
             walk["i"] = 0
             fr._latched = None
+            if p == 1:
+                calls.clear()
+                st0 = stage_snap()
             t0 = time.perf_counter()
             for cs in states:
                 fr.render_once(RenderTask("move", cs))
@@ -163,7 +191,8 @@ def main() -> int:
                 u8_0 = [f.copy() for f in frames]
         fr.running = False
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape))
+        tl = timeline(st0, stage_snap()) if args.passes > 1 else {}
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape), **tl)
 
     def bench_loop(mode, pipeline, hinted):
         """render/run.py's b2b loop: pipeline.render + _to_image only, bench K."""
@@ -171,11 +200,17 @@ def main() -> int:
         ms, digests = [], []
         for p in range(args.passes):
             imgs = []
+            if p == 1:
+                calls.clear()
+                st0 = stage_snap()
             t0 = time.perf_counter()
             for i, w2c in enumerate(w2cs):
                 if hinted:
                     run._set_next_extr(pipeline, w2cs[(i + 1) % len(w2cs)])
-                imgs.append(run._to_image(pipeline.render(gauss, w2c, K_bench, H, W)))
+                t_in = time.perf_counter()
+                r = pipeline.render(gauss, w2c, K_bench, H, W)
+                calls.append((t_in, time.perf_counter()))
+                imgs.append(run._to_image(r))
             ms.append((time.perf_counter() - t0) * 1000.0 / len(w2cs))
             u8 = [run._to_u8(im) for im in imgs]
             digests.append([hashlib.md5(x.tobytes()).hexdigest() for x in u8])
@@ -183,7 +218,8 @@ def main() -> int:
                 u8_0 = u8
         pipeline.backend.next_extrinsics = None
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0)
+        tl = timeline(st0, stage_snap()) if args.passes > 1 else {}
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, **tl)
 
     def settings(pl):
         return {k: getattr(pl, k, None) for k in ("contrib_floor", "transmittance_threshold",

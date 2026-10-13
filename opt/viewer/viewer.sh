@@ -59,13 +59,15 @@ R
 
 do_start() {
   # Debug knobs (task #357), forwarded only when set here: VIEWER_STALL_FILE arms the
-  # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks.
+  # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks,
+  # VIEWER_TIMELINE=<box path> writes per-frame render/send times (task #587).
   # The B4a fold is off in the viewer unless VIEWER_B4A_FOLD=1 (empty or unset = 0). #577 fixed its
   # ETH hang, but on bh-30 it cost page FPS (115.4 on vs 118.9 off, docs/b4a-t577/RESULTS.md): it
   # moves the next frame's pfwc ahead of this frame's blend, off the viewer's host gap between frames.
   rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH ETHOV=$ETHOV DISPATCH=${VIEWER_DISPATCH:-}" \
       "GSPLAT_VIEWER_STALL_FILE=${VIEWER_STALL_FILE:-} GSPLAT_VIEWER_PYSPY=${VIEWER_PYSPY:-}" \
       "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S}" \
+      "${VIEWER_TIMELINE:+GSPLAT_VIEWER_TIMELINE=$VIEWER_TIMELINE}" \
       "GSPLAT_TT_B4A_FOLD=${VIEWER_B4A_FOLD:-0} bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
