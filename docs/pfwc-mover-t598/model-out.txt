@@ -1,0 +1,80 @@
+core-launches 6600; TRISC_1 wall mean 1.655; minus back-pressure: median 1.634 p5 1.622 p95 1.665
+mover busy mean B 1.210 N 1.202; max B 1.687 N 1.618
+fit: lead 0.245 ms, TRISC tail 0.045 ms, mean |err| 0.0169 ms
+measured window 1.772; model window 1.777
+
+== iter 222 + SKIP_RGB (measured base)
+  base                                                       window 1.777  mover-bound cores 8%
+  TRISC free (mover floor only)                              window 1.714  gain +0.063  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.747  gain +0.030  mover-bound cores 4%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.728  gain +0.049  mover-bound cores 1%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.748  gain +0.029  mover-bound cores 5%
+  (a)+(b) upper bounds together                              window 1.718  gain +0.059  mover-bound cores 1%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.777  gain +0.000  mover-bound cores 8%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.777  gain +0.000  mover-bound cores 8%
+  slowest-core TRISC 1.669, mover busy max B 1.687 N 1.618, imbalance |B-N| mean 0.077 p95 0.179
+
+== iter 227 projection
+  base                                                       window 1.677  mover-bound cores 55%
+  TRISC free (mover floor only)                              window 1.672  gain +0.005  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.637  gain +0.040  mover-bound cores 44%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.600  gain +0.077  mover-bound cores 32%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.639  gain +0.038  mover-bound cores 45%
+  (a)+(b) upper bounds together                              window 1.568  gain +0.109  mover-bound cores 23%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.572  gain +0.105  mover-bound cores 22%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.478  gain +0.198  mover-bound cores 2%
+  slowest-core TRISC 1.418, mover busy max B 1.644 N 1.577, imbalance |B-N| mean 0.077 p95 0.176
+### LEAD=0.15
+core-launches 6600; TRISC_1 wall mean 1.655; minus back-pressure: median 1.634 p5 1.622 p95 1.665
+mover busy mean B 1.210 N 1.202; max B 1.687 N 1.618
+fit: lead 0.150 ms, TRISC tail 0.050 ms, mean |err| 0.0187 ms
+measured window 1.772; model window 1.735
+
+== iter 222 + SKIP_RGB (measured base)
+  base                                                       window 1.735  mover-bound cores 1%
+  TRISC free (mover floor only)                              window 1.619  gain +0.116  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.724  gain +0.011  mover-bound cores 0%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.718  gain +0.016  mover-bound cores 0%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.724  gain +0.011  mover-bound cores 1%
+  (a)+(b) upper bounds together                              window 1.718  gain +0.017  mover-bound cores 0%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.735  gain +0.000  mover-bound cores 1%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.735  gain +0.000  mover-bound cores 1%
+  slowest-core TRISC 1.669, mover busy max B 1.687 N 1.618, imbalance |B-N| mean 0.077 p95 0.179
+
+== iter 227 projection
+  base                                                       window 1.604  mover-bound cores 30%
+  TRISC free (mover floor only)                              window 1.577  gain +0.027  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.569  gain +0.035  mover-bound cores 18%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.536  gain +0.068  mover-bound cores 10%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.571  gain +0.034  mover-bound cores 20%
+  (a)+(b) upper bounds together                              window 1.508  gain +0.096  mover-bound cores 6%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.512  gain +0.093  mover-bound cores 5%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.466  gain +0.138  mover-bound cores 0%
+  slowest-core TRISC 1.418, mover busy max B 1.644 N 1.577, imbalance |B-N| mean 0.077 p95 0.176
+### LEAD=0.10
+core-launches 6600; TRISC_1 wall mean 1.655; minus back-pressure: median 1.634 p5 1.622 p95 1.665
+mover busy mean B 1.210 N 1.202; max B 1.687 N 1.618
+fit: lead 0.100 ms, TRISC tail 0.050 ms, mean |err| 0.0190 ms
+measured window 1.772; model window 1.724
+
+== iter 222 + SKIP_RGB (measured base)
+  base                                                       window 1.724  mover-bound cores 0%
+  TRISC free (mover floor only)                              window 1.569  gain +0.156  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.718  gain +0.006  mover-bound cores 0%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.718  gain +0.006  mover-bound cores 0%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.719  gain +0.006  mover-bound cores 0%
+  (a)+(b) upper bounds together                              window 1.718  gain +0.006  mover-bound cores 0%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.724  gain +0.000  mover-bound cores 0%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.724  gain +0.000  mover-bound cores 0%
+  slowest-core TRISC 1.669, mover busy max B 1.687 N 1.618, imbalance |B-N| mean 0.077 p95 0.179
+
+== iter 227 projection
+  base                                                       window 1.569  mover-bound cores 18%
+  TRISC free (mover floor only)                              window 1.527  gain +0.042  mover-bound cores 100%
+  (a) batch writes, fl x0.5                                  window 1.536  gain +0.033  mover-bound cores 9%
+  (a) batch writes, fl -> 0 (upper bound)                    window 1.505  gain +0.064  mover-bound cores 4%
+  (b) survivor-count deal, perfect balance (upper bound)     window 1.537  gain +0.032  mover-bound cores 11%
+  (a)+(b) upper bounds together                              window 1.485  gain +0.084  mover-bound cores 2%
+  (ref) rec at 90 cyc/survivor (not this lever)              window 1.487  gain +0.082  mover-bound cores 2%
+  (ref) rec at 70 cyc/survivor (not this lever)              window 1.466  gain +0.103  mover-bound cores 0%
+  slowest-core TRISC 1.418, mover busy max B 1.644 N 1.577, imbalance |B-N| mean 0.077 p95 0.176
