@@ -8,6 +8,7 @@
 #include "img_pack_u8.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
+#include "tile_window.h"
 
 #ifndef BLEND_RTA_BASE
 #define BLEND_RTA_BASE 32

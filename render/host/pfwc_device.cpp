@@ -29,6 +29,7 @@
 #include "env_config.h"
 #include "gather_visible.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
+#include "../kernels/dataflow/tile_window.h"
 #include "../kernels/dataflow/pfwc_wsplit.h"
 #include "host_profile.h"
 #include "stage_timers.h"
@@ -845,6 +846,11 @@ double pfwc_tt(
             }
         }
     }
+    if (vis != nullptr && vis->windowed() && !fuse_on) {
+        // Task #623: only the fused writer clips to a tile window.
+        throw std::runtime_error("[gsplat_tt::pfwc] GSPLAT_TT_SPLIT=1 needs the fused pfwc "
+                                 "(GSPLAT_TT_PFWC_FUSE=1), which did not run");
+    }
     if (vis != nullptr && env_config::pfwc_rec32() && !fuse_on) {
         // Task #467: the emit reads 32 B records, which only the fused split writer makes.
         throw std::runtime_error("[gsplat_tt::pfwc] GSPLAT_TT_PFWC_REC32=1 needs the fused pfwc "
@@ -1081,8 +1087,17 @@ double pfwc_tt(
             fw.push_back(num_cores);
             fw.push_back(static_cast<uint32_t>(N));
             for (uint32_t k = 0; k < 5; ++k) fw.push_back(vis_bits[k]);
-            fw.push_back(static_cast<uint32_t>(vis->tiles_x));
-            fw.push_back(static_cast<uint32_t>(vis->tiles_y));
+            if (vis->windowed()) {  // task #623: the tile window rides in args 18/19
+                fw.push_back(tile_window::pack_pfwc_x(static_cast<uint32_t>(vis->tiles_x),
+                                                      static_cast<uint32_t>(vis->tile_x0),
+                                                      static_cast<uint32_t>(vis->win_w())));
+                fw.push_back(tile_window::pack_pfwc_y(static_cast<uint32_t>(vis->tiles_y),
+                                                      static_cast<uint32_t>(vis->tile_y0),
+                                                      static_cast<uint32_t>(vis->win_h())));
+            } else {
+                fw.push_back(static_cast<uint32_t>(vis->tiles_x));
+                fw.push_back(static_cast<uint32_t>(vis->tiles_y));
+            }
             fw.push_back(static_cast<uint32_t>(vis->tile_size));
             fw.push_back(pfwc_fuse::seg_base(num_tiles, num_cores, c));
             fw.push_back(c);
@@ -1157,8 +1172,9 @@ double pfwc_tt(
         g_pfwc_ran_fused = true;
         g_fuse_info.num_cores = num_cores;
         g_fuse_info.num_tiles = num_tiles;
-        g_fuse_info.tiles_x = static_cast<uint32_t>(vis->tiles_x);
-        g_fuse_info.screen_tiles = static_cast<uint32_t>(vis->tiles_x * vis->tiles_y);
+        // Task #623: downstream tiles are the window's (the full screen when off).
+        g_fuse_info.tiles_x = static_cast<uint32_t>(vis->win_w());
+        g_fuse_info.screen_tiles = static_cast<uint32_t>(vis->win_w() * vis->win_h());
         T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
         T.compute_ms = 0.0;
         T.download_ms = 0.0;
