@@ -43,6 +43,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "bz_prof.h"
 
 // Task #280 (GSPLAT_TT_MATBLEND_FUSE): in the fused mat+blend program this body
 // runs after the mat mover on the same RISC (matblend_ncrisc.cpp), with its CB
@@ -121,6 +122,10 @@ inline void mb_cb_commit_fence() {
 
 void kernel_main() {
     DeviceZoneScopedN("tile_blend_load");
+    // t630: per-phase accumulators (GSPLAT_TT_BZ_PROF=1 under the profiler).
+    BZ_DO(const uint32_t bz_t0 = bz_now(); uint32_t bz_setup = 0, bz_claim = 0, bz_meta = 0,
+          bz_ready = 0, bz_rdyn = 0, bz_bulkw = 0, bz_dma = 0, bz_cntw = 0, bz_qw = 0,
+          bz_nt = 0, bz_nsc = 0;)
     // RESIDENT blend (GSPLAT_TT_RESIDENT_BLEND): attrs gathered straight from
     // the device-resident per-component SoA proj_m_* buffers by id, candidate
     // ids consumed from resident sort_sorted_ids, per-tile [start,end) from
@@ -263,6 +268,7 @@ void kernel_main() {
     noc_async_read_barrier();
     cb_push_back(CB_XRAMP, 1);
     cb_push_back(CB_YRAMP, 1);
+    BZ_DO(bz_setup = bz_now() - bz_t0;)
 
 
     const uint64_t ctr_noc_addr = get_noc_addr(ctr_noc_x, ctr_noc_y, get_semaphore(ctr_sem_id));
@@ -280,9 +286,11 @@ void kernel_main() {
         // space; the first subchunk's reserve below then returns at once.
         {
             BLEND_PZ("rd_bulk_wait");
+            BZ_ACC(bz_bulkw);
             cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
         }
 #endif
+        BZ_DO(const uint32_t bz_c0 = bz_now();)
         ret_ptr[0] = 0xFFFFFFFFu;
         asm volatile("fence" ::: "memory");
         noc_fast_atomic_increment<noc_mode, /*program_ret_addr=*/true>(
@@ -297,6 +305,7 @@ void kernel_main() {
                 claim = ret_ptr[0];
             } while (claim == 0xFFFFFFFFu);
         }
+        BZ_DO(bz_claim += bz_now() - bz_c0;)
         if (claim >= total_tiles) {
             break;
         }
@@ -318,6 +327,7 @@ void kernel_main() {
             }
         }
         const uint32_t flat = lpt_meta[core_sel * 2u] + rank;
+        BZ_DO(const uint32_t bz_m0 = bz_now(); ++bz_nt;)
         {
             BLEND_PZ("rd_tid");
             noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
@@ -325,7 +335,9 @@ void kernel_main() {
         }
         const uint32_t tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
         // Hand the tile id to the writer (output address) before its data.
+        BZ_DO(const uint32_t bz_q0 = bz_now();)
         cb_reserve_back(CB_TILE_Q, 1);
+        BZ_DO(bz_qw += bz_now() - bz_q0;)
         reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = tile_id;
         cb_push_back(CB_TILE_Q, 1);
         const uint32_t tx = tile_id % tiles_x;
@@ -379,6 +391,7 @@ void kernel_main() {
                 num_subchunks = 1u;
             }
         }
+        BZ_DO(bz_meta += bz_now() - bz_m0;)
 
         for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
             const uint32_t sc_off = sc * MB_BUCKET_FIT;
@@ -389,8 +402,10 @@ void kernel_main() {
             // M1b: read payload_page for ALL subchunks (single-subchunk too) so
             // every tile can consume the materialized slab via process_tile_l1_blend.
             uint32_t payload_page = 0;
+            BZ_DO(++bz_nsc;)
             {
                 BLEND_PZ("rd_dir");
+                BZ_ACC(bz_meta);
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -411,12 +426,14 @@ void kernel_main() {
                 // bound only avoids a device hang if a flag were never written
                 // (the image would then be wrong, which the md5 check catches).
                 BLEND_PZ("rd_ready");
+                BZ_ACC(bz_ready);
                 const uint32_t scr = get_write_ptr(CB_SCR_IDS);
                 auto fp = reinterpret_cast<volatile uint32_t*>(scr);
                 for (uint32_t it = 0; it < (1u << 22); ++it) {
                     noc_async_read_tile(tile_id * 8u + sc, ready_acc, scr);
                     noc_async_read_barrier();
                     invalidate_l1_cache();
+                    BZ_DO(++bz_rdyn;)
                     if (fp[0] == ready_epoch) break;
                 }
             }
@@ -430,10 +447,12 @@ void kernel_main() {
             DeviceZoneScopedN("rd_l1_bulk");
             {
                 BLEND_PZ("rd_bulk_wait");
+                BZ_ACC(bz_bulkw);
                 cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
             }
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
+                BZ_ACC(bz_dma);
                 const uint32_t page0 = payload_page;
                 uint32_t pp = 0;
                 while (pp < rec_pages) {
@@ -450,7 +469,7 @@ void kernel_main() {
             mb_cb_commit_fence();
             cb_push_back(CB_BUCKET_BULK, BULK_REC_SLOT);
 
-            cb_reserve_back(CB_MB_COUNTS, 1);
+            { BZ_ACC(bz_cntw); cb_reserve_back(CB_MB_COUNTS, 1); }
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(
                     get_write_ptr(CB_MB_COUNTS));
@@ -460,7 +479,7 @@ void kernel_main() {
             cb_push_back(CB_MB_COUNTS, 1);
             continue;
         }
-        cb_reserve_back(CB_MB_COUNTS, 1);
+        { BZ_ACC(bz_cntw); cb_reserve_back(CB_MB_COUNTS, 1); }
         {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
             cnt_ptr[0] = L_sub;
@@ -469,7 +488,7 @@ void kernel_main() {
         cb_push_back(CB_MB_COUNTS, 1);
         }  // end subchunk loop
     }
-    cb_reserve_back(CB_MB_COUNTS, 1);
+    { BZ_ACC(bz_cntw); cb_reserve_back(CB_MB_COUNTS, 1); }
     {
         auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
         cnt_ptr[0] = 0u;
@@ -479,4 +498,18 @@ void kernel_main() {
     cb_reserve_back(CB_TILE_Q, 1);
     reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = 0xFFFFFFFFu;
     cb_push_back(CB_TILE_Q, 1);
+#if BZ_ON
+    DeviceTimestampedData("bz_r_tot", bz_now() - bz_t0);
+    DeviceTimestampedData("bz_r_setup", bz_setup);
+    DeviceTimestampedData("bz_r_claim", bz_claim);
+    DeviceTimestampedData("bz_r_meta", bz_meta);
+    DeviceTimestampedData("bz_r_ready", bz_ready);
+    DeviceTimestampedData("bz_r_rdyn", bz_rdyn);
+    DeviceTimestampedData("bz_r_bulkw", bz_bulkw);
+    DeviceTimestampedData("bz_r_dma", bz_dma);
+    DeviceTimestampedData("bz_r_cntw", bz_cntw);
+    DeviceTimestampedData("bz_r_qw", bz_qw);
+    DeviceTimestampedData("bz_r_nt", bz_nt);
+    DeviceTimestampedData("bz_r_nsc", bz_nsc);
+#endif
 }

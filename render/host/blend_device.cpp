@@ -330,6 +330,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (gsplat_tt::env_config::blend_late_claim()) {
         reader_defines["BLEND_LATE_CLAIM"] = "1";
     }
+    // Task #630: GSPLAT_TT_BZ_PROF=1 adds per-phase blend counters (profiler
+    // builds only); GSPLAT_TT_FZ_OFF=1 drops the fz_* mat counters to save code.
+    std::map<std::string, std::string> bz_defs;
+    if (const char* e = std::getenv("GSPLAT_TT_BZ_PROF"); e != nullptr && e[0] == '1') bz_defs["BZ_PROF"] = "1";
+    if (const char* e = std::getenv("GSPLAT_TT_FZ_OFF"); e != nullptr && e[0] == '1') bz_defs["FZ_OFF"] = "1";
+    for (const auto& kv : bz_defs) {
+        reader_defines[kv.first] = kv.second;
+        writer_defines[kv.first] = kv.second;
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -382,6 +391,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     }
 
     std::map<std::string, std::string> compute_defines;
+    for (const auto& kv : bz_defs) compute_defines[kv.first] = kv.second;
     if (blend_prof_on) {
         compute_defines["BLEND_PROF"] = blend_prof_level;
     }

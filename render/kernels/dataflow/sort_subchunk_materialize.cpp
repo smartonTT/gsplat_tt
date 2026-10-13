@@ -171,7 +171,7 @@ inline void read_bucket(const Acc& acc, uint32_t page0, uint32_t n, uint32_t buc
 // Task #319: profiler builds only (PROFILE_KERNEL): per-mover cycle counters of
 // the mat phase, reported once at the end as "fz_*" timestamped-data markers
 // (opt/profiler/fill_zones.py). Untraced builds compile none of it.
-#if defined(PROFILE_KERNEL)
+#if defined(PROFILE_KERNEL) && !defined(FZ_OFF)  // t630: GSPLAT_TT_FZ_OFF=1 drops them (code size)
 #define FZ_PROF 1
 inline uint32_t fz_now() { return *reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L); }
 // dw: done-word wait, dwn: waits, dwb: waits >= 1 us, dwm: longest wait,

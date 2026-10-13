@@ -36,6 +36,7 @@
 // 21-bit-accurate _sfpu_exp_21f_bf16_ so we track the fp32 CPU oracle to >=60 dB.
 
 #include <cstdint>
+#include "../dataflow/bz_prof.h"
 
 #include "api/compute/common.h"
 #include "tools/profiler/kernel_profiler.hpp"  // DeviceZoneScopedN (compute include-order: define before kernel_main)
@@ -1709,6 +1710,9 @@ inline void process_tile_l1_blend(
 
 void kernel_main() {
     DeviceZoneScopedN("tile_blend_sfpu");
+    // t630: per-phase accumulators, MATH thread only (GSPLAT_TT_BZ_PROF=1).
+    BZ_DO(const uint32_t bz_t0 = bz_now(); uint32_t bz_setup = 0, bz_cntw = 0, bz_cntw1 = 0,
+          bz_init = 0, bz_blend = 0, bz_emit = 0, bz_nt = 0, bz_nsc = 0;)
     // Runtime-arg 0: saturation epsilon bits (viewer slider). 0 => keep the
     // compile-time default (kBlendTEps) so non-forwarding callers are unchanged.
     {
@@ -1742,13 +1746,16 @@ void kernel_main() {
     // Ramps are constant across tiles; the reader streams them once per core.
     cb_wait_front(CB_XRAMP, 1);
     cb_wait_front(CB_YRAMP, 1);
+    BZ_DO(bz_setup = bz_now() - bz_t0;)
 
     // Task #60: num_tiles == 0xFFFFFFFF => the reader claims tiles dynamically
     // and ends the stream with an MB_FLAG_DONE counts page.
     const bool dynamic = num_tiles == 0xFFFFFFFFu;
     for (uint32_t t = 0; dynamic || t < num_tiles; t++) {
         if (dynamic) {
+            BZ_DO(const uint32_t bz_w0 = bz_now();)
             cb_wait_front(CB_MB_COUNTS, 1);
+            BZ_DO({ const uint32_t d = bz_now() - bz_w0; bz_cntw += d; if (bz_nt == 0u) bz_cntw1 += d; })
             const uint32_t f0 =
                 reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0))[1];
             if ((f0 & MB_FLAG_DONE) != 0u) {
@@ -1765,6 +1772,8 @@ void kernel_main() {
         while (!tile_done) {
             {
                 BLEND_PZ_WAIT("cmp_wait_cnt");
+                BZ_ACC(bz_cntw);
+                BZ_DO(++bz_nsc;)
                 cb_wait_front(CB_MB_COUNTS, 1);
             }
             uint32_t num_g;
@@ -1780,6 +1789,8 @@ void kernel_main() {
 
             if (!continue_blend) {
                 BLEND_PZ("cmp_init");
+                BZ_ACC(bz_init);
+                BZ_DO(++bz_nt;)
                 TC_PART0();
                 tile_regs_acquire();
                 tile_regs_held = true;
@@ -1799,10 +1810,14 @@ void kernel_main() {
             // M1: ALL tiles (single + fat) consume the materialized L1 slab.
             // Empty tiles (num_g==0) early-return inside process_tile_l1_blend.
             (void)l1_bulk;
-            process_tile_l1_blend(num_g, live_mb_mask, g_seen);
+            {
+                BZ_ACC(bz_blend);
+                process_tile_l1_blend(num_g, live_mb_mask, g_seen);
+            }
 
             if (emit_tile) {
                 BLEND_PZ("cmp_emit");
+                BZ_ACC(bz_emit);
                 TC_PART0();
                 tile_regs_commit();
                 tile_regs_wait();
@@ -1827,4 +1842,15 @@ void kernel_main() {
     cb_pop_front(CB_YRAMP, 1);
     MB_STATS_EMIT();
     TC_DUMP();
+#if BZ_ON
+    DeviceTimestampedData("bz_c_tot", bz_now() - bz_t0);
+    DeviceTimestampedData("bz_c_setup", bz_setup);
+    DeviceTimestampedData("bz_c_cntw", bz_cntw);
+    DeviceTimestampedData("bz_c_cntw1", bz_cntw1);
+    DeviceTimestampedData("bz_c_init", bz_init);
+    DeviceTimestampedData("bz_c_blend", bz_blend);
+    DeviceTimestampedData("bz_c_emit", bz_emit);
+    DeviceTimestampedData("bz_c_nt", bz_nt);
+    DeviceTimestampedData("bz_c_nsc", bz_nsc);
+#endif
 }

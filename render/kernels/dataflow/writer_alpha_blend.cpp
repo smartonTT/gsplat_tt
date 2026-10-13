@@ -6,6 +6,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "img_pack_u8.h"
+#include "bz_prof.h"
 
 // Task #280: shifted ids / compile-time args in the fused mat+blend program.
 #ifndef BLEND_CB_BASE
@@ -67,6 +68,9 @@ void kernel_main() {
     const uint32_t core_index    = get_arg_val<uint32_t>(3);
     const uint32_t tiles_x       = get_arg_val<uint32_t>(4);
     const uint32_t pitch         = get_arg_val<uint32_t>(5);
+    // t630: per-phase accumulators (GSPLAT_TT_BZ_PROF=1 under the profiler).
+    BZ_DO(const uint32_t bz_t0 = bz_now(); uint32_t bz_pre = 0, bz_qw = 0, bz_outw = 0,
+          bz_pack = 0, bz_wr = 0, bz_bar = 0, bz_nt = 0, bz_npoll = 0;)
 
     constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
     constexpr uint32_t CB_IMG_U8 = BLEND_CB_BASE + 8;  // 32 x 96 B RGB staging block
@@ -104,8 +108,10 @@ void kernel_main() {
         // 3-tile batch never straddles a CB wrap.
         {
             BLEND_PZ("wr_wait_out");
+            BZ_ACC(bz_outw);
             cb_wait_front(CB_COLOR_OUT, 3);
         }
+        BZ_DO(++bz_nt; const uint32_t bz_p0 = bz_now();)
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
         // The previous tile's rows must have left the staging block (they had
         // a whole blend tile to drain, so this does not wait in practice).
@@ -117,6 +123,7 @@ void kernel_main() {
             read_ptr += tile_bytes;
         }
         cb_pop_front(CB_COLOR_OUT, 3);
+        BZ_DO(const uint32_t bz_p1 = bz_now(); bz_pack += bz_p1 - bz_p0;)
 
         const uint32_t row0 = ty * 32u;
         const uint32_t col_off = tx * ROW_BYTES;
@@ -137,6 +144,7 @@ void kernel_main() {
                             out.get_noc_addr(row0 + i, col_off), ROW_BYTES);
         }
 #endif
+        BZ_DO(bz_wr += bz_now() - bz_p1;)
     };
     bool ended = false;
 #if defined(BLEND_WRITER_PRE)
@@ -154,12 +162,18 @@ void kernel_main() {
         }
         if (!cb_pages_available_at_front(CB_COLOR_OUT, 3)) return;
         cb_pop_front(CB_TILE_Q, 1);
+        BZ_DO(++bz_npoll;)
         write_tile(screen_tile);
     };
+    BZ_DO(const uint32_t bz_pr0 = bz_now();)
     BLEND_WRITER_PRE(poll);
+    BZ_DO(bz_pre = bz_now() - bz_pr0;)
 #endif
     while (!ended) {
-        cb_wait_front(CB_TILE_Q, 1);
+        {
+            BZ_ACC(bz_qw);
+            cb_wait_front(CB_TILE_Q, 1);
+        }
         const uint32_t screen_tile =
             reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
         cb_pop_front(CB_TILE_Q, 1);
@@ -168,5 +182,19 @@ void kernel_main() {
         }
         write_tile(screen_tile);
     }
-    noc_async_write_barrier();
+    {
+        BZ_ACC(bz_bar);
+        noc_async_write_barrier();
+    }
+#if BZ_ON
+    DeviceTimestampedData("bz_w_tot", bz_now() - bz_t0);
+    DeviceTimestampedData("bz_w_pre", bz_pre);
+    DeviceTimestampedData("bz_w_npoll", bz_npoll);
+    DeviceTimestampedData("bz_w_qw", bz_qw);
+    DeviceTimestampedData("bz_w_outw", bz_outw);
+    DeviceTimestampedData("bz_w_pack", bz_pack);
+    DeviceTimestampedData("bz_w_wr", bz_wr);
+    DeviceTimestampedData("bz_w_bar", bz_bar);
+    DeviceTimestampedData("bz_w_nt", bz_nt);
+#endif
 }

@@ -57,7 +57,7 @@ inline uint32_t n_batches(uint32_t n) { return (n + COEFF_BATCH - 1u) / COEFF_BA
 // (opt/profiler/fill_zones.py). UNPACK: pick_job wait, fill_batch CB wait and
 // copy, records. MATH: mailbox wait, copy_tile, band_batch. PACK: mailbox wait,
 // tile_regs_wait, pack, patch_batch wait on the packer and patch loop.
-#if defined(PROFILE_KERNEL)
+#if defined(PROFILE_KERNEL) && !defined(FZ_OFF)  // t630: GSPLAT_TT_FZ_OFF=1 drops them (code size)
 #define FZ_PROF 1
 inline uint32_t fz_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
 uint32_t fz_a, fz_b;  // fill_batch: CB wait / copy; patch_batch: packer wait / patch
