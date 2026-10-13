@@ -7,8 +7,12 @@ Per view (pfwc program only):
   slowest core = the core whose last RISC ends latest
   busy        = that RISC's KERNEL zone length (FW length if no KERNEL zone) in the pfwc program
   end         = that RISC's FW end - window start
-  setter      = the RISC that ends last on the slowest core
+  setter      = the RISC whose KERNEL zone ends last on the slowest core (BRISC-FW always ends
+                last: it waits for the other RISCs, so FW ends do not name the setter)
 Also the mean over cores per RISC and, over all cores, how often each RISC is the last to end.
+STEPCYC captures (GSPLAT_TT_PFWC_STEPCYC=1) add the movers' pfwc_ws split (t484/t598 names:
+n wall wait cls pfx rec opn tail rd fl m; wait = the color reads and the 10 compute tiles) and
+the TRISCs' pfwc_pc wall and input wait, for the slowest core and the mean core.
 Usage: pfwc608.py DEV.csv[.gz] [--keep 5] [--label X]
 """
 import argparse
@@ -30,8 +34,11 @@ def ms(c):
     return c / CYC_MS
 
 
+WS = "n wall wait cls pfx rec opn tail rd fl m".split()
+
+
 def load(path):
-    iv, stack = defaultdict(list), {}
+    iv, stack, ts = defaultdict(list), {}, defaultdict(list)
     op = gzip.open if path.endswith(".gz") else open
     with op(path, "rt") as f:
         next(f)
@@ -40,13 +47,19 @@ def load(path):
             if len(p) < 12:
                 continue
             c, r, t, z, ty = (int(p[1]), int(p[2])), p[3].strip(), int(p[5]), p[10].strip(), p[11].strip()
-            if ty == "ZONE_START":
+            if ty == "TS_DATA" and z in ("pfwc_ws", "pfwc_pc"):
+                v = int(p[6])
+                i, val = (v >> 32) & 15, v & 0xFFFFFFFF
+                if i == 0 or not ts[(c, r, z)]:
+                    ts[(c, r, z)].append({})
+                ts[(c, r, z)][-1][i] = val
+            elif ty == "ZONE_START":
                 stack[(c, r, z)] = t
             elif ty == "ZONE_END":
                 s = stack.pop((c, r, z), None)
                 if s is not None:
                     iv[(c, r)].append((z, s, t))
-    return iv
+    return iv, ts
 
 
 def main():
@@ -55,7 +68,7 @@ def main():
     ap.add_argument("--keep", type=int, default=5)
     ap.add_argument("--label", default="")
     a = ap.parse_args()
-    iv = load(a.csv)
+    iv, ts = load(a.csv)
     cores = sorted({c for c, _ in iv})
     # per[(view, core)][risc] = (fw_s, fw_e, busy)
     per = defaultdict(dict)
@@ -78,8 +91,10 @@ def main():
                 if k < first or k % NP != 0:
                     continue
                 i = bisect.bisect_left(ks, s)
-                busy = sum(ke - kst for kst, ke in kz[i:] if ke <= e and kst >= s) or (e - s)
-                per[((k - first) // NP, c)][r] = (s, e, busy)
+                ins = [(kst, ke) for kst, ke in kz[i:i + 4] if ke <= e and kst >= s]
+                busy = sum(ke - kst for kst, ke in ins) or (e - s)
+                kend = max((ke for _, ke in ins), default=e)
+                per[((k - first) // NP, c)][r] = (s, e, busy, kend)
     print(f"# {a.label} {a.csv}: {len(cores)} cores, {nprog} programs/core, last {a.keep} views, pfwc only")
     hdr = "view  window | slowest core | " + " ".join(f"{r:>8}" for r in RISCS) + " | setter"
     print(hdr)
@@ -90,31 +105,57 @@ def main():
         w0 = min(x[0] for rr in d.values() for x in rr.values())
         w1 = max(x[1] for rr in d.values() for x in rr.values())
         for c, rr in d.items():
-            last_cnt[max(rr, key=lambda r: rr[r][1])] += 1
+            last_cnt[max(rr, key=lambda r: rr[r][3])] += 1
             for r in RISCS:
                 if r in rr:
                     agg[("mean", r)].append(ms(rr[r][2]))
         cs = max(d, key=lambda c: max(x[1] for x in d[c].values()))
+        agg["slow_core"].append(cs)
         rr = d[cs]
-        setter = max(rr, key=lambda r: rr[r][1])
+        setter = max(rr, key=lambda r: rr[r][3])
         agg["window"].append(ms(w1 - w0))
         for r in RISCS:
             agg[("slow_busy", r)].append(ms(rr[r][2]))
-            agg[("slow_end", r)].append(ms(rr[r][1] - w0))
+            agg[("slow_end", r)].append(ms(rr[r][3] - w0))
         agg["setter"].append(setter)
         print(f"{v:>4} {ms(w1 - w0):7.3f} | {str(cs):>12} | "
               + " ".join(f"{ms(rr[r][2]):8.3f}" for r in RISCS) + f" | {setter}")
         print(f"{'':>4} {'end':>7} | {'':>12} | "
-              + " ".join(f"{ms(rr[r][1] - w0):8.3f}" for r in RISCS))
+              + " ".join(f"{ms(rr[r][3] - w0):8.3f}" for r in RISCS))
     n = a.keep
     mean = lambda k: sum(agg[k]) / len(agg[k])
     print(f"MEAN window {mean('window'):.3f} ms; setter per view: {Counter(agg['setter']).most_common()}")
     print("slowest-core busy  " + " ".join(f"{r}={mean(('slow_busy', r)):.3f}" for r in RISCS))
-    print("slowest-core end   " + " ".join(f"{r}={mean(('slow_end', r)):.3f}" for r in RISCS))
+    print("slowest-core kernel end (from window start) " + " ".join(f"{r}={mean(('slow_end', r)):.3f}" for r in RISCS))
     print("mean-core busy     " + " ".join(f"{r}={mean(('mean', r)):.3f}" for r in RISCS))
     tot = sum(last_cnt.values())
-    print("last RISC to end, all cores x views: "
+    print("last KERNEL to end, all cores x views: "
           + " ".join(f"{r}={last_cnt[r] / tot:.0%}" for r in RISCS) + f" (n={tot}, views={n})")
+    if not ts:
+        return
+    print("STEPCYC (ms; slowest core per view, mean over the 5 views | mean core):")
+    cores_ts = sorted({c for c, _, _ in ts})
+    for r, z, names in (("BRISC", "pfwc_ws", WS), ("NCRISC", "pfwc_ws", WS)):
+        rows = {c: ts[(c, r, z)][-a.keep:] for c in cores_ts if len(ts.get((c, r, z), [])) >= a.keep}
+        if not rows:
+            continue
+        for i, nm in enumerate(names):
+            if nm in ("n", "m"):
+                continue
+            slow = sum(rows[c][v].get(i, 0) for v, c in enumerate(agg["slow_core"]) if c in rows) / n
+            allc = sum(x.get(i, 0) for L in rows.values() for x in L) / (len(rows) * a.keep)
+            print(f"  {r:6s} {nm:5s} {ms(slow):.3f} | {ms(allc):.3f}")
+        sm = sum(rows[c][v].get(10, 0) for v, c in enumerate(agg["slow_core"]) if c in rows) / n
+        print(f"  {r:6s} survivors/launch slowest core {sm:.0f}")
+    for r in ("TRISC_0", "TRISC_1", "TRISC_2"):
+        rows = {c: ts[(c, r, "pfwc_pc")][-a.keep:] for c in cores_ts
+                if len(ts.get((c, r, "pfwc_pc"), [])) >= a.keep}
+        if not rows:
+            continue
+        for i, nm in ((1, "wall"), (3, "in_wait"), (15, "vis+pops")):
+            slow = sum(rows[c][v].get(i, 0) for v, c in enumerate(agg["slow_core"]) if c in rows) / n
+            allc = sum(x.get(i, 0) for L in rows.values() for x in L) / (len(rows) * a.keep)
+            print(f"  {r:7s} {nm:8s} {ms(slow):.3f} | {ms(allc):.3f}")
 
 
 if __name__ == "__main__":
