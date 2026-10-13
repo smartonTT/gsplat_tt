@@ -35,6 +35,9 @@
 #ifndef OL_EMIT_PROF
 #define OL_EMIT_PROF 0
 #endif
+#ifndef OL_ABS_MEANS_ABL
+#define OL_ABS_MEANS_ABL 0  // task #634 timing gate only: 1 = no origin subtract, 2 = control
+#endif
 
 namespace {
 
@@ -142,6 +145,15 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             } while (fl[t] + (D - R) < c);
             TP_ADD(TP_WFL, t0);
         }
+#if OL_ABS_MEANS_ABL == 1
+        // Task #634 ablation gate (host env GSPLAT_TT_OL_ABS_MEANS_ABL=1): copy the
+        // brec means as is, no tile-origin subtract. Wrong output; timing only.
+        const uint32_t mx = mxb;
+        myt = myb;
+        (void)ty_c;
+        (void)sh;
+        (void)msk;
+#else
         const uint32_t kx = (t & msk) * L1_TILE_SIZE;
         uint32_t mx;
         if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
@@ -151,6 +163,14 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             const uint32_t ky = tyi * L1_TILE_SIZE;
             if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
         }
+#if OL_ABS_MEANS_ABL == 2
+        // Task #634 control arm (=2): the subtracts still run, but the records carry
+        // the same absolute means as arm 1, so downstream work matches arm 1.
+        asm volatile("" ::"r"(mx), "r"(myt));
+        mx = mxb;
+        myt = myb;
+#endif
+#endif
         auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * D + (c & (D - 1u))) * REC_BYTES);
         d[0] = cov0;
         d[1] = cov1;

@@ -1085,6 +1085,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
                                                     {"OL_RING_DEPTH", std::to_string(depth) + "u"}};
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         if (rec32) tdef["PFWC_REC32"] = "1";
+        // Task #634 timing gate only (wrong output): 1 = emit skips the tile-origin
+        // subtract, 2 = control (subtracts run, same absolute means written as 1).
+        if (const char* e = std::getenv("GSPLAT_TT_OL_ABS_MEANS_ABL"); e != nullptr && (std::atoi(e) == 1 || std::atoi(e) == 2)) {
+            tdef["OL_ABS_MEANS_ABL"] = std::to_string(std::atoi(e));
+        }
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
                      ComputeConfig{.defines = tdef});
     }
