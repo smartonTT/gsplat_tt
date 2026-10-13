@@ -1,0 +1,12 @@
+================ BUILD ID ================
+=========================================
+=== shot ttw-t555-hero sha=8231f5d env: GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1 03:25:10
+run rc=0
+      1 TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.007 tile_assign=0.008 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.8 p50_ms=12.0 min_ms=6.2 max_ms=15.0 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/shot-ttw-t555-hero
+      1 STAGES n=30 head=0.007 project=0.347 tile_assign=0.008 sort=1.035 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.015 d2h=0.010 assemble=0.000 tail=0.006 xview=0.264 | sum=11.691 view_total=11.694 resid_in_view=+0.003 avg_frame_ms=11.775 resid_vs_frame=+0.084 xview_hits=29 xview_misses=0
+      1 SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.085 upload=0.000 bin_emit=0.499 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.366 publish_wait=0.000 mat=0.111 pre=0.002 log=0.010 cont_prep=0.036 cont_rtargs=0.167 cont_other=-0.246 | sum=1.033 sort=1.035 resid=+0.002
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.007 pfwc_rtargs=0.106 pfwc_chunkcull=0.000 pfwc_enqueue=0.059 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.335 gather_result=0.000 | sum=0.511 project=0.347 resid=-0.165
+VIEWS=30 SWEEP_MD5=906e0435
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/ttw-t555/hero.png diff=opt/metal-screenshots/ttw-t555/hero_diff10.png commit=8231f5db env='GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1' size=1024x1024 sweep_md5=906e0435 ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.51 golden_match=true max_lsb_vs_golden=0

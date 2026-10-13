@@ -1,0 +1,32 @@
+[ttw 2026-10-12T20:09:46-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T20:09:46-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T20:09:46-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T20:09:46-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T20:09:46-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T20:09:46-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T20:09:46-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T20:09:46-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T20:09:46-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T20:09:46-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T20:09:46-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T20:09:46-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=f3b95f08 bin=e1139f65fd9fd763 t555 8231f5db check fuse (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t555-dump  timeout=590s  worry=600s  ts=2026-10-12T20:09:46-0700
+cmd: T=/localdev/smarton/gstt2-t513 TRIAGE=0 RUN_TIMEOUT=150 bash /localdev/smarton/gstt2-t513/docs/b4-step3b-t555/remote_ab.sh 0 dump fuse
+-----------------------------------------
+=== r0-dump-fuse 8231f5d env=[GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1] 03:09:47 load=9.46
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 OL_TOWN_NT=1 cb_bytes/mover=567680 movers=1 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.7 p50_ms=11.7 min_ms=6.3 max_ms=15.0 n_views=30 warmup_s=11.1 out=/localdev/smarton/gstt2-t513/tmp/t555-r0-dump-fuse
+TTW_TIMING ms_view=11.679
+STAGES n=30 head=0.007 project=0.349 tile_assign=0.009 sort=0.964 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.988 d2h=0.009 assemble=0.000 tail=0.006 xview=0.259 | sum=11.591 view_total=11.594 resid_in_view=+0.003 avg_frame_ms=11.679 resid_vs_frame=+0.088 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 0 dump 03:10:13
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t573/tmp/ttw-state/logs/t555-dump-20261012-200946.log
