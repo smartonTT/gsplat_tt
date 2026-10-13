@@ -20,6 +20,7 @@
 #include "dispatch_select.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
+#include "htl.h"
 #include "stage_timers.h"
 #include "gather_visible.h"
 #include "vis_mode.h"
@@ -44,6 +45,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -145,6 +147,16 @@ struct TileAssignDeviceContext {
     // fold_ran = the blend got them all, so the next fused K2 is skipped.
     bool fold_prepared = false, fold_ran = false;
     uint32_t fold_cores = 0, fold_views = 0, fold_skipped = 0;
+    // Task #628 (L-A, GSPLAT_TT_LA_PREFETCH=1): the next view's proj_M read and
+    // early sort, enqueued right behind this view's mat+blend (fold hook); the
+    // next tile_assign_fused_k2 only waits on la_done and finishes with these.
+    bool la_pending = false;
+    std::array<uint32_t, 4> la_key{};
+    std::vector<uint32_t> la_mread;
+    std::vector<uint64_t> la_acc;
+    std::optional<distributed::MeshEvent> la_done;
+    bool la_fold = false, la_early = false, la_cq1 = false;
+    uint32_t la_row_pages = 0, la_permille = 0, la_p_cap = 0, la_views = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
 
@@ -911,12 +923,100 @@ void fold_compare(TileAssignDeviceContext& ctx, const std::shared_ptr<distribute
                  P, ok ? "OK" : "MISMATCH", ctx.b4a_verify_bad, ctx.b4a_verified);
 }
 
+// The end of a fused K2 once proj_M is read (mread): publish M / P and the
+// count rows for the one-launch sort. Task #628: also the L-A prefetch's end.
+static bool fused_k2_finish(TileAssignDeviceContext* ctx, const std::vector<uint32_t>& mread,
+                            bool fold, bool early, bool cq1_used, uint32_t num_cores,
+                            uint32_t row_pages, uint32_t permille, uint32_t p_cap,
+                            const std::vector<uint64_t>& acc, uint32_t screen_tiles, uint32_t* M,
+                            uint32_t* P) {
+    *M = mread[0];
+    *P = mread[1];
+    ctx->fused_P = mread[1];
+    ctx->fused_ready = true;
+    ctx->b4a_valid = b4a_shadow_enabled() && !b4a_fold_enabled() && !ctx->b4a_args.empty();
+    if (fold) {
+        device_state::K2CountRows rows;
+        rows.buf = ctx->buf_k2_rows;
+        rows.num_cores = num_cores;
+        rows.row_pages = row_pages;
+        rows.num_tiles = screen_tiles;
+        rows.P_pub = std::min(mread[1], p_cap);
+        // The ranges the kernel took (pfwc_fuse::k2_range[_speed]).
+        rows.bounds.assign(2u * num_cores + 1u, 0u);
+        for (uint32_t c = 0; c < num_cores; c++) {
+            for (uint32_t mover = 0; mover < 2u; mover++) {
+                uint32_t s0 = 0, n0 = 0;
+                if (acc.empty())
+                    pfwc_fuse::k2_range(rows.P_pub, num_cores, c, mover, 1u, permille, &s0, &n0);
+                else
+                    pfwc_fuse::k2_range_speed(rows.P_pub,
+                                              static_cast<uint32_t>(acc[2u * c + mover]),
+                                              static_cast<uint32_t>(acc[2u * c + mover + 1u]),
+                                              static_cast<uint32_t>(acc.back()), &s0, &n0);
+                rows.bounds[2u * c + mover] = s0;
+                rows.bounds[2u * c + mover + 1u] = s0 + n0;
+            }
+        }
+        rows.bytes = ctx->cap_k2_rows_bytes;
+        rows.P_true = mread[1];
+        rows.overflow = mread[2];
+        rows.early = early;
+        rows.cq1 = early && cq1_used;
+        rows.view = ctx->buf_k2_rows_view;
+        rows.view_m = sort_onelaunch::kRowsViewPerPage;
+        rows.view_banks = ctx->k2_rows_banks;
+        device_state::set_k2_count_rows(rows);
+    }
+    return true;
+}
+
 // prepare (task #552): set the next view's K2 args into b4a_args for the blend
 // about to be enqueued (real outputs) and return before any enqueue.
 bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t screen_tiles,
-                   uint32_t* M, uint32_t* P, bool prepare) {
+                   uint32_t* M, uint32_t* P, bool prepare, bool prefetch = false) {
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
+    const std::array<uint32_t, 4> la_key{nseg, num_tiles, tiles_x, screen_tiles};
+    if (prefetch) {
+        // Task #628 (L-A): only behind a run fold, host-free P and the early
+        // sort, with the B4a verify and shadow off.
+        if (ctx->la_pending || !b4a_fold_enabled() || !ctx->fold_ran ||
+            !env_config::host_free_mp_enabled() || !env_config::sort_ol_early() ||
+            ctx->b4a_verify_pending || ctx->b4a_verified < b4a_verify_views() ||
+            b4a_shadow_enabled())
+            return false;
+    } else if (!prepare && ctx->la_pending) {
+        // Task #628 (L-A): the hook already enqueued this view's sort and
+        // proj_M read; wait for the read and publish.
+        ctx->la_pending = false;
+        ctx->fused_ready = false;
+        try {
+            if (la_key != ctx->la_key) {
+                distributed::Finish(*ctx->cq);
+                if (ctx->la_cq1) distributed::Finish(*device_state::command_queue1());
+                ctx->la_done.reset();
+                throw std::runtime_error("L-A prefetch ran for other segment args");
+            }
+            {
+                GSPLAT_HTL_ZONE("la_wait");
+                distributed::EventSynchronize(*ctx->la_done);
+            }
+            ctx->la_done.reset();
+            bool early = ctx->la_early;
+            if (early && ctx->la_mread[2] != 0) {
+                distributed::Finish(*ctx->cq);
+                early = false;
+            }
+            return fused_k2_finish(ctx, ctx->la_mread, ctx->la_fold, early, ctx->la_cq1,
+                                   ctx->grid.x * ctx->grid.y, ctx->la_row_pages,
+                                   ctx->la_permille, ctx->la_p_cap, ctx->la_acc, screen_tiles,
+                                   M, P);
+        } catch (const std::exception& e) {
+            std::cerr << "[gsplat_tt::tile_assign] L-A fused K2 failed: " << e.what() << "\n";
+            return false;
+        }
+    }
     bool fold_skip = false;
     if (prepare) {
         ctx->fold_prepared = false;
@@ -1012,6 +1112,10 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
         const bool want_early = env_config::sort_ol_early() && fold && !acc.empty();
         distributed::MeshCommandQueue* cq1 =
             want_early && env_config::mat_cq1() ? device_state::command_queue1() : nullptr;
+        if (prefetch && !want_early) {
+            ctx->fold_ran = true;  // the normal call still skips the K2
+            return false;
+        }
         bool early = false;
         uint32_t p_cap = 0;
         std::vector<uint32_t> mread(ELEMS_PER_PAGE, 0);
@@ -1149,9 +1253,45 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
                         static_cast<uint32_t>(ctx->buf_keep->address()),
                         static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc);
                 };
+                if (prefetch) {
+                    // Task #628 (L-A): same device order as below, but the read
+                    // completes into la_mread and the next view waits on la_done.
+                    GSPLAT_HTL_ZONE("la_prefetch");
+                    ctx->la_mread.assign(ELEMS_PER_PAGE, 0u);
+                    if (cq1 != nullptr) {
+                        const distributed::MeshEvent k2_done = ctx->cq->enqueue_record_event();
+                        early = enqueue_sort();
+                        cq1->enqueue_wait_for_event(k2_done);
+                        distributed::ReadShard(*cq1, ctx->la_mread, projM,
+                                               distributed::MeshCoordinate(0, 0), false);
+                        ctx->la_done = cq1->enqueue_record_event_to_host();
+                    } else {
+                        distributed::ReadShard(*ctx->cq, ctx->la_mread, projM,
+                                               distributed::MeshCoordinate(0, 0), false);
+                        ctx->la_done = ctx->cq->enqueue_record_event_to_host();
+                        early = pair_guard::drain_on_throw(enqueue_sort,
+                                                           [&] { distributed::Finish(*ctx->cq); });
+                    }
+                    ctx->la_pending = true;
+                    ctx->la_key = la_key;
+                    ctx->la_fold = fold;
+                    ctx->la_early = early;
+                    ctx->la_cq1 = cq1 != nullptr;
+                    ctx->la_row_pages = row_pages;
+                    ctx->la_permille = permille;
+                    ctx->la_p_cap = p_cap;
+                    ctx->la_acc = acc;
+                    ctx->la_views++;
+                    if (ctx->la_views <= 2 || ctx->la_views % 30 == 0)
+                        std::fprintf(stderr, "[LA] prefetch: next view's sort + proj_M read "
+                                             "behind the blend (%u views, cq1 %d)\n",
+                                     ctx->la_views, static_cast<int>(cq1 != nullptr));
+                    return true;
+                }
                 if (cq1 != nullptr) {
                     const distributed::MeshEvent k2_done = ctx->cq->enqueue_record_event();
                     early = enqueue_sort();
+                    htl::mark("k2_sort_enq");
                     cq1->enqueue_wait_for_event(k2_done);
                     GSPLAT_HOST_ZONE("host_cq1_proj_m");
                     distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
@@ -1182,45 +1322,8 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
                          mread[1], p_cap);
             ensure_pair_buffers(*ctx, static_cast<std::size_t>(round_up(mread[1], ELEMS_PER_PAGE)) * 4);
         }
-        *M = mread[0];
-        *P = mread[1];
-        ctx->fused_P = mread[1];
-        ctx->fused_ready = true;
-        ctx->b4a_valid = b4a_shadow_enabled() && !b4a_fold_enabled() && !ctx->b4a_args.empty();
-        if (fold) {
-            device_state::K2CountRows rows;
-            rows.buf = ctx->buf_k2_rows;
-            rows.num_cores = num_cores;
-            rows.row_pages = row_pages;
-            rows.num_tiles = screen_tiles;
-            rows.P_pub = std::min(mread[1], p_cap);
-            // The ranges the kernel took (pfwc_fuse::k2_range[_speed]).
-            rows.bounds.assign(2u * num_cores + 1u, 0u);
-            for (uint32_t c = 0; c < num_cores; c++) {
-                for (uint32_t mover = 0; mover < 2u; mover++) {
-                    uint32_t s0 = 0, n0 = 0;
-                    if (acc.empty())
-                        pfwc_fuse::k2_range(rows.P_pub, num_cores, c, mover, 1u, permille, &s0, &n0);
-                    else
-                        pfwc_fuse::k2_range_speed(rows.P_pub,
-                                                  static_cast<uint32_t>(acc[2u * c + mover]),
-                                                  static_cast<uint32_t>(acc[2u * c + mover + 1u]),
-                                                  static_cast<uint32_t>(acc.back()), &s0, &n0);
-                    rows.bounds[2u * c + mover] = s0;
-                    rows.bounds[2u * c + mover + 1u] = s0 + n0;
-                }
-            }
-            rows.bytes = ctx->cap_k2_rows_bytes;
-            rows.P_true = mread[1];
-            rows.overflow = mread[2];
-            rows.early = early;
-            rows.cq1 = early && cq1 != nullptr;
-            rows.view = ctx->buf_k2_rows_view;
-            rows.view_m = sort_onelaunch::kRowsViewPerPage;
-            rows.view_banks = ctx->k2_rows_banks;
-            device_state::set_k2_count_rows(rows);
-        }
-        return true;
+        return fused_k2_finish(ctx, mread, fold, early, cq1 != nullptr, num_cores, row_pages,
+                               permille, p_cap, acc, screen_tiles, M, P);
     } catch (const std::exception& e) {
         std::cerr << "[gsplat_tt::tile_assign] fused K2 failed: " << e.what() << "\n";
         return false;
@@ -1239,12 +1342,26 @@ bool tile_assign_fold_prepare(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_
     return fused_k2_impl(nseg, num_tiles, tiles_x, screen_tiles, nullptr, nullptr, /*prepare=*/true);
 }
 
+bool tile_assign_fold_prefetch(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
+                               uint32_t screen_tiles) {
+    if (!b4a_fold_enabled()) return false;
+    return fused_k2_impl(nseg, num_tiles, tiles_x, screen_tiles, nullptr, nullptr,
+                         /*prepare=*/false, /*prefetch=*/true);
+}
+
 void tile_assign_fold_cancel() {
     auto* ctx = context_slot().get();
     if (ctx == nullptr) return;
     ctx->fold_prepared = false;
     ctx->fold_ran = false;
     if (b4a_fold_enabled()) ctx->b4a_valid = false;
+    if (ctx->la_pending) {
+        // Task #628: the prefetched sort and read were for the dropped view.
+        distributed::Finish(*ctx->cq);
+        if (ctx->la_cq1) distributed::Finish(*device_state::command_queue1());
+        ctx->la_pending = false;
+        ctx->la_done.reset();
+    }
 }
 
 bool tile_assign_device_ready() { return ensure_context() != nullptr; }
