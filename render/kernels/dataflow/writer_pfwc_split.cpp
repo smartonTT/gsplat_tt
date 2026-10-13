@@ -100,7 +100,10 @@ void kernel_main() {
 #else
     constexpr uint32_t TL_ARG = ROLE ? 39 : 29;
 #endif
-    constexpr uint32_t CB_TLIST = 38, TLIST_MAX_PAGE = 1024;
+#ifndef PFWC_TLIST_PAGE
+#define PFWC_TLIST_PAGE 1024
+#endif
+    constexpr uint32_t CB_TLIST = 38, TLIST_MAX_PAGE = PFWC_TLIST_PAGE;
     const uint32_t tl_l1 = get_write_ptr(CB_TLIST) + ROLE * TLIST_MAX_PAGE;
     if (num_chunks != 0) {
         const InterleavedAddrGen<true> tl_gen{get_arg_val<uint32_t>(TL_ARG), get_arg_val<uint32_t>(TL_ARG + 1)};
@@ -108,9 +111,27 @@ void kernel_main() {
         noc_async_read_barrier();
     }
     volatile tt_l1_ptr uint32_t* tl = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(tl_l1);
+#ifdef PFWC_UNIT_LIST
+    // Task #644 probe: chunk k is 16 cull units of 64 gaussians, ids tl[16 k + u] (valid ids
+    // first, ~0u pads); each 4 KB plane is gathered as up to 16 reads of 256 B into lanes u * 64.
+    constexpr uint32_t UL_N = 16, UL_B = 256, UL_NONE = 0xFFFFFFFFu;
+    auto tile_of = [&](uint32_t k) -> uint32_t { return k; };
+    auto rd_plane = [&](uint32_t k, const auto& acc, uint32_t l1) {
+        for (uint32_t u = 0; u < UL_N; u++) {
+            const uint32_t id = tl[k * UL_N + u];
+            if (id == UL_NONE) break;
+            noc_async_read(get_noc_addr(id >> 4, acc) + (id & 15u) * UL_B, l1 + u * UL_B, UL_B);
+        }
+    };
+#define PFWC_RD_TILE(k, acc, l1) rd_plane(k, acc, l1)
+#else
     auto tile_of = [&](uint32_t k) -> uint32_t { return tl[k]; };
+#endif
 #else
     auto tile_of = [&](uint32_t k) -> uint32_t { return chunk_start + k * stride; };
+#endif
+#ifndef PFWC_RD_TILE
+#define PFWC_RD_TILE(k, acc, l1) noc_async_read_tile(tile_of(k), acc, l1)
 #endif
 
     constexpr uint32_t LO = ROLE ? 32 : 0, HI = ROLE ? 14 : 0;
@@ -246,17 +267,16 @@ void kernel_main() {
             if (rd_has(o) && !cb_pages_reservable_at_back(IN_CB[o], 1)) return;
         for (uint32_t o = 0; o < 10; o++)
             if (rd_has(o)) cb_reserve_back(IN_CB[o], 1);
-        const uint32_t t = tile_of(rd_k);
-        if (rd_has(0)) noc_async_read_tile(t, in0, get_write_ptr(IN_CB[0]));
-        if (rd_has(1)) noc_async_read_tile(t, in1, get_write_ptr(IN_CB[1]));
-        if (rd_has(2)) noc_async_read_tile(t, in2, get_write_ptr(IN_CB[2]));
-        if (rd_has(3)) noc_async_read_tile(t, in3, get_write_ptr(IN_CB[3]));
-        if (rd_has(4)) noc_async_read_tile(t, in4, get_write_ptr(IN_CB[4]));
-        if (rd_has(5)) noc_async_read_tile(t, in5, get_write_ptr(IN_CB[5]));
-        if (rd_has(6)) noc_async_read_tile(t, in6, get_write_ptr(IN_CB[6]));
-        if (rd_has(7)) noc_async_read_tile(t, in7, get_write_ptr(IN_CB[7]));
-        if (rd_has(8)) noc_async_read_tile(t, in8, get_write_ptr(IN_CB[8]));
-        if (rd_has(9)) noc_async_read_tile(t, in9, get_write_ptr(IN_CB[9]));
+        if (rd_has(0)) PFWC_RD_TILE(rd_k, in0, get_write_ptr(IN_CB[0]));
+        if (rd_has(1)) PFWC_RD_TILE(rd_k, in1, get_write_ptr(IN_CB[1]));
+        if (rd_has(2)) PFWC_RD_TILE(rd_k, in2, get_write_ptr(IN_CB[2]));
+        if (rd_has(3)) PFWC_RD_TILE(rd_k, in3, get_write_ptr(IN_CB[3]));
+        if (rd_has(4)) PFWC_RD_TILE(rd_k, in4, get_write_ptr(IN_CB[4]));
+        if (rd_has(5)) PFWC_RD_TILE(rd_k, in5, get_write_ptr(IN_CB[5]));
+        if (rd_has(6)) PFWC_RD_TILE(rd_k, in6, get_write_ptr(IN_CB[6]));
+        if (rd_has(7)) PFWC_RD_TILE(rd_k, in7, get_write_ptr(IN_CB[7]));
+        if (rd_has(8)) PFWC_RD_TILE(rd_k, in8, get_write_ptr(IN_CB[8]));
+        if (rd_has(9)) PFWC_RD_TILE(rd_k, in9, get_write_ptr(IN_CB[9]));
         rd_pend = true;
     };
     auto rd_poll = [&]() {
@@ -329,20 +349,20 @@ void kernel_main() {
     pg.ha = pgw(6);
 
     for (uint32_t k = ROLE; k < num_chunks; k += 2) {
-        const uint32_t t = tile_of(k);
-        noc_async_read_tile(t, i_op, l1_op);
+        [[maybe_unused]] const uint32_t t = tile_of(k);
+        PFWC_RD_TILE(k, i_op, l1_op);
 #if PFWC_SKIP_RGB
         if (pub01 == 0)  // task #481: the fp32 colours feed only the on-device pack
 #endif
         {
-            noc_async_read_tile(t, i_cr, l1_cr);
-            noc_async_read_tile(t, i_cg, l1_cg);
-            noc_async_read_tile(t, i_cb, l1_cb);
+            PFWC_RD_TILE(k, i_cr, l1_cr);
+            PFWC_RD_TILE(k, i_cg, l1_cg);
+            PFWC_RD_TILE(k, i_cb, l1_cb);
         }
 #if EMIT_PUBOC
         if (pub01 != 0) {
-            noc_async_read_tile(t, i_q01, l1_q01);
-            noc_async_read_tile(t, i_q23, l1_q23);
+            PFWC_RD_TILE(k, i_q01, l1_q01);
+            PFWC_RD_TILE(k, i_q23, l1_q23);
         }
 #endif
 #if WS_READER
@@ -368,9 +388,19 @@ void kernel_main() {
         auto p_tpg = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TPG));
         auto p_aabb = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_AABB));
 
+#ifdef PFWC_UNIT_LIST
+        uint32_t n_el = 0;  // the real lanes are a prefix (host: a partial last unit chunks alone)
+        for (uint32_t u = 0; u < UL_N; u++) {
+            const uint32_t id = tl[k * UL_N + u];
+            if (id == UL_NONE) break;
+            const uint32_t b = id * 64u;
+            n_el = u * 64u + (N - b < 64u ? N - b : 64u);
+        }
+#else
         const uint32_t tbase = t * vis_tile::TILE_ELEMS;
         const uint32_t n_el = (tbase >= N) ? 0u
             : (N - tbase < vis_tile::TILE_ELEMS ? N - tbase : vis_tile::TILE_ELEMS);
+#endif
         auto get_inputs = [&](uint32_t il, uint32_t& tz, uint32_t& op, uint32_t& mx,
                               uint32_t& my, uint32_t& rx, uint32_t& ry) {
             tz = p_dep[il];

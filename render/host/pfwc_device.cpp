@@ -229,6 +229,15 @@ static bool pfwc_deal_on() {
     return v;
 }
 static bool tile_list_on() { return chunk_cull_on() || pfwc_deal_on(); }
+// Task #644 probe (GSPLAT_TT_CHUNK_UNIT=64 with GSPLAT_TT_CHUNK_CULL=1, split writer only): cull
+// 64-gaussian units and gather 16 surviving units per pfwc chunk, T apart (t637 model "u64",
+// lanes unit-contiguous); the tile list holds 16 unit ids per chunk (PFWC_UNIT_LIST).
+static bool chunk_unit_on() {
+    static const bool v = chunk_cull_on() && vis_env_u32("GSPLAT_TT_CHUNK_UNIT", 1024) == 64;
+    return v;
+}
+constexpr uint32_t UL_ELEMS = 64, UL_PER_CHUNK = 16;
+static uint32_t tlist_max_page() { return chunk_unit_on() ? 2048u : TLIST_MAX_PAGE; }
 static float chunk_cull_k() {
     static const float k = [] {
         const char* e = std::getenv("GSPLAT_TT_CHUNK_K");
@@ -421,7 +430,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             cb_raw(pfwc_wsplit::CB_STG_ODD, stg_bytes);
             cb_raw(pfwc_wsplit::CB_MBX, pfwc_wsplit::MBX_BYTES);
             for (uint32_t i = 0; i < pfwc_wsplit::NUM_SEMS; ++i) ctx.fsem[i] = CreateSemaphore(program, cores, 0);
-            if (tile_list_on()) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
+            if (tile_list_on()) cb_raw(CB_TLIST, 2 * tlist_max_page());
         }
     }
     // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 records per-step wall cycles (profiler builds) from the
@@ -448,6 +457,10 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
         if (tile_list_on()) split_defines["PFWC_TILE_LIST"] = "1";
+        if (chunk_unit_on()) {
+            split_defines["PFWC_UNIT_LIST"] = "1";
+            split_defines["PFWC_TLIST_PAGE"] = std::to_string(tlist_max_page());
+        }
     }
     // Task #206: GSPLAT_TT_PFWC_COVCAM_SFPU=1 runs cov_cam as one SFPU pass over the six
     // cov3d tiles in DEST (6 copy_tile instead of 36, no mul_unary/add_binary), same
@@ -906,7 +919,10 @@ double pfwc_tt(
     // Task #433: the surviving tiles, dealt strided like the full scene
     // (chunk_cull::list_count <= seq.count(c), so seg_base(c) holds).
     const bool tile_list = fuse_on && ctx->fuse_tlist;
+    if (chunk_unit_on() && !tile_list)
+        throw std::runtime_error("[gsplat_tt::pfwc] GSPLAT_TT_CHUNK_UNIT=64 needs the fused split writer");
     std::vector<uint32_t> surv;
+    std::size_t n_list = 0;  // tile-list chunks (surv.size(), or the unit chunks of #644)
     std::shared_ptr<distributed::MeshBuffer> tlist_buf;
     // Task #439: the static weighted deal, built and uploaded once per (tiles, cores).
     const bool deal_list = tile_list && pfwc_deal_on();
@@ -942,22 +958,26 @@ double pfwc_tt(
     } else if (tile_list) {
         stagetimers::Span cull_span(st_acc.project_pfwc_chunkcull);
         static chunk_cull::Table tab;
+        const bool unit = chunk_unit_on();
+        const uint32_t ce = unit ? UL_ELEMS : ELEMS_PER_TILE;
+        const uint32_t nce = static_cast<uint32_t>((N + ce - 1) / ce);
         if (tab.means != means || tab.cov != cov3d_unique || tab.N != N)
-            chunk_cull::build(tab, means, cov3d_unique, N, num_tiles, ELEMS_PER_TILE, chunk_cull_k());
+            chunk_cull::build(tab, means, cov3d_unique, N, nce, ce, chunk_cull_k());
         if (vis_env_u32("GSPLAT_TT_CHUNK_SKIP", 1) != 0) {
             const float tr[3] = {t0, t1, t2};
             chunk_cull::survivors(tab, r, tr, fx, fy, cx, cy, vis->image_width, vis->image_height,
                                   vis->k_near, surv);
         } else {
-            surv.resize(num_tiles);
-            for (uint32_t t = 0; t < num_tiles; ++t) surv[t] = t;
+            surv.resize(nce);
+            for (uint32_t t = 0; t < nce; ++t) surv[t] = t;
         }
+        n_list = surv.size();
         if (vis_env_u32("GSPLAT_TT_CHUNK_LOG", 0) != 0)
             std::cerr << "[gsplat_tt::pfwc] chunk cull: " << surv.size() << "/" << num_tiles
                       << " tiles kept\n";
         // One single-page DRAM buffer (all in bank 0), core c's ids at c * page.
-        const uint32_t page = (seq.count(0) * 4u + 63u) & ~63u;
-        if (page > TLIST_MAX_PAGE)
+        const uint32_t page = unit ? tlist_max_page() : (seq.count(0) * 4u + 63u) & ~63u;
+        if (page > tlist_max_page())
             throw std::runtime_error("[gsplat_tt::pfwc] chunk cull: " + std::to_string(seq.count(0)) +
                                      " tiles per core, over the tile-list page");
         if (!ctx->buf_tlist[0] || ctx->tlist_page != page) {
@@ -969,7 +989,33 @@ double pfwc_tt(
         }
         ctx->tlist_cur ^= 1u;
         tlist_buf = ctx->buf_tlist[ctx->tlist_cur];
-        chunk_cull::deal(surv, num_cores, page / 4u, ctx->tlist_host);
+        if (!unit) {
+            chunk_cull::deal(surv, num_cores, page / 4u, ctx->tlist_host);
+        } else {
+            // Units j + i T (i < 16) in chunk j, valid ids first, ~0u pads; a partial last unit
+            // (N % 64 != 0) gets a chunk of its own, so a chunk's real lanes are a prefix.
+            constexpr uint32_t NONE = 0xFFFFFFFFu;
+            uint32_t tail = NONE;
+            if (N % UL_ELEMS != 0 && !surv.empty() && surv.back() == nce - 1) {
+                tail = surv.back();
+                surv.pop_back();
+            }
+            const std::size_t M = surv.size(), T = (M + UL_PER_CHUNK - 1) / UL_PER_CHUNK;
+            n_list = T + (tail != NONE ? 1 : 0);
+            const uint32_t words = page / 4u;
+            if (n_list > num_tiles || chunk_cull::list_count(n_list, 0, num_cores) * UL_PER_CHUNK > words)
+                throw std::runtime_error("[gsplat_tt::pfwc] unit cull: " + std::to_string(n_list) +
+                                         " chunks, over the tile count or the unit-list page");
+            ctx->tlist_host.assign(std::size_t{words} * num_cores, NONE);
+            for (std::size_t j = 0; j < n_list; ++j) {
+                uint32_t* d = &ctx->tlist_host[(j % num_cores) * words + (j / num_cores) * UL_PER_CHUNK];
+                if (j == T) { d[0] = tail; continue; }
+                for (std::size_t i = 0; i < UL_PER_CHUNK && j + i * T < M; ++i) d[i] = surv[j + i * T];
+            }
+        }
+        if (vis_env_u32("GSPLAT_TT_CHUNK_LOG", 0) != 0 && unit)
+            std::cerr << "[gsplat_tt::pfwc] unit cull: " << n_list << " chunks of " << UL_PER_CHUNK
+                      << " units\n";
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, tlist_buf, ctx->tlist_host, /*blocking=*/false);
     }
     auto fbuf = [](const char* name) {
@@ -1034,7 +1080,7 @@ double pfwc_tt(
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = fuse_on ? c : ws.chunk_start[c];
-        const uint32_t num_chunks  = (tile_list && !deal_list) ? chunk_cull::list_count(surv.size(), c, num_cores)
+        const uint32_t num_chunks  = (tile_list && !deal_list) ? chunk_cull::list_count(n_list, c, num_cores)
                                      : (fuse_on ? seq.count(c) : ws.num_chunks[c]);
 
         std::vector<uint32_t> reader_args = {
