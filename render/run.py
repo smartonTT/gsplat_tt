@@ -413,7 +413,19 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
             clean.reset_stage_timings()
         if afr is not None:
             afr.before_pass(p)
-        if gap <= 0.0:
+        if afr is not None and afr.lockstep:
+            # Task #624 split latency arm: the coordinator releases each view to both chips.
+            t0 = time.perf_counter()
+            for i, (extr, nxt) in enumerate(zip(extrs, nexts)):
+                afr.before_view(p, i)
+                _set_next_extr(pipeline, nxt)
+                im = _to_image(pipeline.render(gauss, extr, K, H, W))
+                afr.after_view(p, i)
+                if keep:
+                    imgs.append(im)
+            wall_ms = (time.perf_counter() - t0) * 1000.0
+            render_ms = wall_ms
+        elif gap <= 0.0:
             t0 = time.perf_counter()
             if keep:
                 for extr, nxt in zip(extrs, nexts):
@@ -472,7 +484,9 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
               f"{'' if keep else ' (drop)'}: {wall_ms:.1f} ms for {len(order)} views "
               f"= {pass_ms[-1]:.3f} ms/frame", flush=True)
         if afr is not None:
-            afr.after_pass(p, digests0 if p == 0 else None)
+            crops = (afr.save_crops([_to_u8(im) for im in imgs], out_dir)
+                     if p == 0 and afr.window is not None else None)
+            afr.after_pass(p, digests0 if p == 0 else None, crops=crops)
         del imgs
     Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
     timed = pass_ms[1 + n_warm:] or pass_ms
@@ -524,24 +538,68 @@ def _afr_coordinate(args, argv=None, env=None, popen=None):
     if len(order) < len(devs):
         print(f"[run] AFR: {len(order)} views for {len(devs)} chips", file=sys.stderr, flush=True)
         return 2
+    # Task #624: GSPLAT_TT_SPLIT=1 splits every frame over 2 chips (tile windows).
+    try:
+        mode = afr.split_mode(env)
+        windows = None
+        if mode is not None:
+            if len(devs) != 2:
+                raise ValueError(f"GSPLAT_TT_SPLIT=1 needs 2 chips, got {devs}")
+            W, H = cam["image_size"]
+            windows = afr.split_windows(mode, (W + 31) // 32, (H + 31) // 32)
+    except ValueError as e:
+        print(f"[run] {e}", file=sys.stderr, flush=True)
+        return 2
+    lock = mode is not None and afr.lockstep(env)
     n_warm = max(0, args.b2b_warmup)
     n_passes = 1 + n_warm + max(0, args.b2b_passes)
-    cmds = [([sys.executable, str(Path(__file__).resolve())] + afr.worker_argv(argv, k, len(devs)),
-             afr.worker_env(env, k, d)) for k, d in enumerate(devs)]
+    cmds = [([sys.executable, str(Path(__file__).resolve())]
+             + afr.worker_argv(argv, k, len(devs), windowed=mode is not None),
+             afr.worker_env(env, k, d, window=None if windows is None else windows[k]))
+            for k, d in enumerate(devs)]
     print(f"[run] AFR: {len(devs)} chips (devices {devs}), {len(order)} views, "
-          f"{n_passes} passes", flush=True)
+          f"{n_passes} passes"
+          + ("" if mode is None else f", split {mode[0]} at tile {mode[1]}: windows {windows}"
+             + (" (lockstep latency)" if lock else "")), flush=True)
     kw = {} if popen is None else {"popen": popen}
     rc, info = afr.coordinate(cmds, n_passes, len(order),
-                              log=lambda m: print(m, flush=True), **kw)
+                              log=lambda m: print(m, flush=True),
+                              windowed=mode is not None, lock=lock, **kw)
     if not info["periods"]:
         print(f"[run] AFR: no pass completed (rc {rc}, workers {info['worker_rc']})",
               file=sys.stderr, flush=True)
         return rc or 8
     out_dir = REPO_ROOT / "tmp" / args.iter_dir
+    extra = ""
+    if mode is not None:
+        import hashlib
+        copy_ms = []
+        if info["crops"] and all(info["crops"]):
+            W, H = cam["image_size"]
+            first = np.load(info["crops"][0], mmap_mode="r")
+            frames, copy_ms = afr.join_views(info["crops"], windows, (H, W) + first.shape[3:])
+            info["digests"] = [hashlib.md5(f.tobytes()).hexdigest() for f in frames]
+            hero = cam["order"][0]
+            dump = REPO_ROOT / "tmp" / args.dump_views if getattr(args, "dump_views", None) else None
+            if dump is not None:
+                dump.mkdir(parents=True, exist_ok=True)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for i, (name, f) in enumerate(zip(order, frames)):
+                if name == hero:
+                    Image.fromarray(f).save(out_dir / "hero_clean.png")
+                if dump is not None:
+                    Image.fromarray(f).save(dump / f"view{i:02d}_{name}.png")
+        extra = afr.split_fields(info, n_warm, windows, copy_ms)
     line, ms_frame, ms_median = afr.summary_line(
-        info, args.scene, len(order), n_warm, args.b2b_drop, args.view_gap_ms, devs, out_dir)
+        info, args.scene, len(order), n_warm, args.b2b_drop, args.view_gap_ms, devs, out_dir,
+        extra=extra)
     print(line, flush=True)
-    if rc == 0:
+    if rc == 0 and lock:
+        # The lockstep pass windows hold the per-view barriers: report latency, not b2b.
+        lat = [x for vm in info["view_ms"][1 + n_warm:] or info["view_ms"] for x in vm]
+        print(f"TTW_TIMING split_latency_ms={statistics.mean(lat):.3f}", flush=True)
+        print(f"TTW_TIMING split_latency_ms_median={statistics.median(lat):.3f}", flush=True)
+    elif rc == 0:
         print(f"TTW_TIMING b2b_ms_frame={ms_frame:.3f}", flush=True)
         print(f"TTW_TIMING b2b_ms_frame_median={ms_median:.3f}", flush=True)
     else:
@@ -707,10 +765,14 @@ def _main():
     afr_link = afr_idx = None
     if args.afr_worker is not None:
         k, n = afr.parse_worker(args.afr_worker)
-        afr_idx = afr.split(len(order), n)[k]
+        # Task #624 split: every chip renders every view, only its own tile window.
+        win = afr.worker_window()
+        afr_idx = list(range(len(order))) if win is not None else afr.split(len(order), n)[k]
         order = [order[i] for i in afr_idx]
-        afr_link = afr.WorkerLink(k, n)
-        print(f"[run] AFR worker {k}/{n}: sweep positions {afr_idx}", flush=True)
+        afr_link = afr.WorkerLink(k, n, window=win, lockstep=win is not None and afr.lockstep())
+        print(f"[run] AFR worker {k}/{n}: sweep positions {afr_idx}"
+              + ("" if win is None else f", split window {win}"
+                 + (" (lockstep)" if afr_link.lockstep else "")), flush=True)
     slots = _b2b_keep_out_slots(args, len(order))
     if slots is not None:
         print(f"[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS={slots}", flush=True)
