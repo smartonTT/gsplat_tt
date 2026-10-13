@@ -45,7 +45,9 @@ step() {  # name script args...
   local r=${PIPESTATUS[0]}; [ "$r" = 0 ] || { echo "=== step $n rc=$r"; rc=$r; }
   [ "$r" = 124 ] && exit 124
 }
-if [ "$PLAN" = check ]; then
+if [ "$PLAN" = kcfg ]; then  # t565: solo sort at KCFG +48 KB, no sort in blend (30-view md5 dump)
+  step dump remote_ab.sh 0 dump solo48
+elif [ "$PLAN" = check ]; then
   step dump remote_ab.sh 0 dump $ARM
   step r1-b2b remote_ab.sh 1 b2b base $ARM
 else

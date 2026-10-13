@@ -20,6 +20,7 @@ for arm in "$@"; do
   case $arm in base) k= ;; nt1) k=GSPLAT_TT_OL_TOWN_NT=1 ;; solo) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1" ;;
     fuse) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1" ;;
     fuse34) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_SORT_IN_BLEND=1 GSPLAT_TT_KCFG_EXTRA_KB=34" ;;  # t565: KCFG probe
+    solo48) k="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_SOLO=1 GSPLAT_TT_KCFG_EXTRA_KB=48" ;;  # t565: does KCFG +48 KB alone hang?
     *) echo "bad arm $arm"; exit 2 ;; esac
   tag=r$r-$mode-$arm
   args=(--no-ref --iter-dir t555-$tag)

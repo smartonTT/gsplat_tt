@@ -6,6 +6,9 @@
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}; ARM=${2:-fuse}; D=docs/b4-step3b-t565
+if [ "$ARM" = kcfg48 ]; then  # t565: isolate the fuse-check hang: solo sort at KCFG +48 KB alone
+  PLAN=kcfg O=$D/out-kcfg48 docs/b4-step3b-t555/drive.sh "$rev"; c=$?; echo "=== t565 kcfg48 rc=$c"; exit $c
+fi
 PLAN=check ARM=$ARM O=$D/out-check-$ARM docs/b4-step3b-t555/drive.sh "$rev"; c=$?
 echo "=== t565 check rc=$c"
 [ $c = 0 ] || exit $c
