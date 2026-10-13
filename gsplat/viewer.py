@@ -290,6 +290,9 @@ class GaussianViewer:
         contrib_floor: float | None = None,
         # Back-compat alias: if passed, overrides render_width/height.
         max_resolution: int | None = None,
+        # Task #620: a ready pipeline (gsplat/afr_pool.py AFRPipeline) instead of
+        # Pipeline(get_backend(backend)); one with submit/wait renders frames on a chip pool.
+        pipeline=None,
     ):
         self.gaussians = gaussians
         self.backend_name = backend
@@ -308,7 +311,7 @@ class GaussianViewer:
         self.force_square = force_square
         self.verbose = verbose
 
-        self.pipeline = Pipeline(
+        self.pipeline = pipeline if pipeline is not None else Pipeline(
             get_backend(backend, verbose=verbose, k_cap=3.0),
             tile_size=TILE_SIZE,
             k_cap=3.0,
@@ -547,6 +550,10 @@ class GaussianViewer:
         # Letterbox on the sender thread, not between device frames (task #457).
         self.viewer.frame_post_fn = lambda img, cs: letterbox_for_aspect(img, cs.aspect)
         self.viewer.camera_prepare_fn = _prepare_w2c
+        if hasattr(self.pipeline, "submit"):  # AFR (task #620): FastRenderer pipelines frames
+            self.viewer.render_submit_fn = self._render_submit
+            self.viewer.render_finish_fn = self._render_finish
+            self.viewer.afr_inflight = self.pipeline.inflight
         _sync_sliders_to_pipeline()
         self._request_rerender()
 
@@ -827,7 +834,43 @@ class GaussianViewer:
             traceback.print_exc()
             return _failure_pattern(W, H)
         t_render = time.perf_counter()
+        return self._finish_frame(result, camera_state, W, H, wall_start, t_pose, t_hint,
+                                  t_render)
 
+    def _render_submit(self, camera_state, render_tab_state):
+        """AFR (task #620): start one frame on the chip pool; ``_render_finish`` returns
+        its display image. No next-pose hint: every chip renders whole frames."""
+        wall_start = time.perf_counter()
+        self._frames_rendered += 1
+        W, H = self._resolve_render_size(render_tab_state)
+        ticket = None
+        if W > 0 and H > 0:
+            intrinsics = self._intrinsics(camera_state, W, H)
+            try:
+                ticket = self.pipeline.submit(_cached_w2c(camera_state), intrinsics, H, W)
+            except Exception:
+                traceback.print_exc()
+        return (ticket, camera_state, W, H, wall_start)
+
+    def _render_finish(self, token) -> np.ndarray:
+        ticket, camera_state, W, H, wall_start = token
+        if W <= 0 or H <= 0:
+            return np.zeros((max(H, 1), max(W, 1), 3), dtype=np.uint8)
+        if ticket is None:
+            return _failure_pattern(W, H)
+        t_pose = time.perf_counter()
+        try:
+            result = self.pipeline.wait(ticket)
+        except Exception:
+            traceback.print_exc()
+            return _failure_pattern(W, H)
+        t_render = time.perf_counter()
+        return self._finish_frame(result, camera_state, W, H, wall_start, t_pose, t_pose,
+                                  t_render)
+
+    def _finish_frame(self, result, camera_state, W: int, H: int, wall_start: float,
+                      t_pose: float, t_hint: float, t_render: float) -> np.ndarray:
+        """Stats and display image of one rendered frame."""
         self._render_ms.append(result.timings.get("total", 0.0))
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)

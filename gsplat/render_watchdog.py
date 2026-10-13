@@ -69,6 +69,7 @@ def pose_record(rec: dict) -> dict:
         "c2w": np.linalg.inv(w2c.astype(np.float64)).tolist(),
         "K": rec["K"].tolist(),
         "settings": rec["settings"],
+        **({"chip": rec["chip"]} if "chip" in rec else {}),
     }
 
 
@@ -99,15 +100,19 @@ class RenderWatchdog:
         self._thread: threading.Thread | None = None
 
     # -- per render ---------------------------------------------------------
-    def begin(self, extrinsics: Any, intrinsics: Any, H: int, W: int) -> dict:
+    def begin(self, extrinsics: Any, intrinsics: Any, H: int, W: int, chip: Any = None) -> dict:
         settings = {k: _plain(getattr(self.backend, k, None)) for k in SETTINGS}
         with self._lock:
             self._seq += 1
-            first = (int(W), int(H)) not in self._sizes
+            # A resolution's first render compiles once per chip (AFR, task #620).
+            size = (int(W), int(H)) if chip is None else (int(W), int(H), chip)
+            first = size not in self._sizes
             rec = {"seq": self._seq, "utc": _utc(), "t0": self._clock(), "ms": None,
                    "W": int(W), "H": int(H), "w2c": _np(extrinsics), "K": _np(intrinsics),
-                   "settings": settings,
+                   "settings": settings, "size": size,
                    "limit": self.first_limit_s if first else self.limit_s}
+            if chip is not None:
+                rec["chip"] = chip
             self._ring.append(rec)
             self._active = rec
         return rec
@@ -115,7 +120,7 @@ class RenderWatchdog:
     def end(self, rec: dict) -> None:
         with self._lock:
             rec["ms"] = round((self._clock() - rec["t0"]) * 1000.0, 3)
-            self._sizes.add((rec["W"], rec["H"]))
+            self._sizes.add(rec.get("size", (rec["W"], rec["H"])))
             if self._active is rec:
                 self._active = None
 
@@ -129,6 +134,20 @@ class RenderWatchdog:
             finally:
                 self.end(rec)
         guarded.__wrapped__ = render
+        return guarded
+
+    def wrap_wait(self, wait: Callable) -> Callable:
+        """AFR (task #620): guard the viewer's wait for a pool frame (gsplat/afr_pool.py
+        Ticket: extrinsics, intrinsics, H, W, chip) the way ``wrap`` guards a render."""
+        def guarded(ticket, *a, **kw):
+            rec = self.begin(ticket.extrinsics, ticket.intrinsics, ticket.H, ticket.W,
+                             chip=ticket.chip)
+            try:
+                self._maybe_stall()
+                return wait(ticket, *a, **kw)
+            finally:
+                self.end(rec)
+        guarded.__wrapped__ = wait
         return guarded
 
     def _maybe_stall(self) -> None:

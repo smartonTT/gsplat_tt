@@ -84,6 +84,26 @@ def main():
 
     cam = json.loads((REPO / "benchmarks" / "cameras_v2.json").read_text())["bicycle"]
     W, H = cam["image_size"]
+    hero = cam["views"][cam["order"][0]]
+    K = run.build_intrinsics(W, H, float(cam["fov_deg"]))
+    extr = c2w_to_w2c(torch.tensor(hero["c2w"], dtype=torch.float32))
+    # AFR on N chips (task #620, GSPLAT_VIEWER_AFR_DEVICES=0,1; off when unset): this
+    # process opens no device, one worker per chip renders whole frames (gsplat/afr_pool.py).
+    # viewer.sh ships this file onto older tagged trees: touch afr_pool only when it is on.
+    afr_devs = None
+    extra = {}
+    if os.environ.get("GSPLAT_VIEWER_AFR_DEVICES", "").strip():
+        from gsplat import afr_pool
+        afr_devs = afr_pool.devices_from_env()
+    if afr_devs:
+        pool = afr_pool.AFRPool(
+            afr_devs, afr_pool.tt_clean_factory,
+            cfg={"ply_path": args.ply_path, "verbose": args.verbose,
+                 "settings": {"contrib_floor": float(cam["contrib_floor"])},
+                 "warm": (extr.numpy(), K.numpy(), H, W)},
+            inflight=afr_pool.inflight_from_env(len(afr_devs)),
+            max_wh=afr_pool.max_wh_from_env())
+        extra["pipeline"] = afr_pool.AFRPipeline(pool, contrib_floor=float(cam["contrib_floor"]))
     print(f"[viewer_clean] sha={os.environ.get('GSPLAT_SHA', '?')} loading {args.ply_path}", flush=True)
     gauss = load_ply(args.ply_path)
     viewer = GaussianViewer(gauss, host=args.host, port=args.port, backend="tt_clean",
@@ -91,7 +111,7 @@ def main():
                             scene_path=args.ply_path,
                             # Same contribution floor as the bench (1/255), not the
                             # slider's 1/16384: that kept more pairs (slower, other image).
-                            contrib_floor=float(cam["contrib_floor"]))
+                            contrib_floor=float(cam["contrib_floor"]), **extra)
     # The bind check above is racy: another process can take the port before viser
     # binds, and viser then moves on silently. Check the port it really holds (#380).
     bound = viewer.server.get_port()
@@ -111,7 +131,10 @@ def main():
             first_limit_s=args.watchdog_first_s,
             stall_file=os.environ.get("GSPLAT_VIEWER_STALL_FILE") or None,
             pyspy=os.environ.get("GSPLAT_VIEWER_PYSPY") or None)
-        viewer.pipeline.render = wd.wrap(viewer.pipeline.render)
+        if afr_devs:  # every frame is a wait on the pool (FastRenderer and selftest)
+            viewer.pipeline.wait = wd.wrap_wait(viewer.pipeline.wait)
+        else:
+            viewer.pipeline.render = wd.wrap(viewer.pipeline.render)
         if hasattr(viewer, "exit_hooks"):
             viewer.exit_hooks.append(lambda: wd.flush_ring("exit"))
         wd.start()
@@ -122,9 +145,6 @@ def main():
     if args.selftest > 0:
         # Same call the viewer makes per frame (pipeline.render), hero view of
         # the bench camera set; excludes JPEG encode and websocket transfer.
-        hero = cam["views"][cam["order"][0]]
-        K = run.build_intrinsics(W, H, float(cam["fov_deg"]))
-        extr = c2w_to_w2c(torch.tensor(hero["c2w"], dtype=torch.float32))
         for _ in range(3):
             viewer.pipeline.render(gauss, extr, K, H, W)
         ms = []
@@ -135,21 +155,31 @@ def main():
         med = statistics.median(ms)
         print(f"[viewer_clean] SELFTEST hero {W}x{H} n={len(ms)} median={med:.2f} ms "
               f"({1000.0 / med:.1f} FPS) min={min(ms):.2f} max={max(ms):.2f}", flush=True)
-        # Save the device frame and score it against the reference render.
+        if afr_devs:
+            # Frames in flight as FastRenderer keeps them: the interval is the page's best case.
+            iv = afr_pool.pipelined_intervals_ms(viewer.pipeline, extr, K, H, W, args.selftest)
+            med = statistics.median(iv)
+            print(f"[viewer_clean] SELFTEST-AFR hero {W}x{H} chips={afr_devs} "
+                  f"inflight={viewer.pipeline.inflight} n={len(iv)} median interval={med:.2f} ms "
+                  f"({1000.0 / med:.1f} FPS) min={min(iv):.2f} max={max(iv):.2f}", flush=True)
+        # Save the device frame and score it against the reference render (AFR: one per chip).
         import numpy as np
         from PIL import Image
-        img = viewer.pipeline.render(gauss, extr, K, H, W).image
-        img8 = (img if img.dtype == np.uint8 else
-                (np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8))
-        out = REPO.parent / "hero_viewer.png"
-        Image.fromarray(img8).save(out)
-        ref_p = REPO / "benchmarks" / "reference_v2" / "hero.png"
-        if ref_p.exists():
-            ref = np.asarray(Image.open(ref_p).convert("RGB"), dtype=np.float64)
-            mse = float(np.mean((img8.astype(np.float64) - ref) ** 2))
-            psnr = 10.0 * np.log10(255.0 ** 2 / mse) if mse > 0 else float("inf")
-            print(f"[viewer_clean] HERO saved {out} PSNR vs reference_v2/hero.png = {psnr:.2f} dB",
-                  flush=True)
+        for i in range(len(afr_devs) if afr_devs else 1):
+            res = viewer.pipeline.render(gauss, extr, K, H, W)
+            img = res.image
+            img8 = (img if img.dtype == np.uint8 else
+                    (np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8))
+            chip = getattr(res, "chip", None)
+            out = REPO.parent / ("hero_viewer.png" if not chip else f"hero_viewer_chip{chip}.png")
+            Image.fromarray(img8).save(out)
+            ref_p = REPO / "benchmarks" / "reference_v2" / "hero.png"
+            if ref_p.exists():
+                ref = np.asarray(Image.open(ref_p).convert("RGB"), dtype=np.float64)
+                mse = float(np.mean((img8.astype(np.float64) - ref) ** 2))
+                psnr = 10.0 * np.log10(255.0 ** 2 / mse) if mse > 0 else float("inf")
+                print(f"[viewer_clean] HERO saved {out} PSNR vs reference_v2/hero.png = "
+                      f"{psnr:.2f} dB" + ("" if chip is None else f" (chip {chip})"), flush=True)
 
     print(f"[viewer_clean] READY port={args.port}", flush=True)
     viewer.run()

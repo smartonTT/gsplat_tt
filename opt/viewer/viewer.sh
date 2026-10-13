@@ -61,6 +61,9 @@ do_start() {
   # Debug knobs (task #357), forwarded only when set here: VIEWER_STALL_FILE arms the
   # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks,
   # VIEWER_TIMELINE=<box path> writes per-frame render/send times (task #587).
+  # VIEWER_AFR_DEVICES=0,1 renders alternate frames on those PCIe chips, one worker process
+  # each (gsplat/afr_pool.py, task #620; needs a tree with that file), VIEWER_AFR_INFLIGHT
+  # the frames in flight (default one per chip). Unset: the single-chip viewer.
   # The B4a fold is on in the viewer unless VIEWER_B4A_FOLD=0 (empty or unset = 1). It used to cost
   # page FPS (#577/#587): under the fold the device idles through the render thread's host work
   # before sort(N). #597 moved that work (pose matrices) into the camera-update callback; bh-30
@@ -69,6 +72,8 @@ do_start() {
       "GSPLAT_VIEWER_STALL_FILE=${VIEWER_STALL_FILE:-} GSPLAT_VIEWER_PYSPY=${VIEWER_PYSPY:-}" \
       "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S}" \
       "${VIEWER_TIMELINE:+GSPLAT_VIEWER_TIMELINE=$VIEWER_TIMELINE}" \
+      "${VIEWER_AFR_DEVICES:+GSPLAT_VIEWER_AFR_DEVICES=$VIEWER_AFR_DEVICES}" \
+      "${VIEWER_AFR_INFLIGHT:+GSPLAT_VIEWER_AFR_INFLIGHT=$VIEWER_AFR_INFLIGHT}" \
       "GSPLAT_TT_B4A_FOLD=${VIEWER_B4A_FOLD:-1} bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)

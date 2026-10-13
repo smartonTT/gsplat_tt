@@ -223,6 +223,11 @@ class FastRenderer(Renderer):
     * ``viewer.frame_post_fn(img, camera_state)`` (if set) runs on the sender
       thread before the encode (the letterbox), off the render thread.
 
+    * AFR on N chips (task #620, ``viewer.render_submit_fn`` set; gsplat/afr_pool.py):
+      frame N is submitted to chip N % N_chips with the newest camera pose, up to
+      ``viewer.afr_inflight`` frames are in flight, and the oldest is waited for first,
+      so frames leave in order. No next-pose hint (each chip renders whole frames).
+
     ``on_frame_sent(t_render_start, t_render_end, t_sent, encode_s)``
     (perf_counter seconds) is called after each send, for the on-screen stats.
     """
@@ -234,6 +239,12 @@ class FastRenderer(Renderer):
         self.on_frame_sent = on_frame_sent
         self.jpeg_encoder_name, self._encode_jpeg = pick_jpeg_encoder()
         self.pipeline_frames = pipeline_frames_from_env()
+        # AFR (task #620): frames in flight on the chip pool, oldest first.
+        self._afr = getattr(self.viewer, "render_submit_fn", None) is not None
+        self.afr_depth = max(1, int(getattr(self.viewer, "afr_inflight", 2) or 2))
+        self._inflight: collections.deque = collections.deque()
+        if self._afr:
+            self.pipeline_frames = False
         self.motion_quality = MotionQuality(adaptive_quality_from_env())
         self._last_msg = None  # last frame message handed to viser (pacing, task #532)
         self._latched = None  # pose hinted to the device with the last frame
@@ -258,6 +269,12 @@ class FastRenderer(Renderer):
                 cv.notify_all()
 
     def run(self) -> None:
+        try:
+            self._run()
+        finally:
+            self._afr_drop_inflight()
+
+    def _run(self) -> None:
         while self.running:
             while not self.is_prepared_fn():
                 time.sleep(0.1)
@@ -266,6 +283,14 @@ class FastRenderer(Renderer):
                 # waiting for the next 16 ms burst tick (that capped ~60 FPS).
                 if not self._render_event.is_set():
                     self.submit(RenderTask("rerender", self.viewer.get_camera_state(self.client)))
+            elif self._inflight and not self._render_event.is_set():
+                # AFR: nothing new to start; deliver the oldest frame in flight.
+                try:
+                    self._afr_finish_oldest()
+                except Exception:
+                    traceback.print_exc()
+                    os._exit(1)
+                continue
             elif not self._render_event.wait(0.2):
                 self.submit(RenderTask("static", self.viewer.get_camera_state(self.client)))
             self._render_event.clear()
@@ -276,7 +301,7 @@ class FastRenderer(Renderer):
             self._state = self.transitions[self._state][task.action]
             assert task.camera_state is not None
             try:
-                self.render_once(task)
+                (self.render_once_afr if self._afr else self.render_once)(task)
             except Exception:
                 traceback.print_exc()
                 os._exit(1)
@@ -324,6 +349,56 @@ class FastRenderer(Renderer):
                 if c2w is not None else None
             self.timeline.add(k="r", te=te, t0=t0, t1=t1, a=task.action, h=nxt is not None,
                               drop=dropped, dev=dev[-1] if dev else None, v=v)
+
+    def render_once_afr(self, task: RenderTask) -> None:
+        """AFR (task #620): start this frame on the next chip with the newest pose, then
+        deliver the oldest frames until fewer than ``afr_depth`` are in flight."""
+        te = time.perf_counter()
+        cs = task.camera_state
+        get_cs = getattr(self.viewer, "latest_camera_state", None) or \
+            getattr(self.viewer, "get_camera_state", None)
+        if task.action in ("move", "rerender") and get_cs is not None:
+            cs = get_cs(self.client) or cs
+        with self.lock:
+            t0 = time.perf_counter()
+            W, H = self._get_img_wh(cs.aspect)
+            self.viewer.render_tab_state.viewer_width = W
+            self.viewer.render_tab_state.viewer_height = H
+            token = self.viewer.render_submit_fn(cs, self.viewer.render_tab_state)
+        quality = MotionQuality.STILL if task.action in ("static", "update") else MotionQuality.MAX
+        self._inflight.append((token, cs, quality, task.action, t0, te, W * H))
+        while len(self._inflight) >= self.afr_depth:
+            self._afr_finish_oldest()
+
+    def _afr_finish_oldest(self) -> None:
+        token, cs, quality, action, t0, te, n_px = self._inflight.popleft()
+        with self.lock:
+            rendered = self.viewer.render_finish_fn(token)
+            self.viewer._after_render()
+            t1 = time.perf_counter()
+            self.viewer.render_tab_state.num_view_rays_per_sec = n_px / max(t1 - t0, 1e-10)
+        img, depth = rendered if isinstance(rendered, tuple) else (rendered, None)
+        with self._out_cv:
+            dropped = self._out is not None
+            self._out = (img, depth, quality, t0, t1, cs)
+            self._out_cv.notify()
+        if self.timeline is not None:
+            # t0: submitted, t1: delivered; chip: the pool's chip for this frame.
+            chip = getattr(token, "chip", None)
+            if chip is None and isinstance(token, tuple) and token:
+                chip = getattr(token[0], "chip", None)
+            self.timeline.add(k="r", te=te, t0=t0, t1=t1, a=action, h=False, drop=dropped,
+                              dev=None, v=None, chip=chip)
+
+    def _afr_drop_inflight(self) -> None:
+        """Free the pool slots of frames still in flight when this renderer stops."""
+        while self._inflight:
+            token = self._inflight.popleft()[0]
+            try:
+                with self.lock:
+                    self.viewer.render_finish_fn(token)
+            except Exception:
+                traceback.print_exc()
 
     def _frame_pending(self) -> bool:
         """True while the last frame handed to viser still sits unsent in its buffer."""
