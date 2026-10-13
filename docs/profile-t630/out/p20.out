@@ -1,0 +1,14 @@
+================ BUILD ID ================
+  cpp : #124 sha=ff073ad4 bin=a297a5f117af4fae t630 2aa6b5cc FOLD=1 fixed-cost profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t630-p20  timeout=380s  worry=600s  ts=2026-10-13T12:28:30-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t630/bench.sh tracy P20 20 25 GSPLAT_TT_FZ_OFF=1 GSPLAT_TT_BZ_PROF=1 GSPLAT_TT_KCFG_EXTRA_KB=34
+-----------------------------------------
+=== tracy P20 20:25 [GSPLAT_TT_FZ_OFF=1 GSPLAT_TT_BZ_PROF=1 GSPLAT_TT_KCFG_EXTRA_KB=34] 2aa6b5cc 19:28:34 card=p100a load=1.34 1.32 2.45
+tracy P20 rc=0 19:28:40
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.826 render=9.826 py_resid=0.063 project=0.685 sort=1.112 blend=7.759 d2h=0.011 tail=0.004 xview=0.182 view_total=9.763 project_pfwc_rtargs=0.099 project_pfwc_enqueue=0.041 project_gather_wait=0.649 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=159.032 fps=6.29 ms_frame_median=159.032 pass_ms_frame=159.032 check_pass_ms_frame=9.826 raw_md5=81be8889 gap_ms=0.00 render_ms_frame=159.032 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t6
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P20 rows 199956
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t630/tmp/ttw-state/logs/t630-p20-20261013-122826.log

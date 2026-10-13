@@ -1,0 +1,11 @@
+================ BUILD ID ================
+  cpp : #124 sha=ff073ad4 bin=a297a5f117af4fae t630 2aa6b5cc FOLD=1 fixed-cost profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t630-disasm  timeout=380s  worry=600s  ts=2026-10-13T12:27:02-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t630/bench.sh disasm
+-----------------------------------------
+=== disasm 2aa6b5cc 19:27:04 card=p100a load=1.52 1.27 2.55
+objdump=/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-objdump elf=/localdev/smarton/.cache/ttmc-gstt2-t513/tt-metal-cache5481144561508939120/kernels/matblend_compute/3680402692383663153/trisc1/trisc1.elf
+disasm lines 18843
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t630/tmp/ttw-state/logs/t630-disasm-20261013-122701.log

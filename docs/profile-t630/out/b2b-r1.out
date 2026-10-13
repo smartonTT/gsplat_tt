@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #124 sha=ff073ad4 bin=a297a5f117af4fae t630 2aa6b5cc FOLD=1 fixed-cost profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t630-b2b-r1  timeout=380s  worry=600s  ts=2026-10-13T12:26:37-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t630/bench.sh b2b 1
+-----------------------------------------
+=== b2b-r1 2aa6b5cc 19:26:41 card=p100a load=1.54 1.24 2.58
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=10 views=30 gap_ms=0.00 t_end=1791919615.050 period=8.443 render=8.443 py_resid=0.060 head=0.003 project=0.258 tile_assign=0.003 sort=0.874 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.058 d2h=0.009 assemble=0.000 tail=0.005 xview=0.172 view_total=8.383 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=11 views=30 gap_ms=0.00 t_end=1791919615.463 period=8.447 render=8.447 py_resid=0.059 head=0.003 project=0.249 tile_assign=0.003 sort=0.863 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.080 d2h=0.009 assemble=0.000 tail=0.005 xview=0.174 view_total=8.388 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=12 views=30 gap_ms=0.00 t_end=1791919615.877 period=8.467 render=8.467 py_resid=0.059 head=0.003 project=0.278 tile_assign=0.003 sort=0.899 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.035 d2h=0.009 assemble=0.000 tail=0.005 xview=0.174 view_total=8.408 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=13 views=30 gap_ms=0.00 t_end=1791919616.290 period=8.459 render=8.459 py_resid=0.060 head=0.003 project=0.271 tile_assign=0.003 sort=0.928 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.005 d2h=0.009 assemble=0.000 tail=0.005 xview=0.173 view_total=8.399 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=14 views=30 gap_ms=0.00 t_end=1791919616.702 period=8.441 render=8.441 py_resid=0.059 head=0.003 project=0.238 tile_assign=0.003 sort=0.824 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.123 d2h=0.009 assemble=0.000 tail=0.005 xview=0.175 view_total=8.382 sort_pread=0.002 sort_bin_co
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t630/tmp/ttw-state/logs/t630-b2b-r1-20261013-122636.log

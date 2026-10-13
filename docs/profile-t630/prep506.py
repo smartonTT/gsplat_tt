@@ -37,7 +37,7 @@ for i, path in enumerate(a.chunks):
     cut = {}
     for c, L in fw.items():
         L.sort(); n = len(L)
-        assert n % NP == 0 and n >= NP * a.keep, (path, c, n)
+        assert n >= NP * a.keep, (path, c, n)  # t630: FOLD=1 chunks carry 2 extra leading programs (35 = 2 + 11*3)
         cut[c] = L[n - NP * a.keep - 1][1] if n > NP * a.keep else -1
     kept = [p for p in rows if (p[1], p[2]) in cut and int(p[5]) > cut[(p[1], p[2])]]
     t0 = min(int(p[5]) for p in kept)

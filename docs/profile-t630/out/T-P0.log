@@ -1,0 +1,121 @@
+[eth] card p100a: worker dispatch (ETH default is p150 only)
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=7
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-13 19:27:21.508 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 19:27:21.508 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 19:27:21.511 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 19:27:21.512 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 19:27:21.512 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 19:27:21.512 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 19:27:21.513 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-13 19:27:21.513 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-13 19:27:21.514 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 19:27:21.514 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 19:27:21.516 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 19:27:21.517 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 19:27:21.517 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 19:27:21.517 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 19:27:21.517 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-13 19:27:21.518 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-13 19:27:21.518 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-13 19:27:21.588 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-13 19:27:21.588 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-13 19:27:21.588 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-13 19:27:21.588 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-13 19:27:21.589 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-13 19:27:21.591 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-13 19:27:21.591 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-13 19:27:21.683 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-13 19:27:21.683 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-13 19:27:21.683 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 19:27:21.683 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 19:27:21.685 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 19:27:21.686 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-13 19:27:21.686 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 19:27:21.686 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 19:27:21.687 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0x61) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-13 19:27:21.687 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-13 19:27:21.687 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 19:27:21.687 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 19:27:21.687 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-13 19:27:21.687 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 19:27:21.687 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 19:27:21.687 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-13 19:27:21.687 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-13 19:27:21.687 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-13 19:27:21.687 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-13 19:27:21.687 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-13 19:27:21.687 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-13 19:27:21.747 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-10-13 19:27:21.843 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_301982_1418787891_0' (shm_resource_tracker.cpp:265)
+2026-10-13 19:27:21.843 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_301982' (shm_resource_tracker.cpp:275)
+2026-10-13 19:27:22.435 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349998 GHz, device_time_at_sync=3970829725416 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+[gsplat_tt::sort] bucket tile stride 512 pages, 7 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 5.0 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.55 layout=0.10 pub_host=0.36 total=1.10ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+BRISC_STACK kernel=matblend_brisc margin=1008 depth=4016 avail=5024 reserve=128 elf=/localdev/smarton/.cache/ttmc-gstt2-t513-prof/tt-metal-cache6970262101358695406/kernels/matblend_brisc/16961702440093306624/brisc/brisc.elf
+[run] timing 5 views (warmup excluded)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.60 layout=0.12 pub_host=0.37 total=1.09ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[SUBCHUNK] tiles_split=64 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=33181
+[SORT] stage=ONELAUNCH P=2090575 P_kept=2090575 num_tiles=1024 max_tile_n=19171 onelaunch=0.50 layout=0.08 pub_host=0.33 total=0.91ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[B4A] fold: view K2 from the previous blend (2 views)
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=0.51 layout=0.08 pub_host=0.32 total=0.91ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[SUBCHUNK] tiles_split=66 total_subchunks=1093 max_subchunks_per_tile=3 payload_pages=35760
+[SORT] stage=ONELAUNCH P=2255766 P_kept=2255766 num_tiles=1024 max_tile_n=18906 onelaunch=0.51 layout=0.08 pub_host=0.33 total=0.92ms
+OUT_RING new pinned slot (slots=5 grows=4 replaced=0)
+[SUBCHUNK] tiles_split=62 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=37612
+[SORT] stage=ONELAUNCH P=2374790 P_kept=2374790 num_tiles=1024 max_tile_n=17834 onelaunch=0.53 layout=0.08 pub_host=0.32 total=0.94ms
+OUT_RING new pinned slot (slots=6 grows=5 replaced=0)
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.343 render=9.343 py_resid=0.068 project=0.740 sort=1.161 blend=7.161 d2h=0.011 tail=0.004 xview=0.187 view_total=9.274 project_pfwc_rtargs=0.098 project_pfwc_enqueue=0.058 project_gather_wait=0.689 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.086 sort_bin_emit=0.530 sort_publish_host=0.335 sort_publish_wait=0.000 sort_mat=0.097 sort_pre=0.001 sort_log=0.010 sort_cont_prep=0.179 sort_cont_rtargs=0.100 sort_cont_other=-0.181
+[run] B2B pass 0 (check): 46.7 ms for 5 views = 9.343 ms/frame
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.45 layout=0.09 pub_host=0.35 total=0.90ms
+[SUBCHUNK] tiles_split=64 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=33181
+[SORT] stage=ONELAUNCH P=2090575 P_kept=2090575 num_tiles=1024 max_tile_n=19171 onelaunch=0.45 layout=0.08 pub_host=0.31 total=0.84ms
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=0.45 layout=0.08 pub_host=0.32 total=0.85ms
+[SUBCHUNK] tiles_split=66 total_subchunks=1093 max_subchunks_per_tile=3 payload_pages=35760
+[SORT] stage=ONELAUNCH P=2255766 P_kept=2255766 num_tiles=1024 max_tile_n=18906 onelaunch=0.43 layout=0.07 pub_host=0.33 total=0.84ms
+OUT_RING new pinned slot (slots=7 grows=6 replaced=0)
+[SUBCHUNK] tiles_split=62 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=37612
+[SORT] stage=ONELAUNCH P=2374790 P_kept=2374790 num_tiles=1024 max_tile_n=17834 onelaunch=0.51 layout=0.08 pub_host=0.34 total=0.93ms
+OUT_RING new pinned slot (slots=7 grows=7 replaced=0)
+B2B_STAGES pass=1 views=5 gap_ms=0.00 period=158.418 render=158.418 py_resid=0.082 project=0.293 sort=1.178 blend=6.857 d2h=0.008 tail=149.835 xview=0.153 view_total=158.336 project_pfwc_rtargs=0.068 project_pfwc_enqueue=0.024 project_gather_wait=0.290 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=0.457 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.241 sort_pre=0.002 sort_log=0.008 sort_cont_prep=0.102 sort_cont_rtargs=0.099 sort_cont_other=-0.147
+[run] B2B pass 1: 792.1 ms for 5 views = 158.418 ms/frame
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=158.418 fps=6.31 ms_frame_median=158.418 pass_ms_frame=158.418 check_pass_ms_frame=9.343 raw_md5=57fe026f gap_ms=0.00 render_ms_frame=158.418 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t630-P0
+TTW_TIMING b2b_ms_frame=158.418
+TTW_TIMING b2b_ms_frame_median=158.418

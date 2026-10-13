@@ -19,7 +19,7 @@ C = 1350.0 * 1000.0  # cycles per ms
 
 
 def m(x):
-    return float(np.mean(x)) if len(x) else float("nan")
+    return float(np.median(x)) if len(x) else float("nan")  # t630: median (a few doubled marker sums skew means)
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
                                  slow=max(spans.values()) / C, mean=m(list(spans.values())) / C,
                                  endspread=(w1 - min(e for s, e in per.values())) / C,
                                  pre=m(pre) / C, post=m(post) / C))
-    print("\n## per-program fixed parts (ms, mean over views)\n")
+    print("\n## per-program fixed parts (ms, median over views)\n")
     print("| program | window | slowest core | mean core | launch skew | end spread | preamble | postamble |")
     print("|---|---|---|---|---|---|---|---|")
     for pn in P:
@@ -109,7 +109,7 @@ def main():
                 row["window"] = (w1 - w0) / C
                 for k, x in row.items():
                     crit[k].append(x)
-    print("\n## mat+blend per core (ms; mean over cores x views | critical last-ending core, mean over views)\n")
+    print("\n## mat+blend per core (ms; mean over cores x views | critical last-ending core, median over views)\n")
     print("| part | all cores | critical core |")
     print("|---|---|---|")
     for k in allc:

@@ -1,0 +1,53 @@
+views 30 cores 110 programs ['mat+blend', 'sort', 'pfwc']
+
+## per-program fixed parts (ms, median over views)
+
+| program | window | slowest core | mean core | launch skew | end spread | preamble | postamble |
+|---|---|---|---|---|---|---|---|
+| mat+blend | 6.202 | 6.201 | 6.034 | 0.000 | 0.229 | 0.001 | 0.000 |
+| sort | 1.487 | 1.487 | 1.421 | 0.000 | 0.209 | 0.000 | 0.000 |
+| pfwc | 1.547 | 1.547 | 1.419 | 0.000 | 0.202 | 0.001 | 0.000 |
+
+## mat+blend per core (ms; mean over cores x views | critical last-ending core, median over views)
+
+| part | all cores | critical core |
+|---|---|---|
+| launch | 0.000 | 0.000 |
+| mat | 1.418 | 1.708 |
+| c_setup | 0.000 | 0.002 |
+| c_cntw1 | 0.000 | 0.000 |
+| c_cntw | 0.000 | 0.000 |
+| c_init | 0.005 | 0.005 |
+| c_blend | 4.547 | 4.442 |
+| c_emit | 0.000 | 0.000 |
+| c_tot | 4.579 | 4.448 |
+| c_nt | 10.000 | 10.000 |
+| c_nsc | 10.000 | 10.000 |
+| blend_zone | 4.475 | 3.901 |
+| t1_post | 0.000 | 0.000 |
+| drain | 0.099 | 0.248 |
+| span | 6.034 | 6.201 |
+| end_gap | 0.133 | 0.000 |
+| ld_start | 1.357 | 1.568 |
+| r_tot | 4.586 | 4.531 |
+| r_setup | 0.005 | 0.003 |
+| r_claim | 0.003 | 0.003 |
+| r_meta | 0.018 | 0.015 |
+| r_ready | 0.007 | 0.004 |
+| r_bulkw | 4.465 | 4.370 |
+| r_dma | 0.031 | 0.022 |
+| r_cntw | 0.000 | 0.000 |
+| r_qw | 0.000 | 0.000 |
+| r_nt | 10.000 | 10.000 |
+| r_nsc | 10.000 | 10.000 |
+| r_rdyn | 11.000 | 10.500 |
+| w_tot | 4.740 | 5.049 |
+| w_pre | 2.001 | 1.721 |
+| w_qw | 0.000 | 0.000 |
+| w_outw | 2.076 | 2.467 |
+| w_pack | 0.647 | 0.647 |
+| w_wr | 0.022 | 0.207 |
+| w_bar | 0.004 | 0.000 |
+| w_nt | 10.000 | 10.000 |
+| w_npoll | 1.000 | 1.000 |
+| window | | 6.202 |

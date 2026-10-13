@@ -1,0 +1,15 @@
+views 30 (steady mat+blend groups with folded k2)
+
+| quantity | median | min | max |
+|---|---|---|---|
+| window | 6.202 | 5.062 | 7.162 |
+| mat mean | 1.449 | 1.134 | 1.701 |
+| mat max | 2.063 | 1.977 | 2.197 |
+| blend mean | 4.468 | 3.538 | 5.261 |
+| blend max | 4.706 | 3.773 | 5.576 |
+| max(blend+drain) | 4.932 | 3.851 | 5.687 |
+| drain max | 0.265 | 0.157 | 0.395 |
+| max(mat+blend+drain) | 6.201 | 5.061 | 7.161 |
+
+fit mat max vs blend max over views: slope 0.027
+overlap bound (window - max(blend+drain)) median 1.263 ms

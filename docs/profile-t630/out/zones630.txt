@@ -1,0 +1,49 @@
+
+### mat+blend
+
+| zone | RISC | start (all) | dur (all) | start (crit) | dur (crit) |
+|---|---|---|---|---|---|
+| mat_cull_mask | TRISC_1 | 0.001 | 1.417 | 0.001 | 1.707 |
+| mat_cull_mask | TRISC_2 | 0.001 | 1.417 | 0.001 | 1.707 |
+| sort_subchunk_mat | NCRISC | 0.001 | 1.356 | 0.001 | 1.567 |
+| sort_subchunk_mat | BRISC | 0.001 | 1.362 | 0.001 | 1.202 |
+| mat_cull_mask | TRISC_0 | 0.002 | 1.416 | 0.002 | 1.706 |
+| tile_blend_load | NCRISC | 1.357 | 4.477 | 1.568 | 3.842 |
+| k2_pairs | BRISC | 1.370 | 1.992 | 1.210 | 1.712 |
+| rd_l1_bulk | NCRISC | 1.392 | 4.343 | 1.695 | 3.782 |
+| tile_blend_sfpu | TRISC_1 | 1.418 | 4.475 | 1.708 | 3.901 |
+| tile_blend_sfpu | TRISC_2 | 1.418 | 4.475 | 1.708 | 3.901 |
+| tile_blend_sfpu | TRISC_0 | 1.418 | 4.475 | 1.708 | 3.901 |
+| k2_rows | BRISC | 2.320 | 1.048 | 1.933 | 0.959 |
+
+### sort
+
+| zone | RISC | start (all) | dur (all) | start (crit) | dur (crit) |
+|---|---|---|---|---|---|
+| sort_ol_prefix | BRISC | 0.003 | 0.061 | 0.003 | 0.000 |
+| sort_ol_fill | NCRISC | 0.025 | 0.082 | 0.056 | 0.074 |
+| sort_ol_barrier | BRISC | 0.064 | 0.079 | 0.003 | 0.087 |
+| sort_ol_fillb | BRISC | 0.064 | 0.071 | 0.003 | 0.077 |
+| sort_ol_emit | BRISC | 0.133 | 1.227 | 0.104 | 1.318 |
+| sort_ol_emit | NCRISC | 0.144 | 1.252 | 0.146 | 1.341 |
+| sort_ol_town | TRISC_2 | 0.152 | 1.145 | 0.124 | 1.274 |
+| sort_ol_town | TRISC_1 | 0.152 | 1.142 | 0.124 | 1.262 |
+| sort_ol_town | TRISC_0 | 0.152 | 1.141 | 0.124 | 1.212 |
+
+### pfwc
+
+| zone | RISC | start (all) | dur (all) | start (crit) | dur (crit) |
+|---|---|---|---|---|---|
+| pfwc | TRISC_1 | 0.001 | 1.357 | 0.001 | 1.472 |
+| mat_cull_mask | TRISC_1 | 0.001 | 1.409 | 0.001 | 1.741 |
+| sort_subchunk_mat | NCRISC | 0.001 | 1.353 | 0.001 | 1.710 |
+| sort_subchunk_mat | BRISC | 0.001 | 1.349 | 0.001 | 1.230 |
+| mat_cull_mask | TRISC_2 | 0.001 | 1.408 | 0.001 | 1.740 |
+| pfwc | TRISC_2 | 0.001 | 1.345 | 0.001 | 1.461 |
+| mat_cull_mask | TRISC_0 | 0.002 | 1.408 | 0.002 | 1.740 |
+| pfwc | TRISC_0 | 0.002 | 1.349 | 0.002 | 1.465 |
+| tile_blend_load | NCRISC | 1.354 | 4.229 | 1.711 | 3.992 |
+| rd_l1_bulk | NCRISC | 1.389 | 4.099 | 1.716 | 3.932 |
+| tile_blend_sfpu | TRISC_1 | 1.410 | 4.251 | 1.742 | 4.035 |
+| tile_blend_sfpu | TRISC_2 | 1.410 | 4.251 | 1.742 | 4.035 |
+| tile_blend_sfpu | TRISC_0 | 1.410 | 4.251 | 1.742 | 4.035 |
