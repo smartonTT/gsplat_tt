@@ -84,7 +84,7 @@ The Flags column marks shelvings that should not be treated as settled.
 | K2 pairs from pfwc writers | #384 | net ~-0.05 | Mod (Tracy) | Mod | Writer growth lands on pfwc's mover end, which is 1:1 critical (t614). Stays shelved. |
 | FPU quadratic blend | #511 / t111 / t148 | +0.45 worse | M | | Settled. |
 | B2 ellipse cull | #538 | 9.168 vs 9.284 (-0.116) | M | **OB** (pre-226/227) | Shelved as small and costly. The gain was over the 0.1 bar at the time; it was not re-measured after the fold. |
-| Chunk cull (ply order) | #486, #502 | ~0 | M / Mod | | PLY order has no spatial locality. See unsized idea U3 (spatially reordered scene). |
+| Chunk cull (ply order); Morton reorder + chunk cull | #486, #502; #169/#433 (GSPLAT_TT_CHUNK_CULL), #470, #479, #493 | ply order ~0; Morton net -0.14..-0.41 (loss) | M / Mod | | PLY order has no spatial locality. The Morton reorder + chunk cull was already built and device-measured in b2b: net +0.14..+0.41 ms/view loss, caused by sort emit bursts on Morton gids. See U3 (sized by #631). |
 | Speed-weighted pfwc deal | #517 | noise | M | | Settled. |
 | pfwc N+1 under blend tail | #512 | ≤0.070 fused | Mod | Mod | Fold (226) took most of this. |
 | Mat-start TRISC idle fill | #509 | ~0 | Mod | Mod | T1 idle-fill bound 0.298 (PROFILE t227). Only pays if mat is critical, which it is not. |
@@ -167,7 +167,7 @@ Bounds are rough and come from the §2 budget. None of them is measured.
 |---|---|---|---|---|
 | U1 | pfwc | Mover transfer pattern: both NoCs, bursts ≥256 B, fewer barriers, more outstanding reads | 0.2-0.5 | The mover end is 1.30-1.45 and the DRAM floor is 0.80. This is the only stage with a known critical path at 1:1. Being sized in #629. |
 | U2 | pfwc | Smaller per-Gaussian record (fp16/bf16 SoA for scale, rotation and colour; 60 B down to ~32 B) | ≤0.3 | Plan 3 listed it as "≤0.3 once DRAM-bound" but never built it. It pays only after U1 makes pfwc DRAM-bound. Needs a precision check (0.45 dB margin). |
-| U3 | pfwc | Load-time Morton (spatial) reorder of the scene plus a per-chunk bounding-sphere frustum cull | 0.3-0.6 | 60% of N is never visible. Chunk cull failed twice on PLY order, which has no locality. Reordering at load is a per-scene cost, not a per-view cost, so it is legitimate. pfwc's 1.06 fixed part scales with N. |
+| U3 | pfwc | Morton reorder + chunk frustum cull: **not unsized, sized by #631** (docs/morton-cull-t631/README.md on ttp/t631-morton-cull-size) | gross 0.44 bound; net expected <=0.15 unless sort emit de-burst is solved | Already built (#169/#433, GSPLAT_TT_CHUNK_CULL) and device-measured in b2b (#470, #479, #493): net +0.14..+0.41 ms/view loss, cause sort emit bursts on Morton gids. Re-open only with an emit de-burst fix. |
 | U4 | view boundary | L-A: enqueue gather(N+2) right after mat+blend(N+1) | ≤0.30 | #628 is measuring this now. |
 | U5 | view boundary | Fold gather into pfwc (one program less per view) | 0.05-0.25 | Overlaps U4. Size it after #628. |
 | U6 | mat+blend | Break down the 1.42 ms fixed intercept: per-tile T init, the output write (1024² RGB), CB setup, and the window minus the slowest core (~1.4 ms) | 0.2-0.8 | The largest piece of unattributed time. Needs a FOLD=1 trace with per-phase zones (profiling, not a lever). |
@@ -207,8 +207,9 @@ Bounds are rough and come from the §2 budget. None of them is measured.
    they can clear the bar.
 3. **U4 L-A view-boundary enqueue** (≤0.30). #628 is running it. Follow with U5 (gather into pfwc) only
    if L-A leaves idle.
-4. **U3 spatial reorder + chunk frustum cull** (0.3-0.6). This is the largest unsized single-chip pfwc
-   lever. Size it with a CPU model of chunk visibility over the 30 views, then a device A/B.
+4. **U3 Morton reorder + chunk frustum cull**: sized by #631 (docs/morton-cull-t631/README.md on
+   ttp/t631-morton-cull-size): gross bound 0.44, expected net <=0.15. Already device-measured as a net
+   loss (#470/#479/#493, sort emit bursts on Morton gids); worth a retry only if emit de-burst is solved.
 5. **U10 sort key width / pass count and fixed cost** (0.2-0.4). The stage has the largest gap to its floor.
 6. **U8 pair reduction**: re-measure B2 ellipse at 227 (0.1-0.15, measured once at -0.116) and size
    16x16 tiles on a CPU pair count.
