@@ -88,3 +88,14 @@ def test_scan_fails_short_margin(tmp_path):
     p.write_bytes(b"")
     bad = _scan(tmp_path, _fake_tools(tmp_path, 0xFFB02000 - (16 + 4096 + 48) - 112), 0)
     assert bad.returncode == 1 and '"margin": 112' in bad.stdout
+
+
+def test_scan_skips_firmware_elf(tmp_path):
+    # Task #577: a fresh JIT cache also holds <hash>/firmware/brisc/brisc.elf, which has no
+    # __stack_base (not a kernel; its frame is in --reserve). It failed run.py with exit 9.
+    kern = tmp_path / "cache/c1/kernels/kern/h/brisc/brisc.elf"
+    fw = tmp_path / "cache/c1/firmware/brisc/brisc.elf"
+    for p in (kern, fw):
+        p.parent.mkdir(parents=True)
+        p.write_bytes(b"")
+    assert bsc.find_elfs(str(tmp_path / "cache")) == [str(kern)]

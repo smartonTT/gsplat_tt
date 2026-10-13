@@ -12,9 +12,9 @@ from _start and compares the deepest chain with top - __stack_base.
                              [--top 0xffb02000] [--reserve 128]
   brisc_stack_check.py --scan <JIT cache dir> [--since <epoch s>] [...]
 
---scan checks every brisc.elf under the dir modified at or after --since (task
-#574: render/run.py runs it on the kernels each run compiles and fails the run
-when one is short).
+--scan checks every kernel brisc.elf (not firmware/) under the dir modified at
+or after --since (task #574: render/run.py runs it on the kernels each run
+compiles and fails the run when one is short).
 
 Indirect calls (jalr) are not followed: --reserve covers them and the firmware
 frame above the kernel. Prints one JSON line; exit 1 when margin < reserve.
@@ -104,9 +104,11 @@ def check_elf(elf, tools=DEFAULT_TOOLS, top=0xFFB02000, reserve=128):
 
 
 def find_elfs(root, since=0.0, name="brisc.elf"):
-    """Paths of `name` files under root with mtime >= since, sorted."""
+    """Paths of kernel `name` files under root with mtime >= since, sorted. Skips the
+    firmware/ dirs a fresh JIT cache also holds (task #577: no __stack_base there)."""
     out = []
-    for d, _, files in os.walk(root):
+    for d, dirs, files in os.walk(root):
+        dirs[:] = [x for x in dirs if x != "firmware"]
         if name in files:
             p = os.path.join(d, name)
             try:
