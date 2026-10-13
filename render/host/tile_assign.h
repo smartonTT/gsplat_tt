@@ -108,6 +108,9 @@ bool b4a_k2_in_blend();
 bool tile_assign_fold_prepare(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                               uint32_t screen_tiles);
 void tile_assign_fold_cancel();
+// Task #643 (GSPLAT_TT_SORT_IN_FOLD, fold_sort.h): the blend's after-hook;
+// enqueues the next view's early sort behind the folded K2. True if enqueued.
+bool tile_assign_fold_enqueue_sort();
 
 bool tile_assign_device_ready();
 

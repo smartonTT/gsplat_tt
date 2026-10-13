@@ -24,6 +24,7 @@
 #include "gather_visible.h"
 #include "vis_mode.h"
 #include "sort_mover_speed.h"
+#include "fold_sort.h"
 #include "sort_onelaunch_layout.h"
 #include "sort.h"
 #include "pair_guard.h"
@@ -44,6 +45,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -145,6 +147,13 @@ struct TileAssignDeviceContext {
     // fold_ran = the blend got them all, so the next fused K2 is skipped.
     bool fold_prepared = false, fold_ran = false;
     uint32_t fold_cores = 0, fold_views = 0, fold_skipped = 0;
+    // Task #643 (fold_sort.h): the prepared view's early-sort inputs (set by
+    // fold_prepare), and whether the blend's after-hook enqueued its sort
+    // behind the folded K2 (fold_k2_done: recorded on CQ0 before the sort).
+    bool fold_want_early = false, fold_sorted = false;
+    uint32_t fold_screen_tiles = 0, fold_tiles_x = 0, fold_row_pages = 0, fold_rows_addr = 0;
+    std::vector<uint64_t> fold_acc;
+    std::optional<distributed::MeshEvent> fold_k2_done;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
 
@@ -918,16 +927,21 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     bool fold_skip = false;
+    bool hook_sorted = false;  // task #643: the previous blend's hook enqueued this sort
     if (prepare) {
         ctx->fold_prepared = false;
         ctx->fold_ran = false;
         ctx->b4a_valid = false;
+        ctx->fold_sorted = false;
+        ctx->fold_want_early = false;
     } else {
         ctx->fused_ready = false;
         if (ctx->b4a_verify_pending) b4a_verify(*ctx);
         ctx->b4a_valid = false;
         fold_skip = b4a_fold_enabled() && ctx->fold_ran;
+        hook_sorted = fold_sort::use_hook_sort(fold_skip, ctx->fold_sorted);
         ctx->fold_ran = false;
+        ctx->fold_sorted = false;
         device_state::clear_k2_count_rows("fused_k2");
     }
     try {
@@ -1098,6 +1112,12 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
             if (prepare) {
                 ctx->fold_prepared = true;
                 ctx->b4a_valid = true;
+                ctx->fold_want_early = want_early;
+                ctx->fold_screen_tiles = screen_tiles;
+                ctx->fold_tiles_x = tiles_x;
+                ctx->fold_row_pages = row_pages;
+                ctx->fold_rows_addr = rows_addr;
+                ctx->fold_acc = acc;
                 return true;
             }
             // Task #552: the previous view's blend already ran this K2.
@@ -1149,7 +1169,14 @@ bool fused_k2_impl(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t
                         static_cast<uint32_t>(ctx->buf_keep->address()),
                         static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc);
                 };
-                if (cq1 != nullptr) {
+                if (hook_sorted && cq1 != nullptr) {
+                    // Task #643: the sort is already queued behind the folded
+                    // K2; CQ1 waits on the event recorded before it.
+                    early = true;
+                    cq1->enqueue_wait_for_event(*ctx->fold_k2_done);
+                    GSPLAT_HOST_ZONE("host_cq1_proj_m");
+                    distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
+                } else if (cq1 != nullptr) {
                     const distributed::MeshEvent k2_done = ctx->cq->enqueue_record_event();
                     early = enqueue_sort();
                     cq1->enqueue_wait_for_event(k2_done);
@@ -1239,11 +1266,39 @@ bool tile_assign_fold_prepare(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_
     return fused_k2_impl(nseg, num_tiles, tiles_x, screen_tiles, nullptr, nullptr, /*prepare=*/true);
 }
 
+bool tile_assign_fold_enqueue_sort() {
+    auto* ctx = context_slot().get();
+    if (ctx == nullptr) return false;
+    ctx->fold_sorted = false;
+    distributed::MeshCommandQueue* cq1 =
+        env_config::mat_cq1() ? device_state::command_queue1() : nullptr;
+    if (!fold_sort::hook_enqueues(env_config::sort_in_fold() && b4a_fold_enabled(), ctx->fold_ran,
+                                  ctx->fold_want_early, ctx->b4a_verified < b4a_verify_views(),
+                                  cq1 != nullptr))
+        return false;
+    // The K2 just ran into the real outputs (fold_prepare's args), so the sort
+    // takes those buffers, as at the start of the next view.
+    ctx->fold_k2_done = ctx->cq->enqueue_record_event();
+    ctx->fold_sorted = sort_onelaunch_enqueue_early(
+        ctx->fold_screen_tiles, ctx->fold_tiles_x, ctx->fold_row_pages, ctx->fold_rows_addr,
+        static_cast<uint32_t>(ctx->buf_gids->address()),
+        static_cast<uint32_t>(ctx->buf_tids->address()),
+        static_cast<uint32_t>(ctx->buf_keep->address()),
+        static_cast<uint32_t>(ctx->buf_pairs_P->address()), ctx->fold_acc,
+        /*drain_before_grow=*/true);
+    static uint32_t n = 0;
+    if (++n <= 2 || n % 30 == 0)
+        std::fprintf(stderr, "[B4A] sort_in_fold: next view's sort enqueued=%d (%u hooks)\n",
+                     static_cast<int>(ctx->fold_sorted), n);
+    return ctx->fold_sorted;
+}
+
 void tile_assign_fold_cancel() {
     auto* ctx = context_slot().get();
     if (ctx == nullptr) return;
     ctx->fold_prepared = false;
     ctx->fold_ran = false;
+    ctx->fold_sorted = false;
     if (b4a_fold_enabled()) ctx->b4a_valid = false;
 }
 

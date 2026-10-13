@@ -209,6 +209,13 @@ inline bool sort_ol_early() {
     static const bool v = env_uint("GSPLAT_TT_SORT_OL_EARLY", 1u) != 0u;
     return v;
 }
+// Task #643 (L-A', fold_sort.h): with the B4a fold and CQ1, enqueue the next
+// view's early sort in the blend's after-hook, behind the mat+blend that ran
+// its K2, instead of at the start of that view. Default 0 (off).
+inline bool sort_in_fold() {
+    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_SORT_IN_FOLD", 0u) != 0u;
+    return v;
+}
 // Second command queue (needs sort_ol_early): CQ1 waits for the K2, reads
 // proj_M and the K2 count rows; the host sums the bucket totals from the rows
 // and uploads the bin layout and the mat work list on CQ1 while the sort runs

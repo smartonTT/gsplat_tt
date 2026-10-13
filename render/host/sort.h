@@ -140,11 +140,13 @@ bool sort_grow_tile_capacity(uint32_t max_n);
 // mover-speed sums acc (2 * cores + 1, as the K2 got them), so the fold holds
 // by construction. The pair buffers are passed in: tile_assign registers them
 // only later. Returns false, with nothing enqueued, when the one-launch config
-// does not hold; the sort then runs at its usual place.
+// does not hold; the sort then runs at its usual place. drain_before_grow
+// (task #643, from the blend's after-hook): Finish before growing a sort buffer.
 bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
                                   uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
                                   uint32_t keep_addr, uint32_t pairs_P_addr,
-                                  const std::vector<uint64_t>& acc);
+                                  const std::vector<uint64_t>& acc,
+                                  bool drain_before_grow = false);
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

@@ -426,7 +426,10 @@ py::tuple render_view(
                     gsplat_tt::tile_assign_fold_prepare(fi.num_cores, fi.num_tiles, fi.tiles_x,
                                                         fi.screen_tiles);
             });
-            gsplat_tt::blend_set_after_enqueue_hook([] {});
+            // Task #643 (GSPLAT_TT_SORT_IN_FOLD): the next view's sort goes
+            // behind this mat+blend (and its K2), after the frame event.
+            gsplat_tt::blend_set_after_enqueue_hook(
+                [] { (void)gsplat_tt::tile_assign_fold_enqueue_sort(); });
         } else if (have_next) {
             gsplat_tt::blend_set_after_enqueue_hook([&] {
                 enqueue_pfwc(means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr,
