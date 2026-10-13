@@ -43,14 +43,19 @@ step() {  # name timeout round arms...
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
+if [ "${SKIP_SHOT:-0}" = 1 ]; then echo "=== shot skipped (SKIP_SHOT=1)"; else
 echo "=== shot $(TZ=America/Los_Angeles date +%T)"
 H=$H T=$T NO_SYNC=1 NAME=ttw-t614 SHOT_TIMEOUT=500 opt/ttw/screenshot.sh 614 "$rev" --locked > "$O/shot.out" 2>&1; s=$?
 grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot.out"; echo "shot rc=$s"
 [ $s = 0 ] || rc=5
+fi
+# Each devrun step stays under the 600 s reservation ceiling (3 arms ~ 60-90 s measured).
 step warm 400 0 base htl
-step r1 900 1 base htl hs300 hs700 ds150 ds400
-step r2 900 2 htl base ds400 ds150 hs700 hs300
-step r3 600 3 base htl f0 base
+step r1a 400 1 base htl hs300
+step r1b 400 1 hs700 ds150 ds400
+step r2a 400 2 htl base ds400
+step r2b 400 2 ds150 hs700 hs300
+step r3 400 3 base htl f0 base
 scp -q -o BatchMode=yes "$H:$T/tmp/t614/*.*" "$O/" || rc=4
 echo "=== drive t614 done rc=$rc $(TZ=America/Los_Angeles date)"
 exit $rc
