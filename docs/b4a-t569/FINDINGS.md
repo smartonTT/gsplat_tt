@@ -21,3 +21,19 @@ Fix tried (0f1231fe): K2's scratch uses CB 21 (CB_BSORT, same address; K2 only t
 get_write_ptr) instead of a second index 62 on the same CB. ETH default stays off in
 dispatch_select.h b4a_fold_on until docs/b4a-t569/bench.sh (verify, md5, hero, b2b A/B) passes
 with GSPLAT_TT_B4A_FOLD=1 under ETH.
+
+## t570 (2026-10-12)
+
+- Fix 0f1231fe does not fix it: s3 (45ff1ff5, bh-30, ETH, GSPLAT_TT_B4A_FOLD=1 VERIFY=3) hangs again at
+  the first folded view (view 2, cores_with_k2_args=120/120), rc=124, reset OK. CB 62 is ruled out.
+- Step 3, K1 (ETH, hang) vs K2 (worker, pass) matblend entries, field by field: base 0x9e00, sem 640,
+  lcb 656, rcb 1664, minrcb 64, mask 0x400135ff07ff07ff, text offsets 0x680/0x75a0/0xe350/0x102b0/0x17230,
+  rta (0,0)/(360,0)/(608,0)x3: identical. Only the watcher kernel ids differ (47/45/46 vs 53/51/52).
+- Ring extent: dev_mem_map.h is the same file in the overlay and the host tt-metal (md5 a87cffab).
+  KERNEL_CONFIG base = MEM_MAP_END = 0x9e00; kcfg = (69 + 32) KB = 0x19400 (split pfwc + BRISC reader
+  defaults), so l1_unreserved_base = 0x23200. Fold matblend ends at 0x9e00 + 0x17230 + TRISC2 .text
+  0xa90 (2704 B, JIT cache) = 0x21ac0: 5952 B under the unreserved start. tt-metal also TT_FATALs a
+  program larger than the ring (program.cpp get_ringbuffer_size), so no ring overflow.
+- So the launch message and the config ring are not the cause. What differs is ETH itself and the
+  core count (120 vs 110; ETH adds logical column 11). Probe 5 (probe5.sh) bisects under ETH:
+  A grid 11x10, B grid 12x9, C one command queue (GSPLAT_TT_MAT_CQ1=0).
