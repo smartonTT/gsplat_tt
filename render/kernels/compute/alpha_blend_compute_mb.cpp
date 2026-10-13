@@ -614,6 +614,9 @@ inline void dispatch_blend_pairs(
 #ifndef BLEND_SCHED
 #define BLEND_SCHED 0
 #endif
+#ifndef BLEND_SWAP_FILL
+#define BLEND_SWAP_FILL 0
+#endif
 #if BLEND_SCHED
 #if !BLEND_CONST_HOIST || !defined(BLEND_PIXEL_FLOOR) || BLEND_FPU_QF_ABL
 #error "BLEND_SCHED bodies are the CONST_HOIST + PIXEL_FLOOR bodies"
@@ -667,6 +670,31 @@ template <uint32_t IX>
 #if BLEND_EXP1
     // Task #584: xlog2 = power * ONE_LN2 + bias in one MAD (bias from S_C0, loaded
     // in the slot of the leading NOP), degree-1 poly c1 x + c0 from L13/L14. 24 ops.
+#if BLEND_SWAP_FILL
+    // Task #646: the 4 pads (3 after a swap, 1 between the xlog2 MAD and the
+    // swap reading it) hold this body's own loads into dead LREGs, which still
+    // keeps every swap and MAD result one slot from its reader. 20 ops.
+    BS_LD(4, BS_S(S_C0), 0, 7);
+    BS_SWAP(0, 9, 1);
+    BS_LD(5, BS_S(S_OP), 0, 7);
+    BS_MAD(0, 0, 12, 4, 0);
+    BS_LD(6, BS_S(S_K99), 0, 7);
+    BS_SWAP(9, 0, 1);
+    BS_LD(7, BS_S(S_FL), 0, 7);
+    BS_EXEXP(1, 0, 0);
+    BS_EXMAN(0, 0, 0);
+    BS_SHFT(0, 1, 0x000, 0);
+    BS_EXEXP(1, 0, 1);
+    BS_EXMAN(0, 0, 1);
+    BS_CAST(0, 0, 0);
+    BS_MAD(0, 0, 13, 14, 0);
+    BS_LD(3, BS_S(S_CR), 0, 7);
+    BS_SETEXP(1, 0, 0x000, 0);
+    BS_MUL(0, 5, 1, 9, 0);
+    BS_LD(4, BS_S(S_CG), 0, 7);
+    BS_SWAP(0, 6, 1);
+    BS_LD(5, BS_S(S_CB), 0, 7);
+#else
     BS_LD(4, BS_S(S_C0), 0, 7);
     BS_SWAP(0, 9, 1);
     BS_NOP();
@@ -691,6 +719,7 @@ template <uint32_t IX>
     BS_LD(3, BS_S(S_CR), 0, 7);
     BS_LD(4, BS_S(S_CG), 0, 7);
     BS_LD(5, BS_S(S_CB), 0, 7);
+#endif  // BLEND_SWAP_FILL
 #else
     BS_NOP();
     BS_SWAP(0, 9, 1);

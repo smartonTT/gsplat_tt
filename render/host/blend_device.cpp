@@ -452,6 +452,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         // Task #584: degree-1 minimax exp in the bodies (iter 227: 1 by default,
         // b2b -0.142 ms/view, hero 42.85 dB; not bit-identical, 0 = the degree-2 form).
         compute_defines["BLEND_EXP1"] = env_or("GSPLAT_TT_BLEND_EXP1", "1");
+        // Task #646: EXP1 bodies with the 4 pad NOPs filled by their own loads
+        // (bit-identical reorder; 0 = the iter-227 order, for A/B).
+        compute_defines["BLEND_SWAP_FILL"] = env_or("GSPLAT_TT_BLEND_SWAP_FILL", "1");
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
     }
     if (fused) {

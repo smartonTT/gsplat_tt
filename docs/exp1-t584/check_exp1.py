@@ -23,6 +23,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "blend-sched-t219"))
 import check_cpp as cc  # noqa: E402  (chdirs to blend-loop-model-t205)
+import schedule  # noqa: E402
 import stalls  # noqa: E402
 
 KERNEL = os.path.join(HERE, "..", "..", "render", "kernels", "compute", "alpha_blend_compute_mb.cpp")
@@ -65,7 +66,7 @@ def lreg_args(op, vals):
     return [f"L{v}" if n.startswith("lreg") else str(v) for n, v in zip(names, vals)]
 
 
-def bodies(src, ops, exp1, level=2):
+def bodies(src, ops, exp1, level=2, fill=0):
     consts = {}
     for m in re.finditer(r"constexpr uint32_t ((?:DR|S)_\w+ = [^;]+);", src):
         for part in m[1].split(","):
@@ -73,7 +74,7 @@ def bodies(src, ops, exp1, level=2):
             consts[k.strip()] = eval(v)
     a, b = src.index("#ifndef BLEND_SCHED"), src.index("using BlendBodyFn")
     env = {"BLEND_SCHED": level, "BLEND_CONST_HOIST": 1, "BLEND_PIXEL_FLOOR": 1, "BLEND_FPU_QF_ABL": 0,
-           "BLEND_EXP1": exp1}
+           "BLEND_EXP1": exp1, "BLEND_SWAP_FILL": fill}
     n0 = len(cc.ERR)
     k = cc.Kernel(cc.preprocess(src[a:b], env), consts, ops)
     if level == 1:
@@ -83,15 +84,19 @@ def bodies(src, ops, exp1, level=2):
     return {m: cc.replay(k.call("blend_pair_body", [m // 2, 1 + (m & 1)]), list(buf)) for m in range(32)}
 
 
-def rules(seq):
+def rules(seq, fill=0):
+    """fill 0: an sfpnop after every sfpswap. fill 1 (#646): the op after a swap
+    may be any op that neither reads nor writes the swap's LREGs."""
     bad, sf = [], [(o, lreg_args(o, v)) for o, v in seq if o.startswith("sfp")]
     for i, (op, a) in enumerate(sf):
         rd, wr = stalls.regs(op, a)
         if wr - set(range(8)) - ({9} if op == "sfpswap" else set()):
             bad.append(f"{i}: {op} writes a constant LREG")
         prev = sf[i - 1] if i else ("", [])
-        if prev[0] == "sfpswap" and op != "sfpnop":
+        if prev[0] == "sfpswap" and op != "sfpnop" and not fill:
             bad.append(f"{i}: no sfpnop after sfpswap")
+        if prev[0] == "sfpswap" and fill and (rd | wr) & stalls.regs(*prev)[1]:
+            bad.append(f"{i}: {op} touches the sfpswap LREGs right before it")
         pw = stalls.regs(*prev)[1] if prev[0] in stalls.MAD else set()
         if op == "sfpswap" and pw & rd:
             bad.append(f"{i}: sfpswap reads the MAD result right before it")
@@ -120,11 +125,33 @@ def check_bodies(src, ops):
             ERR.append(f"m{m}: bias {bias} not loaded from S_C0 ({lds[-1:]})")
     print(f"A2 singles with EXP1: {32 - len({e.split()[0] for e in ERR if e.startswith('m')})}/32 pass; "
           f"ops {len(old[0])} -> {len(new[0])}")
+    check_fill(src, ops, new)
     e1 = bodies(src, ops, 1, level=1)
     if not any("BLEND_EXP1" in e for e in e1):
         ERR.append("BLEND_SCHED 1 + EXP1 does not hit the #error")
     else:
         print("level 1 + EXP1: #error active as intended")
+
+
+def sym(seq):
+    return schedule.run([(o, lreg_args(o, v)) for o, v in seq])
+
+
+def check_fill(src, ops, ref):
+    """#646: BLEND_SWAP_FILL 1 bodies = the fill-0 bodies (symbolic DEST writes and
+    constant LREGs), 4 ops fewer, no sfpnop, issue rules with the fill swap rule."""
+    fil, n0 = bodies(src, ops, 1, fill=1), len(ERR)
+    for m in range(32):
+        bad, sf = rules(fil[m], fill=1)
+        ERR.extend(f"fill m{m} {b}" for b in bad)
+        if sym(fil[m]) != sym(ref[m]):
+            ERR.append(f"fill m{m}: not equivalent to the fill-0 body")
+        if len(ref[m]) - len(fil[m]) != 4 or any(o == "sfpnop" for o, _ in sf):
+            ERR.append(f"fill m{m}: {len(ref[m])} -> {len(fil[m])} ops, want 4 fewer and no sfpnop")
+        if stalls.stalls(sf) != stalls.stalls(rules(ref[m])[1]):
+            ERR.append(f"fill m{m}: MAD stalls {stalls.stalls(rules(ref[m])[1])} -> {stalls.stalls(sf)}")
+    print(f"A2 singles with SWAP_FILL: {32 - len({e.split()[1] for e in ERR[n0:]})}/32 equivalent and pass; "
+          f"ops {len(ref[0])} -> {len(fil[0])}")
 
 
 def main():
