@@ -48,10 +48,12 @@ step() {  # name timeout round mode arms...
 for a in base c1k u64id u64; do step verify-$a 480 0 dump $a; done
 grep -q "MD5 golden rc=0 (base)" "$O/verify-base.out" || { echo "=== base verify failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/"; exit 8; }
 grep -q "^run rc=0" "$O/verify-u64id.out" || { echo "=== u64id arm failed, stop"; scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/"; exit 9; }
-rc=0  # the u64 dump is diagnostic only
-for a in base c1k u64id; do step warm-$a 240 0 b2b $a; done
+rc=0  # u64 is timed only when its dump ran (its order differs, so its md5 differs from c1k)
+fw="base c1k u64id"; bw="u64id c1k base"
+if grep -q "^run rc=0" "$O/verify-u64.out"; then fw="$fw u64"; bw="u64 $bw"; fi
+for a in $fw; do step warm-$a 240 0 b2b $a; done
 for r in 1 2 3; do
-  case $r in 2) arms="u64id c1k base" ;; *) arms="base c1k u64id" ;; esac
+  case $r in 2) arms=$bw ;; *) arms=$fw ;; esac
   for a in $arms; do step r$r-b2b-$a 240 $r b2b $a; step r$r-lat-$a 240 $r lat $a; done
 done
 scp -q -o BatchMode=yes "$H:$T/tmp/t644/*" "$O/" || rc=4

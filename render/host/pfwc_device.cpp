@@ -561,6 +561,10 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
         if (tile_list_on()) writer_defines["PFWC_TILE_LIST"] = "1";
+        if (chunk_unit_on()) {  // #644: role 0 walks the even chunks of the same unit list
+            writer_defines["PFWC_UNIT_LIST"] = "1";
+            writer_defines["PFWC_TLIST_PAGE"] = std::to_string(tlist_max_page());
+        }
     }
     const KernelHandle writer = CreateKernel(
         program,
