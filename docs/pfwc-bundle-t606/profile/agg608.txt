@@ -1,0 +1,20 @@
+pfwc window (ms, mean of 5 views per chunk) | slowest core TRISC_1 / NCRISC / BRISC busy | setter
+ 0:5   base 1.466 (1.391/1.464/1.403)  rec 1.432 (1.376/1.431/1.380)  vis 1.416 (1.340/1.414/1.354)  new 1.389 (1.337/1.379/1.349)
+ 5:10  base 1.557 (1.482/1.556/1.498)  rec 1.475 (1.419/1.473/1.427)  vis 1.551 (1.470/1.550/1.488)  new 1.501 (1.452/1.483/1.474)
+10:15  base 1.626 (1.549/1.624/1.563)  rec 1.548 (1.491/1.547/1.497)  vis 1.607 (1.523/1.606/1.542)  new 1.595 (1.549/1.570/1.576)
+15:20  base 1.543 (1.477/1.542/1.487)  rec 1.470 (1.424/1.453/1.439)  vis 1.552 (1.483/1.551/1.494)  new 1.451 (1.398/1.449/1.401)
+20:25  base 1.530 (1.454/1.528/1.476)  rec 1.452 (1.395/1.451/1.400)  vis 1.514 (1.441/1.513/1.475)  new 1.441 (1.388/1.431/1.401)
+25:30  base 1.442 (1.372/1.430/1.389)  rec 1.420 (1.362/1.419/1.364)  vis 1.385 (1.313/1.384/1.323)  new 1.357 (1.298/1.355/1.302)
+
+base views=30 window 1.527 gain vs base +0.000  b2b gain -  | TRISC_0=1.446 TRISC_1=1.454 TRISC_2=1.442 NCRISC=1.524 BRISC=1.469
+rec  views=30 window 1.466 gain vs base +0.061  b2b gain 0.071 (t599)  | TRISC_0=1.403 TRISC_1=1.411 TRISC_2=1.399 NCRISC=1.462 BRISC=1.418
+vis  views=30 window 1.504 gain vs base +0.023  b2b gain 0.022 (t606 C, 1 round)  | TRISC_0=1.422 TRISC_1=1.428 TRISC_2=1.418 NCRISC=1.503 BRISC=1.446
+new  views=30 window 1.456 gain vs base +0.072  b2b gain 0.070 (t606 r1-r4)  | TRISC_0=1.397 TRISC_1=1.404 TRISC_2=1.393 NCRISC=1.444 BRISC=1.417
+base setters: 0:[('NCRISC', 5)]; 5:[('NCRISC', 5)]; 10:[('NCRISC', 5)]; 15:[('NCRISC', 5)]; 20:[('NCRISC', 5)]; 25:[('NCRISC', 4), ('BRISC', 1)]
+rec setters: 0:[('NCRISC', 5)]; 5:[('NCRISC', 5)]; 10:[('NCRISC', 5)]; 15:[('NCRISC', 3), ('BRISC', 2)]; 20:[('NCRISC', 5)]; 25:[('NCRISC', 5)]
+vis setters: 0:[('NCRISC', 5)]; 5:[('NCRISC', 5)]; 10:[('NCRISC', 5)]; 15:[('NCRISC', 5)]; 20:[('NCRISC', 5)]; 25:[('NCRISC', 5)]
+new setters: 0:[('NCRISC', 4), ('BRISC', 1)]; 5:[('NCRISC', 3), ('BRISC', 2)]; 10:[('BRISC', 3), ('NCRISC', 2)]; 15:[('NCRISC', 5)]; 20:[('NCRISC', 4), ('BRISC', 1)]; 25:[('NCRISC', 5)]
+base n=6 k2 0.643 sort 1.435 mat+blend 5.183
+rec n=6 k2 0.643 sort 1.443 mat+blend 5.179
+vis n=6 k2 0.640 sort 1.441 mat+blend 5.188
+new n=6 k2 0.641 sort 1.437 mat+blend 5.185

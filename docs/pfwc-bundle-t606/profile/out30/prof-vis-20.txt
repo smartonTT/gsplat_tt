@@ -1,0 +1,17 @@
+# vis-20 dev-vis-20.csv.gz: 110 cores, 44 programs/core, last 5 views, pfwc only
+view  window | slowest core |  TRISC_0  TRISC_1  TRISC_2   NCRISC    BRISC | setter
+   0   1.529 |      (15, 2) |    1.455    1.461    1.451    1.527    1.472 | NCRISC
+         end |              |    1.457    1.462    1.452    1.529    1.473
+   1   1.549 |      (15, 2) |    1.470    1.476    1.466    1.548    1.488 | NCRISC
+         end |              |    1.472    1.477    1.467    1.549    1.489
+   2   1.529 |       (3, 5) |    1.450    1.456    1.446    1.528    1.527 | NCRISC
+         end |              |    1.452    1.457    1.447    1.529    1.528
+   3   1.506 |       (2, 5) |    1.431    1.437    1.427    1.505    1.504 | NCRISC
+         end |              |    1.432    1.438    1.428    1.506    1.505
+   4   1.457 |      (15, 3) |    1.367    1.374    1.363    1.456    1.386 | NCRISC
+         end |              |    1.369    1.375    1.365    1.457    1.387
+MEAN window 1.514 ms; setter per view: [('NCRISC', 5)]
+slowest-core busy  TRISC_0=1.435 TRISC_1=1.441 TRISC_2=1.431 NCRISC=1.513 BRISC=1.475
+slowest-core kernel end (from window start) TRISC_0=1.436 TRISC_1=1.442 TRISC_2=1.432 NCRISC=1.514 BRISC=1.477
+mean-core busy     TRISC_0=1.331 TRISC_1=1.338 TRISC_2=1.327 NCRISC=1.374 BRISC=1.376
+last KERNEL to end, all cores x views: TRISC_0=0% TRISC_1=0% TRISC_2=0% NCRISC=37% BRISC=63% (n=550, views=5)
