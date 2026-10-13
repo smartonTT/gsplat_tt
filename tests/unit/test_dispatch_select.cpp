@@ -96,6 +96,22 @@ int main() {
     std::remove(tmp);
     check(card_type_path(0) == "/sys/class/tenstorrent/tenstorrent!0/tt_card_type", "sysfs path");
 
+    // Task #581: device id and card index for AFR workers.
+    check(device_id_from_env(nullptr) == 0, "device id unset");
+    check(device_id_from_env("") == 0, "device id empty");
+    check(device_id_from_env("1") == 1, "device id 1");
+    check(device_id_from_env("3") == 3, "device id 3");
+    check(device_id_from_env("-1") == 0, "device id negative");
+    check(device_id_from_env("1x") == 0, "device id junk");
+    check(device_id_from_env("x") == 0, "device id not a number");
+    check(card_index(0, nullptr) == 0, "card index no visible");
+    check(card_index(1, "") == 1, "card index empty visible");
+    check(card_index(0, "1") == 1, "card index visible 1");
+    check(card_index(0, "2,3") == 2, "card index first visible");
+    check(card_index(0, "a") == 0, "card index bad visible");
+    check(card_type_path(card_index(0, "1")) == "/sys/class/tenstorrent/tenstorrent!1/tt_card_type",
+          "afr worker sysfs path");
+
     if (failures) return 1;
     std::printf("test_dispatch_select: OK\n");
     return 0;

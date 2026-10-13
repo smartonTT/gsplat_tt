@@ -87,7 +87,9 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     if (!s.mesh_device) {
-        constexpr int device_id = 0;
+        // Task #581: GSPLAT_TT_DEVICE_ID picks the device (AFR workers, render/afr.py); default 0.
+        const int device_id = dispatch::device_id_from_env(std::getenv("GSPLAT_TT_DEVICE_ID"));
+        const int card_idx = dispatch::card_index(device_id, std::getenv("TT_VISIBLE_DEVICES"));
         // GSPLAT_TT_KCFG_EXTRA_KB=N grows the Tensix kernel config ring buffer by N KB (default
         // 69 KB) by shrinking the worker L1 allocator. Unset: sized for the pfwc config, plus
         // 8 KB with the device profiler on, except the split stays at 32 KB (kcfg_size.h). The split only builds with the fused
@@ -109,7 +111,7 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
                          std::getenv("GSPLAT_TT_DISPATCH"));
         }
         const std::string card = mode == dispatch::Mode::kAuto
-                                     ? dispatch::read_card_type_file(dispatch::card_type_path(device_id))
+                                     ? dispatch::read_card_type_file(dispatch::card_type_path(card_idx))
                                      : std::string();
         const dispatch::Choice dc =
             dispatch::resolve(mode, card, static_cast<uint32_t>(num_cqs),
@@ -134,8 +136,8 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         const auto g = s.mesh_device->compute_with_storage_grid_size();
         std::size_t gx = g.x, gy = g.y;
         cap_grid(gx, gy);
-        std::fprintf(stderr, "[DEV] dispatch %s (%s%s%s), command queues %u, compute grid %zux%zu%s\n",
-                     eth ? "eth" : "worker", dc.why, card.empty() ? "" : ", card ", card.c_str(),
+        std::fprintf(stderr, "[DEV] device %d (card %d), dispatch %s (%s%s%s), command queues %u, compute grid %zux%zu%s\n",
+                     device_id, card_idx, eth ? "eth" : "worker", dc.why, card.empty() ? "" : ", card ", card.c_str(),
                      static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y,
                      (gx != g.x || gy != g.y)
                          ? (", stage grid capped to " + std::to_string(gx) + "x" + std::to_string(gy)).c_str()

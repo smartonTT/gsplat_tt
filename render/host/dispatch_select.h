@@ -91,6 +91,29 @@ inline bool b4a_fold_on(const char* env, Kind kind) {
     return kind == Kind::kWorker;
 }
 
+// Task #581 (AFR, render/afr.py): the device this process opens. GSPLAT_TT_DEVICE_ID
+// (`env`, nullptr if unset) is the tt-metal device id passed to create_unit_mesh; unset, empty
+// or not a non-negative integer = 0. An AFR worker normally runs with TT_VISIBLE_DEVICES=<pcie
+// id> and device id 0, so two processes never open each other's chip.
+inline int device_id_from_env(const char* env) {
+    if (env == nullptr || *env == '\0') return 0;
+    char* end = nullptr;
+    const long v = std::strtol(env, &end, 10);
+    if (end == env || *end != '\0' || v < 0 || v > 255) return 0;
+    return static_cast<int>(v);
+}
+
+// The /dev/tenstorrent/<n> (and sysfs) index of the card `device_id` names: the first id of
+// TT_VISIBLE_DEVICES (`visible`, nullptr if unset) when that is set, since tt-metal then numbers
+// the visible cards from 0; else device_id itself.
+inline int card_index(int device_id, const char* visible) {
+    if (visible == nullptr || *visible == '\0') return device_id;
+    char* end = nullptr;
+    const long v = std::strtol(visible, &end, 10);
+    if (end == visible || v < 0 || v > 255 || (*end != '\0' && *end != ',')) return device_id;
+    return static_cast<int>(v);
+}
+
 // tt-kmd's card type attribute ("p150a", "p100a", ...) of /dev/tenstorrent/<id>.
 inline std::string card_type_path(int device_id) {
     return "/sys/class/tenstorrent/tenstorrent!" + std::to_string(device_id) + "/tt_card_type";
