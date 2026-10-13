@@ -1,0 +1,82 @@
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/p150bench/ttm-eth12-t427 (from env)
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-13 01:48:28.390 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 01:48:28.390 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 01:48:28.394 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 01:48:28.395 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-13 01:48:28.395 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 01:48:28.395 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 01:48:28.397 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-13 01:48:28.397 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-13 01:48:28.397 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 01:48:28.397 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 01:48:28.400 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 01:48:28.401 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-13 01:48:28.401 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 01:48:28.401 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 01:48:28.401 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-13 01:48:28.401 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-13 01:48:28.402 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-13 01:48:28.472 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-10-13 01:48:28.472 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-13 01:48:28.472 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-13 01:48:28.472 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-13 01:48:28.473 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-13 01:48:28.474 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-13 01:48:28.475 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-13 01:48:28.783 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-13 01:48:28.783 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-13 01:48:28.783 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-13 01:48:28.783 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-13 01:48:28.784 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-13 01:48:28.785 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-13 01:48:28.785 | info     |             UMD | Firmware bundle version 19.15.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-13 01:48:28.786 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-13 01:48:28.788 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-13 01:48:28.788 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-13 01:48:28.788 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 01:48:28.788 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 01:48:28.788 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-13 01:48:28.788 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 01:48:28.788 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-13 01:48:28.788 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-13 01:48:28.788 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-13 01:48:28.788 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-13 01:48:28.788 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-13 01:48:28.788 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-13 01:48:28.788 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 120)
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 5.1 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.63 layout=0.10 pub_host=0.37 total=1.18ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[run] timing 30 views (warmup excluded)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.52 layout=0.08 pub_host=0.36 total=0.96ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=120/120 ran=1
