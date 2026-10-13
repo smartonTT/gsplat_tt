@@ -61,7 +61,7 @@ def load_dev(path):
                 s = stack.pop((c, r, z), None)
                 if s is not None:
                     iv[(c, r)].append((z, s, t))
-            elif z.startswith("fz_"):
+            elif z.startswith(("fz_", "bz_")):  # t630: + bz_ counters
                 td[(c, r)].append((z, t, int(p[6])))
     return iv, td
 
