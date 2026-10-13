@@ -12,7 +12,7 @@
 [ttw 2026-10-13T13:25:19-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=90553d1e bin=dad729cb129737fe t644 90553d1e u64 gather probe (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t644-verify-c1k  timeout=480s  worry=600s  ts=2026-10-13T13:25:19-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/u64-gather-t644/remote_ab.sh 0 dump c1k
