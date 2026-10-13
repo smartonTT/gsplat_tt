@@ -1,6 +1,7 @@
 #!/bin/bash
-# t595 (remote, measurement box bh-33, through devrun.sh inside drive.sh's ttp lock p100):
-# per-stage b2b profile of best-iter-227 defaults.
+# t630 (remote, measurement box bh-33, through devrun.sh inside drive.sh's ttp lock p100), adapted
+# from t595's docs/profile-t227/bench.sh: FOLD=1 fixed-cost attribution of best-iter-227 defaults.
+#   bench.sh disasm                 objdump of the newest untraced matblend_compute trisc1.elf (SFPU count)
 #   bench.sh b2b <round>            render/run.py --no-ref --back-to-back (1 check + 1 warm-up + 20 passes,
 #                                   30 views), GSPLAT_B2B_ALL_STAGES=1 (prints every host stage timer; no
 #                                   effect on the device work)
@@ -15,9 +16,10 @@ export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=${MESH_DEVICE:-P100} TTW_DEVRUN=
 unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_STAGES \
   GSPLAT_TT_HOST_PROFILE GSPLAT_TT_MAT_EARLY_CULL GSPLAT_TT_MATCULL_PROF TT_METAL_DEVICE_PROFILER \
   GSPLAT_TT_PROFILE GSPLAT_TT_PROFILE_READ_EVERY TT_METAL_PROFILER_DIR GSPLAT_TT_K2_PROF GSPLAT_TT_OL_EMIT_PROF \
-  GSPLAT_TT_BLEND_PROF GSPLAT_VIEW_COUNTS GSPLAT_B2B_ALL_STAGES
+  GSPLAT_TT_BLEND_PROF GSPLAT_VIEW_COUNTS GSPLAT_B2B_ALL_STAGES GSPLAT_TT_BZ_PROF GSPLAT_TT_FZ_OFF \
+  GSPLAT_TT_KCFG_EXTRA_KB GSPLAT_TT_B4A_FOLD GSPLAT_TT_MATCULL_DEPTH
 T=${T:-/localdev/smarton/gstt2-t513}; cd "$T" || exit 1; source .venv/bin/activate
-S=$T/tmp/t595; mkdir -p $S
+S=$T/tmp/t630; mkdir -p $S
 CACHE=/localdev/smarton/.cache/ttmc-gstt2-t513
 hang() { echo "HANG in $1: tt-smi -r"; tt-smi -r > $S/reset-$1.log 2>&1; echo "reset rc=$?"; exit 124; }
 SYS='/sys/class/tenstorrent/tenstorrent!0'
@@ -28,35 +30,35 @@ case $mode in
 b2b)
   tag=b2b-r${1:?round}; hdr $tag
   GSPLAT_B2B_ALL_STAGES=1 TT_METAL_CACHE_RENDER=$CACHE timeout ${RUN_TIMEOUT:-300} \
-    python3 render/run.py --no-ref --back-to-back --iter-dir t595-$tag > $S/run-$tag.log 2>&1
+    python3 render/run.py --no-ref --back-to-back --iter-dir t630-$tag > $S/run-$tag.log 2>&1
   rc=$?; echo "run rc=$rc"; grep -E "$pat" $S/run-$tag.log | cut -c1-300 | head -6
   { [ $rc = 124 ] || [ $rc = 137 ]; } && hang $tag
-  rm -rf tmp/t595-$tag; exit $rc ;;
+  rm -rf tmp/t630-$tag; exit $rc ;;
 counts)
   tag=counts; hdr $tag
   GSPLAT_VIEW_COUNTS=1 TT_METAL_CACHE_RENDER=$CACHE timeout ${RUN_TIMEOUT:-300} \
-    python3 render/run.py --no-ref --iter-dir t595-$tag > $S/run-$tag.log 2>&1
+    python3 render/run.py --no-ref --iter-dir t630-$tag > $S/run-$tag.log 2>&1
   rc=$?; echo "run rc=$rc"; grep -E "$pat" $S/run-$tag.log | cut -c1-300 | head -6
   echo "VIEW_COUNTS lines $(grep -c '^VIEW_COUNTS' $S/run-$tag.log)"
   { [ $rc = 124 ] || [ $rc = 137 ]; } && hang $tag
-  rm -rf tmp/t595-$tag; exit $rc ;;
+  rm -rf tmp/t630-$tag; exit $rc ;;
 dump)
   tag=dump; hdr $tag
-  rm -rf tmp/t595-dump
+  rm -rf tmp/t630-dump
   TT_METAL_CACHE_RENDER=$CACHE timeout ${RUN_TIMEOUT:-300} \
-    python3 render/run.py --no-ref --iter-dir t595-$tag --dump-views t595-dump > $S/run-$tag.log 2>&1
+    python3 render/run.py --no-ref --iter-dir t630-$tag --dump-views t630-dump > $S/run-$tag.log 2>&1
   rc=$?; echo "run rc=$rc"; grep -E "$pat" $S/run-$tag.log | cut -c1-300 | head -6
   { [ $rc = 124 ] || [ $rc = 137 ]; } && hang $tag
-  if [ -d tmp/t595-dump ]; then (cd tmp/t595-dump && md5sum * | sort -k2) > $S/md5-dump.txt
+  if [ -d tmp/t630-dump ]; then (cd tmp/t630-dump && md5sum * | sort -k2) > $S/md5-dump.txt
     echo "VIEWS=$(wc -l < $S/md5-dump.txt) SWEEP_MD5=$(md5sum < $S/md5-dump.txt | cut -c1-8) (golden 077caaba)"; fi
-  rm -rf tmp/t595-$tag tmp/t595-dump; exit $rc ;;
+  rm -rf tmp/t630-$tag tmp/t630-dump; exit $rc ;;
 chunk)
   tag=${1:?tag}; a=${2:?a}; b=${3:?b}; hdr "chunk $tag $a:$b"
-  TT_METAL_CACHE_RENDER=$CACHE timeout ${RUN_TIMEOUT:-300} python3 render/run.py --no-ref --iter-dir t595-$tag \
+  TT_METAL_CACHE_RENDER=$CACHE timeout ${RUN_TIMEOUT:-300} python3 render/run.py --no-ref --iter-dir t630-$tag \
     --view-range $a:$b --back-to-back --b2b-passes 1 --b2b-warmup 0 > $S/run-$tag.log 2>&1
   rc=$?; echo "run rc=$rc"; grep -E "$pat" $S/run-$tag.log | cut -c1-300 | head -6
   { [ $rc = 124 ] || [ $rc = 137 ]; } && hang $tag
-  rm -rf tmp/t595-$tag; exit $rc ;;
+  rm -rf tmp/t630-$tag; exit $rc ;;
 tracy)
   tag=${1:?tag}; a=${2:?a}; b=${3:?b}; shift 3; e="$*"
   PR=$S/prof-$tag; rm -rf $PR; mkdir -p $PR
@@ -64,7 +66,7 @@ tracy)
 #!/bin/bash
 cd $T; source .venv/bin/activate
 env $e TT_METAL_CACHE_RENDER=$CACHE-prof GSPLAT_TT_PROFILE_READ_EVERY=11 \
-  python3 render/run.py --no-ref --iter-dir t595-$tag --view-range $a:$b --back-to-back --b2b-passes 1 --b2b-warmup 0
+  python3 render/run.py --no-ref --iter-dir t630-$tag --view-range $a:$b --back-to-back --b2b-passes 1 --b2b-warmup 0
 IN
   chmod +x $PR/inner.sh
   hdr "tracy $tag $a:$b [${e:-plain}]"
@@ -81,7 +83,16 @@ IN
   head -1 "$dl" | cut -c1-200
   gzip -c "$dl" > $S/dev-$tag.csv.gz
   echo "device csv $tag rows $(wc -l < "$dl")"
-  rm -rf $PR tmp/t595-$tag
+  rm -rf $PR tmp/t630-$tag
   exit $rc ;;
+disasm)
+  hdr disasm
+  od=$(find "$TT_METAL_HOME/runtime/sfpi" -name 'riscv*-objdump' -type f 2>/dev/null | head -1)
+  elf=$(find "$CACHE" -path '*matblend_compute*' -name trisc1.elf -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2)
+  echo "objdump=$od elf=$elf"
+  [ -n "$od" ] && [ -n "$elf" ] || { echo "disasm: missing tool or elf"; exit 2; }
+  "$od" -d -C "$elf" | gzip -c > $S/matblend_trisc1.dis.gz
+  "$od" -h "$elf" > $S/matblend_trisc1.sections.txt
+  echo "disasm lines $(zcat $S/matblend_trisc1.dis.gz | wc -l)"; exit 0 ;;
 *) echo "bad mode $mode"; exit 2 ;;
 esac
