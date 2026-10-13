@@ -60,6 +60,15 @@ int main() {
     check(resolve(Mode::kAuto, "", 1, true).kind == Kind::kWorker, "auto unknown card -> worker");
     check(std::strlen(resolve(Mode::kAuto, "p100a", 1, false).why) > 0, "reason logged");
 
+    // Task #562: the B4a fold (K2(N+1) in the fused blend(N)) hangs the p150 under ETH
+    // dispatch (12x10), so its default follows the dispatch; GSPLAT_TT_B4A_FOLD wins.
+    check(b4a_fold_on(nullptr, Kind::kWorker), "fold unset, worker -> on");
+    check(!b4a_fold_on(nullptr, Kind::kEth), "fold unset, eth -> off");
+    check(!b4a_fold_on("", Kind::kWorker), "fold set but empty = 0, as before");
+    check(b4a_fold_on("1", Kind::kEth), "fold=1 forces on under eth");
+    check(!b4a_fold_on("0", Kind::kWorker), "fold=0 kill switch, worker");
+    check(!b4a_fold_on("0", Kind::kEth), "fold=0 kill switch, eth");
+
     // Overlay marker in TT_METAL_RUNTIME_ROOT.
     check(!overlay_active(nullptr), "runtime root unset");
     check(!overlay_active(""), "runtime root empty");

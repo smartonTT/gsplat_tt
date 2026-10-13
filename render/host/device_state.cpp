@@ -37,6 +37,7 @@ struct State {
         buffers;
     std::mutex mu;
     bool sort_publish_pending = false;
+    bool eth_dispatch = false;  // task #562: what get_device() opened the device with
     bool sort_pipe_scalars_valid = false;
     uint32_t sort_pipe_p_kept = 0;
     uint32_t sort_pipe_mask_elems = 0;
@@ -114,6 +115,7 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             dispatch::resolve(mode, card, static_cast<uint32_t>(num_cqs),
                               dispatch::overlay_active(std::getenv("TT_METAL_RUNTIME_ROOT")));
         const bool eth = dc.kind == dispatch::Kind::kEth;
+        s.eth_dispatch = eth;
         const tt::tt_metal::DispatchCoreConfig dispatch_cfg =
             eth ? tt::tt_metal::DispatchCoreConfig{tt::tt_metal::DispatchCoreType::ETH}
                 : tt::tt_metal::DispatchCoreConfig{};
@@ -140,6 +142,13 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
                          : "");
     }
     return s.mesh_device;
+}
+
+bool eth_dispatch() {
+    get_device();
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    return s.eth_dispatch;
 }
 
 bool is_initialized() {
