@@ -8,9 +8,9 @@ whose camera walks the bench poses, so the pipelined mode latches and hints
 exactly the next bench view. Prints per mode: ms/view (render loop wall / views),
 xview hits/misses (delta of the C++ counters) and the list md5 computed like
 render/run.py's raw_md5, plus the opt/md5_golden.py list md5 of the same frames (the
-'md5sum *' lines of the view PNGs sorted by name; 39d84b28 on a p150 with eth 12x10).
-The two are different hashes of the same frames: raw_md5 d9a60a3c pairs with golden
-39d84b28 (t460). Saves the
+'md5sum *' lines of the view PNGs sorted by name; 84695855 on a p150 with eth 12x10 since
+iter 227, 39d84b28 before). The two are different hashes of the same frames: raw_md5
+c194c715 pairs with golden 84695855 (t586; before iter 227 d9a60a3c with 39d84b28, t460). Saves the
 pipelined hero frame as hero.png, a x4 diff and the PSNR vs the reference render.
   venv/bin/python opt/viewer/pipeline_probe.py --out DIR [--passes 4] [--port 8097]
 """
