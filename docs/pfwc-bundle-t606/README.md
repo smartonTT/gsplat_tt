@@ -29,6 +29,8 @@ spoke/frame/leaf edges as in best-iter-227.
 Verdict: **shelved** on both kill rules (gain 0.070 < 0.1 ms/view gate; md5 off golden). The VIS_FAST
 predicate was not made exact: an exact predicate can only keep or lose VIS_FAST's 0.0-0.02 ms, so the
 bundle cannot reach the gate either way. Both flags stay default 0; no golden refresh proposed.
+The step-3 pfwc profile below (t608) confirms the A/B: the pfwc window gain equals the b2b gain
+for each arm, so the verdict stands.
 
 ## pfwc window profile (plan-4 spec 1 step 3, review #607, task t608)
 
