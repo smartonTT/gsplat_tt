@@ -1,0 +1,43 @@
+== t574base writer_pfwc_split/9429089415189212552/brisc/brisc.elf
+== t574base writer_pfwc_split/9134361578478573699/ncrisc/ncrisc.elf
+ffb00cb8 00000008 b noc_nonposted_writes_acked
+ffb00cc0 00000008 b noc_nonposted_writes_num_issued
+ffb00cc8 00000008 b noc_reads_num_issued
+== t574base sort_bin_onelaunch/5910751635739734247/brisc/brisc.elf
+ffb00c30 00000100 D __clz_tab
+== t574base sort_bin_onelaunch/268247651041380475/ncrisc/ncrisc.elf
+ffb00d28 00000008 b noc_nonposted_atomics_acked
+ffb00d30 00000008 b noc_nonposted_writes_acked
+ffb00d20 00000008 b noc_nonposted_writes_num_issued
+ffb00d38 00000008 b noc_reads_num_issued
+ffb00c20 00000100 D __clz_tab
+== t574base matblend_ncrisc/14734383810536576984/ncrisc/ncrisc.elf
+ffb00c20 00000008 b noc_nonposted_atomics_acked
+ffb00c30 00000008 b noc_nonposted_writes_acked
+ffb00c28 00000008 b noc_nonposted_writes_num_issued
+ffb00c38 00000008 b noc_reads_num_issued
+== t574base matblend_brisc/17684589488667556733/brisc/brisc.elf
+ffb00d30 00000004 d _ZN3k2k5g_rtaE
+ffb00d34 00000004 b g_b4a_ctx
+ffb00d38 00000004 b g_b4a_fn
+ffb00c30 00000100 D __clz_tab
+== t574new writer_pfwc_split/18044788735795189317/brisc/brisc.elf
+== t574new writer_pfwc_split/3613961761017699124/ncrisc/ncrisc.elf
+ffb00cb8 00000008 b noc_nonposted_writes_acked
+ffb00cc0 00000008 b noc_nonposted_writes_num_issued
+ffb00cc8 00000008 b noc_reads_num_issued
+== t574new sort_bin_onelaunch/88548601893927724/ncrisc/ncrisc.elf
+ffb00c28 00000008 b noc_nonposted_atomics_acked
+ffb00c30 00000008 b noc_nonposted_writes_acked
+ffb00c20 00000008 b noc_nonposted_writes_num_issued
+ffb00c38 00000008 b noc_reads_num_issued
+== t574new sort_bin_onelaunch/430432708597095045/brisc/brisc.elf
+== t574new matblend_brisc/2188857505155710578/brisc/brisc.elf
+ffb00c30 00000004 d _ZN3k2k5g_rtaE
+ffb00c34 00000004 b g_b4a_ctx
+ffb00c38 00000004 b g_b4a_fn
+== t574new matblend_ncrisc/7944056402022931286/ncrisc/ncrisc.elf
+ffb00c20 00000008 b noc_nonposted_atomics_acked
+ffb00c30 00000008 b noc_nonposted_writes_acked
+ffb00c28 00000008 b noc_nonposted_writes_num_issued
+ffb00c38 00000008 b noc_reads_num_issued
