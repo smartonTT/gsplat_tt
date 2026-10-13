@@ -1,0 +1,13 @@
+================ BUILD ID ================
+  cpp : #124 sha=cdc57f43 bin=f463cbc791d85a95 t595 094262a8 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t595-dump  timeout=380s  worry=600s  ts=2026-10-13T00:50:41-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh dump
+-----------------------------------------
+=== dump 094262a8 07:50:43 card=p100a load=1.67 0.72 0.37
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.6 p50_ms=8.7 min_ms=6.0 max_ms=11.2 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t595-dump
+VIEWS=31 SWEEP_MD5=a0a7aef7 (golden 077caaba)
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-dump-20261013-005040.log

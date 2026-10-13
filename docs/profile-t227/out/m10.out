@@ -1,0 +1,14 @@
+================ BUILD ID ================
+  cpp : #124 sha=cdc57f43 bin=f463cbc791d85a95 t595 094262a8 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t595-m10  timeout=380s  worry=600s  ts=2026-10-13T00:53:26-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh tracy M10 10 15 GSPLAT_TT_MATCULL_PROF=1
+-----------------------------------------
+=== tracy M10 10:15 [GSPLAT_TT_MATCULL_PROF=1] 094262a8 07:53:28 card=p100a load=1.69 1.54 0.77
+tracy M10 rc=1 07:53:32
+2026-10-13 07:53:32.826 | critical |          Always | TT_FATAL: Program size (117536) too large for kernel config buffer (103424) on TENSIX (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+Traceback (most recent call last):
+no device csv M10
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-m10-20261013-005326.log

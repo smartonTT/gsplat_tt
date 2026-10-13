@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #124 sha=cdc57f43 bin=f463cbc791d85a95 t595 094262a8 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t595-warm  timeout=380s  worry=600s  ts=2026-10-13T00:49:58-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh b2b 0
+-----------------------------------------
+=== b2b-r0 094262a8 07:50:00 card=p100a load=2.09 0.65 0.33
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=10 views=30 gap_ms=0.00 t_end=1791877809.102 period=8.440 render=8.440 py_resid=0.060 head=0.003 project=0.240 tile_assign=0.003 sort=0.799 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.147 d2h=0.008 assemble=0.000 tail=0.004 xview=0.173 view_total=8.381 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=11 views=30 gap_ms=0.00 t_end=1791877809.514 period=8.445 render=8.445 py_resid=0.060 head=0.003 project=0.238 tile_assign=0.003 sort=0.800 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.151 d2h=0.009 assemble=0.000 tail=0.004 xview=0.174 view_total=8.385 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=12 views=30 gap_ms=0.00 t_end=1791877809.927 period=8.452 render=8.452 py_resid=0.060 head=0.003 project=0.246 tile_assign=0.003 sort=0.814 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.135 d2h=0.009 assemble=0.000 tail=0.004 xview=0.175 view_total=8.392 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=13 views=30 gap_ms=0.00 t_end=1791877810.340 period=8.443 render=8.443 py_resid=0.059 head=0.003 project=0.242 tile_assign=0.003 sort=0.809 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.138 d2h=0.009 assemble=0.000 tail=0.004 xview=0.173 view_total=8.383 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=14 views=30 gap_ms=0.00 t_end=1791877810.754 period=8.472 render=8.472 py_resid=0.060 head=0.003 project=0.287 tile_assign=0.004 sort=0.845 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.083 d2h=0.008 assemble=0.000 tail=0.004 xview=0.176 view_total=8.413 sort_pread=0.002 sort_bin_co
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-warm-20261013-004958.log
