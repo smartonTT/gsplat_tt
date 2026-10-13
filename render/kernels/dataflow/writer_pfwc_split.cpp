@@ -420,6 +420,18 @@ void kernel_main() {
 
         pg.begin(m0, seg_base / PW);
         rs.begin(seg_base + m0);
+#if PFWC_REC32 && PFWC_RECFAST
+        // Task #599: the register-cursor record loop (pfwc_wsplit::rec32_chunk).
+        {
+            const RecSrc src{p_dep, p_aabb, p_tpg, p_a, p_b, p_c, p_m2x, p_m2y, q01, q23};
+            pr = rec32_chunk(mw, vis_tile::MASK_WORDS, src, vis_tile::PAYLOAD, pr, pg, rs, w_hrec, w_rec,
+                             flush_pg, flush_rec, [&] {
+#if WS_READER
+                                 if (rd_here) rd_poll();
+#endif
+                             });
+        }
+#else
         for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++) {
 #if WS_READER
             if (rd_here && (w & 7u) == 7u) rd_poll();
@@ -470,6 +482,7 @@ void kernel_main() {
                 rs.next(flush_rec);
             }
         }
+#endif  // PFWC_REC32 && PFWC_RECFAST
         rs.end(flush_rec);
         WS_MARK(ws_rec);
 

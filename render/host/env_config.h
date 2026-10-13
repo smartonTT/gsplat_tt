@@ -304,6 +304,14 @@ inline bool pfwc_rec32() {
     return v;
 }
 
+// Task #599 (docs/pfwc-rec-loop-t599): the PFWC_REC32 writers' record loop with
+// its page and record cursors in registers (pfwc_wsplit::rec32_chunk; 117 -> 67
+// cycles per survivor on one mover). Same bytes and md5. Needs pfwc_rec32().
+inline bool pfwc_recfast() {
+    static const bool v = pfwc_rec32() && env_uint("GSPLAT_TT_PFWC_RECFAST", 0u) != 0u;
+    return v;
+}
+
 // Task #481: with REC32 and the per-scene UNORM16 packs, the pfwc writer no longer reads the
 // fp32 colour tiles (12 B per Gaussian of DRAM reads per view); the writer still reads them
 // when the packs are absent (NaN scene). Default on since task #489 (bundled with
