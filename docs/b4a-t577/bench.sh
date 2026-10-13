@@ -48,9 +48,10 @@ for a in off on on off off on; do  # 3 rounds, alternating order (ABBA AB)
   else run b2b$n-$a 400 GSPLAT_TT_B4A_FOLD=1 -- --back-to-back; chk_fold b2b$n-$a; fi
 done
 for f in $O/run-b2b*-o*.log; do echo "$(basename $f .log) $(grep -o 'b2b_ms_frame=[0-9.]*' $f | tail -1)"; done | tee $O/ab.txt
-t0=$(date +%s); k=0  # soak: fold-on b2b, 1000 passes a run, until SOAK_S seconds
+t0=$(date +%s); k=0  # soak: b2b with the tree's fold default (GSPLAT_TT_B4A_FOLD unset; on under ETH since
+# the gate lift), 1000 passes a run, until SOAK_S seconds
 while [ $(( $(date +%s) - t0 )) -lt $SOAK_S ]; do
-  k=$((k + 1)); run soak$k 900 GSPLAT_TT_B4A_FOLD=1 -- --back-to-back --b2b-passes 1000 || break; chk_fold soak$k
+  k=$((k + 1)); run soak$k 900 GSPLAT_TT_STACK_CHECK=1 -- --back-to-back --b2b-passes 1000 || break; chk_fold soak$k
 done
 echo "SOAK runs=$k seconds=$(( $(date +%s) - t0 )) rc=$rc" | tee $O/soak.txt
 rm -rf tmp/t577-*
