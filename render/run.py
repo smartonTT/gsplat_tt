@@ -365,7 +365,7 @@ def _b2b_keep_out_slots(args, n_views, env=os.environ):
 
 
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
-                  hero_clean, dump_dir, out_dir):
+                  hero_clean, dump_dir, out_dir, afr=None, idx=None):
     """Throughput mode: render `order` back to back, 1 + args.b2b_warmup +
     args.b2b_passes times.
 
@@ -383,7 +383,12 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
 
     GSPLAT_TT_XVIEW_OVERLAP=1: each render is told the next view's w2c (the
     first view's at the end of a pass that another pass follows), so every
-    render but the very last prefetches the next one."""
+    render but the very last prefetches the next one.
+
+    Task #581 (AFR worker): `afr` (render/afr.py WorkerLink) waits for the
+    coordinator's GO before each pass and reports the pass's monotonic window
+    and pass 0's digests; `idx` = the sweep positions of `order`, used in the
+    --dump-views file names (default 0..len-1)."""
     import hashlib
     extrs = [c2w_to_w2c(torch.from_numpy(np.asarray(cam["views"][n]["c2w"],
                                                      dtype=np.float32)))
@@ -406,6 +411,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
         gap = getattr(args, "view_gap_ms", 0.0)
         if clean is not None:
             clean.reset_stage_timings()
+        if afr is not None:
+            afr.before_pass(p)
         if gap <= 0.0:
             t0 = time.perf_counter()
             if keep:
@@ -431,6 +438,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                     imgs.append(im)
                 _spin_ms(gap)
             wall_ms = (time.perf_counter() - t0) * 1000.0
+        if afr is not None:
+            afr.mark_end()
         pass_ms.append(wall_ms / len(order))
         render_frame.append(render_ms / len(order))
         if clean is not None:
@@ -451,7 +460,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                 if name == hero_name:
                     hero_clean = img
                 if dump_dir is not None:
-                    Image.fromarray(_to_u8(img)).save(dump_dir / f"view{i:02d}_{name}.png")
+                    j = i if idx is None else idx[i]
+                    Image.fromarray(_to_u8(img)).save(dump_dir / f"view{j:02d}_{name}.png")
         elif keep and digests != digests0:
             identical = False
             bad = [order[i] for i, (a, b) in enumerate(zip(digests, digests0)) if a != b]
@@ -461,6 +471,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
               f"{' (warm-up)' if 0 < p <= n_warm else ''}"
               f"{'' if keep else ' (drop)'}: {wall_ms:.1f} ms for {len(order)} views "
               f"= {pass_ms[-1]:.3f} ms/frame", flush=True)
+        if afr is not None:
+            afr.after_pass(p, digests0 if p == 0 else None)
         del imgs
     Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
     timed = pass_ms[1 + n_warm:] or pass_ms
@@ -484,6 +496,57 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     print(f"TTW_TIMING b2b_ms_frame={ms_frame:.3f}", flush=True)
     print(f"TTW_TIMING b2b_ms_frame_median={ms_median:.3f}", flush=True)
     return 0 if identical else 5
+
+
+def _afr_coordinate(args, argv=None, env=None, popen=None):
+    """Task #581: GSPLAT_TT_AFR=1. Start one run.py worker per chip in
+    GSPLAT_TT_AFR_DEVICES (render/afr.py), print the merged B2B line and
+    return the exit code. Opens no device itself."""
+    import json
+    import subprocess
+    import afr
+    env = os.environ if env is None else env
+    argv = sys.argv[1:] if argv is None else argv
+    if not args.back_to_back:
+        print("[run] GSPLAT_TT_AFR=1 needs --back-to-back (AFR is a throughput "
+              "mode; latency per view is the single-chip one)", file=sys.stderr, flush=True)
+        return 2
+    try:
+        devs = afr.devices(env)
+    except ValueError as e:
+        print(f"[run] {e}", file=sys.stderr, flush=True)
+        return 2
+    cam = json.loads(args.cameras.read_text())[args.scene]
+    order = cam["order"]
+    if args.view_range:
+        a, b = args.view_range.split(":")
+        order = order[int(a) if a else None:int(b) if b else None]
+    if len(order) < len(devs):
+        print(f"[run] AFR: {len(order)} views for {len(devs)} chips", file=sys.stderr, flush=True)
+        return 2
+    n_warm = max(0, args.b2b_warmup)
+    n_passes = 1 + n_warm + max(0, args.b2b_passes)
+    cmds = [([sys.executable, str(Path(__file__).resolve())] + afr.worker_argv(argv, k, len(devs)),
+             afr.worker_env(env, k, d)) for k, d in enumerate(devs)]
+    print(f"[run] AFR: {len(devs)} chips (devices {devs}), {len(order)} views, "
+          f"{n_passes} passes", flush=True)
+    kw = {} if popen is None else {"popen": popen}
+    rc, info = afr.coordinate(cmds, n_passes, len(order),
+                              log=lambda m: print(m, flush=True), **kw)
+    if not info["periods"]:
+        print(f"[run] AFR: no pass completed (rc {rc}, workers {info['worker_rc']})",
+              file=sys.stderr, flush=True)
+        return rc or 8
+    out_dir = REPO_ROOT / "tmp" / args.iter_dir
+    line, ms_frame, ms_median = afr.summary_line(
+        info, args.scene, len(order), n_warm, args.b2b_drop, args.view_gap_ms, devs, out_dir)
+    print(line, flush=True)
+    if rc == 0:
+        print(f"TTW_TIMING b2b_ms_frame={ms_frame:.3f}", flush=True)
+        print(f"TTW_TIMING b2b_ms_frame_median={ms_median:.3f}", flush=True)
+    else:
+        print(f"[run] AFR failed: rc {rc}, workers {info['worker_rc']}", file=sys.stderr, flush=True)
+    return rc
 
 
 _STACK_CHECKED: set = set()
@@ -566,6 +629,8 @@ def _main():
                          "how much device work a host gap hides")
     ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
                     help=argparse.SUPPRESS)
+    # Task #581: set by the AFR coordinator (GSPLAT_TT_AFR=1) on its workers.
+    ap.add_argument("--afr-worker", default=None, metavar="K/N", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     # Device-lock discipline: render_clean opens the TT device, so only run
@@ -575,6 +640,12 @@ def _main():
               "(no TTW_DEVRUN). Use devrun.sh, or set TTW_ALLOW_DIRECT=1 for a "
               "one-off manual human run.", file=sys.stderr, flush=True)
         sys.exit(3)
+
+    # Task #581: GSPLAT_TT_AFR=1 --back-to-back runs one worker process per chip.
+    import afr
+    if afr.enabled() and args.afr_worker is None and args.ref_only is None:
+        sys.stdout.flush()
+        os._exit(_afr_coordinate(args))
 
     # Task #409: ETH dispatch (12x10) on a p150, worker elsewhere; before the device opens.
     if args.ref_only is None:
@@ -633,6 +704,13 @@ def _main():
         order = order[int(a) if a else None:int(b) if b else None]
         if not order:
             sys.exit(f"[run] --view-range {args.view_range} selects no views")
+    afr_link = afr_idx = None
+    if args.afr_worker is not None:
+        k, n = afr.parse_worker(args.afr_worker)
+        afr_idx = afr.split(len(order), n)[k]
+        order = [order[i] for i in afr_idx]
+        afr_link = afr.WorkerLink(k, n)
+        print(f"[run] AFR worker {k}/{n}: sweep positions {afr_idx}", flush=True)
     slots = _b2b_keep_out_slots(args, len(order))
     if slots is not None:
         print(f"[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS={slots}", flush=True)
@@ -664,8 +742,13 @@ def _main():
     st_prev = clean_backend._clean.stage_timings() if pv_stages else None
     if args.back_to_back:
         rc = _back_to_back(args, clean_pipeline, gauss, cam, order, K, H, W,
-                           hero_name, hero_clean, dump_dir, out_dir)
+                           hero_name, hero_clean, dump_dir, out_dir,
+                           afr=afr_link, idx=afr_idx)
         rc = rc or _brisc_stack_check(t_start)
+        if afr_link is not None:
+            import hashlib
+            hero_px = np.asarray(Image.open(out_dir / "hero_clean.png").convert("RGB"))
+            afr_link.done(rc, hashlib.md5(hero_px.tobytes()).hexdigest())
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(rc)
