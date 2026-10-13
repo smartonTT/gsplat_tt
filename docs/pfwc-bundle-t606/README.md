@@ -36,7 +36,7 @@ for each arm, so the verdict stands.
 
 The gain (0.070) is between 0.05 and 0.1, so step 3 runs before shelving. Device profiler
 (t595 "tracy" shape, `GSPLAT_TT_B4A_FOLD=0` so pfwc, k2, sort and mat+blend are separate programs
-that fit kcfg), bh-33 p100, one build at 68e841f1, one JIT cache per arm off /home, 2026-10-13
+that fit kcfg), bh-33 p100, views 0:5 built at ac51095c (no code difference from 68e841f1), one JIT cache per arm off /home, 2026-10-13
 03:00-03:31 PDT (rec views 25:30 at 09:29 PDT, after an ssh drop). Arms: base = A (defaults),
 rec = RECFAST only, vis = C (VIS_FAST only), new = B (bundle). One capture per arm per 5-view chunk; each capture renders 11 views and the last
 5 (the b2b pass) are analysed. Views 0:5 also with `GSPLAT_TT_PFWC_STEPCYC=1` (mover and TRISC
