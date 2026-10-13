@@ -53,6 +53,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--passes", type=int, default=4, help="passes per mode; pass 0 is the check pass")
     ap.add_argument("--port", type=int, default=8097)
+    ap.add_argument("--short", action="store_true",
+                    help="task #587: only viewer_on, viewer_on_nosend, bench_on, with render_fn sections")
     ap.add_argument("--reference", default=str(REPO / "benchmarks" / "reference_v2" / "hero.png"))
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -90,8 +92,12 @@ def main() -> int:
     frames: list[np.ndarray] = []
     orig_fn = v.render_fn
 
+    calls: list[tuple[float, float]] = []  # (render call start, end), task #587
+
     def rec_fn(cs, ts):
+        t_in = time.perf_counter()
         img = orig_fn(cs, ts)
+        calls.append((t_in, time.perf_counter()))
         frames.append(np.ascontiguousarray(img))
         return img
     v.render_fn = rec_fn
@@ -128,6 +134,24 @@ def main() -> int:
     print(f"PIPE K_view==K_bench {bool(np.array_equal(np.asarray(K_view), np.asarray(K_bench)))}",
           flush=True)
 
+    def stage_snap():
+        return {k: float(v) for k, v in clean.stage_timings().items() if isinstance(v, (int, float))}
+
+    def timeline(st0, st1):
+        """Task #587: per-view host stage ms (C++ stage timers) and the render call / gap
+        between calls (host time outside the C++ call, where only a queued pfwc keeps the
+        device busy) over the timed passes."""
+        nv = max(1.0, st1.get("views", 0.0) - st0.get("views", 0.0))
+        keys = ("view_total", "project", "project_gather_wait", "tile_assign", "sort",
+                "sort_bin_hist_d2h", "sort_publish_wait", "blend", "d2h", "tail", "xview")
+        stages = {k: round((st1[k] - st0.get(k, 0.0)) / nv, 3) for k in keys if k in st1}
+        call = [b - a for a, b in calls]
+        gap = [calls[i + 1][0] - calls[i][1] for i in range(len(calls) - 1)]
+        q = lambda xs, f: sorted(xs)[min(len(xs) - 1, int(f * len(xs)))] * 1000.0 if xs else 0.0
+        return dict(stage_ms=stages, call_ms_mean=round(statistics.mean(call) * 1000.0, 3) if call else 0.0,
+                    gap_ms_mean=round(statistics.mean(gap) * 1000.0, 3) if gap else 0.0,
+                    gap_ms_p50=round(q(gap, 0.5), 3), gap_ms_p90=round(q(gap, 0.9), 3))
+
     def report(mode, ms, digests, h, m, u8_0, **extra):
         raw = hashlib.md5("".join(digests[0]).encode()).hexdigest()[:8]
         golden = golden_list_md5(u8_0, order)
@@ -140,11 +164,20 @@ def main() -> int:
               f"fps={1000.0 / results[mode]['ms_view']:.1f} passes_ms={results[mode]['passes_ms']} "
               f"raw_md5={raw} golden_list_md5={golden} identical_across_passes={results[mode]['identical_across_passes']} "
               f"xview_hits={h} xview_misses={m}", flush=True)
+        if "stage_ms" in extra:
+            print(f"PIPE_TL mode={mode} " + json.dumps({k: extra[k] for k in (
+                "call_ms_mean", "gap_ms_mean", "gap_ms_p50", "gap_ms_p90", "stage_ms",
+                "render_fn_ms") if k in extra}), flush=True)
 
-    def viewer_loop(mode, pipelined):
-        """FastRenderer.render_once("move") over the bench views (the live path)."""
+    def viewer_loop(mode, pipelined, nosend=False):
+        """FastRenderer.render_once("move") over the bench views (the live path).
+        nosend: the sender thread skips letterbox and JPEG (its GIL share, task #587)."""
         os.environ["GSPLAT_VIEWER_PIPELINE"] = "1" if pipelined else "0"
         fr = FastRenderer(viewer=v, client=_Client(), lock=v.lock)
+        post0 = v.frame_post_fn
+        if nosend:
+            fr._encode_jpeg = lambda img, q: b""
+            v.frame_post_fn = lambda img, cs: img
         for _ in range(3):  # warm (JIT, caches), unhinted
             gv.pipeline.render(gauss, w2cs[0], K_bench, H, W)
         h0, m0 = xv()
@@ -153,6 +186,11 @@ def main() -> int:
             frames.clear()
             walk["i"] = 0
             fr._latched = None
+            if p == 1:
+                calls.clear()
+                st0 = stage_snap()
+                if gv._prof is not None:
+                    gv._prof.clear()
             t0 = time.perf_counter()
             for cs in states:
                 fr.render_once(RenderTask("move", cs))
@@ -162,8 +200,13 @@ def main() -> int:
                 shots[mode] = frames[0].copy()
                 u8_0 = [f.copy() for f in frames]
         fr.running = False
+        v.frame_post_fn = post0
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape))
+        tl = timeline(st0, stage_snap()) if args.passes > 1 else {}
+        if gv._prof:
+            n = max(1, gv._prof.get("n", 1))
+            tl["render_fn_ms"] = {k: round(x * 1000.0 / n, 3) for k, x in gv._prof.items() if k != "n"}
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape), **tl)
 
     def bench_loop(mode, pipeline, hinted):
         """render/run.py's b2b loop: pipeline.render + _to_image only, bench K."""
@@ -171,11 +214,17 @@ def main() -> int:
         ms, digests = [], []
         for p in range(args.passes):
             imgs = []
+            if p == 1:
+                calls.clear()
+                st0 = stage_snap()
             t0 = time.perf_counter()
             for i, w2c in enumerate(w2cs):
                 if hinted:
                     run._set_next_extr(pipeline, w2cs[(i + 1) % len(w2cs)])
-                imgs.append(run._to_image(pipeline.render(gauss, w2c, K_bench, H, W)))
+                t_in = time.perf_counter()
+                r = pipeline.render(gauss, w2c, K_bench, H, W)
+                calls.append((t_in, time.perf_counter()))
+                imgs.append(run._to_image(r))
             ms.append((time.perf_counter() - t0) * 1000.0 / len(w2cs))
             u8 = [run._to_u8(im) for im in imgs]
             digests.append([hashlib.md5(x.tobytes()).hexdigest() for x in u8])
@@ -183,30 +232,39 @@ def main() -> int:
                 u8_0 = u8
         pipeline.backend.next_extrinsics = None
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0)
+        tl = timeline(st0, stage_snap()) if args.passes > 1 else {}
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, **tl)
 
     def settings(pl):
         return {k: getattr(pl, k, None) for k in ("contrib_floor", "transmittance_threshold",
                                                    "min_opacity", "max_radius", "k_cap")}
 
+    if args.short:
+        print(f"PIPE settings viewer {settings(pipe)}", flush=True)
+        viewer_loop("viewer_on", True)
+        viewer_loop("viewer_on_nosend", True, nosend=True)
+        bench_loop("bench_on", pipe, True)
+        viewer_loop("viewer_on_2", True)
+        hero = shots["viewer_on"]
     # 1) The viewer's own render settings (slider defaults).
-    print(f"PIPE settings viewer {settings(pipe)}", flush=True)
-    viewer_loop("viewer_off", False)
-    viewer_loop("viewer_on", True)
-    bench_loop("viewer_settings_bench_off", pipe, False)
-    bench_loop("viewer_settings_bench_on", pipe, True)
-    # 2) The bench's settings (render/run.py: Pipeline(CleanBackend, 32, contrib_floor)) on
-    # the same backend, swapped into the viewer: the pipelined viewer path vs the golden.
-    from gsplat.pipeline import Pipeline
-    bp = Pipeline(pipe.backend, tile_size=32, contrib_floor=float(cam["contrib_floor"]))
-    print(f"PIPE settings bench {settings(bp)}", flush=True)
-    gv.pipeline = bp
-    bench_loop("bench_off", bp, False)
-    bench_loop("bench_on", bp, True)
-    viewer_loop("bench_settings_viewer_off", False)
-    viewer_loop("bench_settings_viewer_on", True)
-    hero = shots["bench_settings_viewer_on"]
-    pipe = bp
+    if not args.short:
+        print(f"PIPE settings viewer {settings(pipe)}", flush=True)
+        viewer_loop("viewer_off", False)
+        viewer_loop("viewer_on", True)
+        bench_loop("viewer_settings_bench_off", pipe, False)
+        bench_loop("viewer_settings_bench_on", pipe, True)
+        # 2) The bench's settings (render/run.py: Pipeline(CleanBackend, 32, contrib_floor)) on
+        # the same backend, swapped into the viewer: the pipelined viewer path vs the golden.
+        from gsplat.pipeline import Pipeline
+        bp = Pipeline(pipe.backend, tile_size=32, contrib_floor=float(cam["contrib_floor"]))
+        print(f"PIPE settings bench {settings(bp)}", flush=True)
+        gv.pipeline = bp
+        bench_loop("bench_off", bp, False)
+        bench_loop("bench_on", bp, True)
+        viewer_loop("bench_settings_viewer_off", False)
+        viewer_loop("bench_settings_viewer_on", True)
+        hero = shots["bench_settings_viewer_on"]
+        pipe = bp
 
     ref = np.asarray(Image.open(args.reference).convert("RGB"))
     Image.fromarray(hero).save(args.out / "hero.png")

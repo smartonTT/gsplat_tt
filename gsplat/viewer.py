@@ -304,6 +304,8 @@ class GaussianViewer:
         self._host_ms: deque[float] = deque(maxlen=30)
         self._encode_ms: deque[float] = deque(maxlen=30)
         self._hints = 0
+        # Task #587: GSPLAT_VIEWER_PROF=1 sums _render_fn's host sections (s) per frame.
+        self._prof = {} if os.environ.get("GSPLAT_VIEWER_PROF") == "1" else None
         self._last_hud = 0.0
         self._hud_args: tuple | None = None
         self._last_sent = 0.0
@@ -785,7 +787,9 @@ class GaussianViewer:
         # Invert in float32 torch exactly as the bench (render/run.py) does, so a
         # viewer frame is bit-identical to the bench's for the same camera.
         extrinsics = c2w_to_w2c(torch.from_numpy(np.asarray(render_c2w, dtype=np.float32)))
+        t_pose = time.perf_counter()
         self._hint_next_pose(W, H, intrinsics)
+        t_hint = time.perf_counter()
 
         try:
             result = self.pipeline.render(
@@ -794,6 +798,7 @@ class GaussianViewer:
         except Exception:
             traceback.print_exc()
             return _failure_pattern(W, H)
+        t_render = time.perf_counter()
 
         self._render_ms.append(result.timings.get("total", 0.0))
         if result.image is None:
@@ -819,6 +824,14 @@ class GaussianViewer:
         if self.verbose:
             self._log_verbose(W, H, result, wall_elapsed)
         self._update_stats(wall_elapsed, W, H, result.num_visible)
+        if self._prof is not None:
+            t_end = time.perf_counter()
+            dev_s = result.timings.get("total", 0.0) / 1000.0
+            for k, dt in (("pose", t_pose - wall_start), ("hint", t_hint - t_pose),
+                          ("render_py", t_render - t_hint - dev_s), ("post", t_end - t_render),
+                          ("total", t_end - wall_start), ("dev", dev_s)):
+                self._prof[k] = self._prof.get(k, 0.0) + dt
+            self._prof["n"] = self._prof.get("n", 0) + 1
         return display
 
     def _hint_next_pose(self, W: int, H: int, intrinsics: torch.Tensor) -> None:
