@@ -85,8 +85,11 @@ cat > "$T/bin/ttp" <<'EOF'
 echo "ttp $*" >> "$F/calls"
 while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done; shift
 case $1 in opt/sync_remote.sh) exit 0 ;; esac
+case " $* " in *" opt/viewer/viewer.sh "*) exit 0 ;; esac   # viewer start/deploy: logged only
 exec "$@"
 EOF
+# Fake git fetch (no network); every other git command runs the real git.
+printf '#!/bin/sh\n[ "$1" = fetch ] && exit 0\nexec %q "$@"\n' "$(command -v git)" > "$T/bin/git"
 printf '#!/bin/sh\necho SSH_PREFLIGHT=ok\n' > "$T/bin/preflight"
 chmod +x "$T/bin/"*
 
@@ -269,6 +272,14 @@ bad=$(grep -vE 'ControlMaster=no' "$T/opts"; grep -vE 'ControlPath=none' "$T/opt
   grep -vE 'BatchMode=yes' "$T/opts"; grep -vE 'ConnectTimeout=' "$T/opts"; grep -vE '^[a-z]+ ([^ ]+ )?T=1 ' "$T/opts")
 c() { [ -s "$T/opts" ] && [ -z "$bad" ]; }; check "all $(grep -c . "$T/opts") ssh/scp calls are mux-free, strict and bounded" c
 [ -z "$bad" ] || sort -u <<<"$bad" | head -5 | sed 's/^/     bad: /'
+
+# 11. Viewer deploy starts the viewer with the B4a fold off (#563: the fold hangs it under ETH
+# dispatch, #556); VIEWER_B4A_FOLD in the caller's env overrides. After case 10: viewer.sh status
+# runs for real here, and its ssh carries no outer timeout.
+new_case viewer_fold_off; run viewer --rev HEAD
+c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=0 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "deploy runs viewer.sh with VIEWER_B4A_FOLD=0" c
+new_case viewer_fold_env; VIEWER_B4A_FOLD=1 run viewer --rev HEAD
+c() { [ "$RC" = 0 ] && [ "$(calls 'lock viewer -- env VIEWER_HOST=bh-30 VIEWER_B4A_FOLD=1 opt/viewer/viewer.sh deploy ')" = 1 ]; }; check "VIEWER_B4A_FOLD=1 in the env wins" c
 
 echo "$((N - FAILS))/$N passed"
 [ "$FAILS" = 0 ]

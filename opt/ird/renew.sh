@@ -20,6 +20,10 @@ PORT=46483
 TIMEOUT=14:00:00
 IRD_USER=${IRD_USER:-$USER}
 RROOT=/localdev/$IRD_USER
+# The viewer starts with the B4a fold off (VIEWER_B4A_FOLD=0, task #563): the fold hangs the
+# pipelined viewer under ETH dispatch (#556). Set VIEWER_B4A_FOLD=1, or empty for the tree's
+# default, once that hang is fixed.
+VIEWER_B4A_FOLD=${VIEWER_B4A_FOLD-0}
 VIEWER_BOX=bh-30
 RESERVE_WAIT=${IRD_RESERVE_WAIT:-240}
 PREFLIGHT=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
@@ -439,12 +443,12 @@ if [ "$DEPLOY" = 1 ] && [ "$ROLE" = viewer ]; then
     if [[ $vs == *running* ]]; then DEPLOY_MSG="current: $DSHA has the tree of $REV ($TSHA), running"
     else
       DEPLOY_MSG="started: $DSHA has the tree of $REV ($TSHA)"
-      act ttp lock viewer -- env VIEWER_HOST="$HOST" opt/viewer/viewer.sh start >&2 || { DEPLOY_MSG="start failed"; STATUS=deploy_failed; emit 6; }
+      act ttp lock viewer -- env VIEWER_HOST="$HOST" VIEWER_B4A_FOLD="$VIEWER_B4A_FOLD" opt/viewer/viewer.sh start >&2 || { DEPLOY_MSG="start failed"; STATUS=deploy_failed; emit 6; }
     fi
   else
     DEPLOY_SHA=$TSHA
     DEPLOY_MSG="deployed $REV ($TSHA) over ${DSHA:-none}"
-    act ttp lock viewer -- env VIEWER_HOST="$HOST" opt/viewer/viewer.sh deploy "$TSHA" >&2 || { DEPLOY_MSG="deploy $REV failed"; STATUS=deploy_failed; emit 6; }
+    act ttp lock viewer -- env VIEWER_HOST="$HOST" VIEWER_B4A_FOLD="$VIEWER_B4A_FOLD" opt/viewer/viewer.sh deploy "$TSHA" >&2 || { DEPLOY_MSG="deploy $REV failed"; STATUS=deploy_failed; emit 6; }
   fi
   [ "$DRY" = 1 ] && DEPLOY_MSG="planned: $DEPLOY_MSG"
 fi
