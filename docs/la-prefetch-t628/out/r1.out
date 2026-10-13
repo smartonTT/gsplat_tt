@@ -1,0 +1,47 @@
+================ BUILD ID ================
+  cpp : #124 sha=7cbf73fc bin=14b97a8c6aa85bfd t628 7cbf73fc L-A prefetch (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t628-r1  timeout=400s  worry=600s  ts=2026-10-13T11:28:37-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-prefetch-t628/remote.sh 1 base la htl lah
+-----------------------------------------
+=== r1-base 7cbf73fc   18:28:43 load=1.81
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.465 fps=118.13 ms_frame_median=8.464 pass_ms_frame=8.436,8.481,8.483,8.539,8.479,8.449,8.464,8.465,8.448,8.484,8.470,8.468,8.461,8.437,8.444,8.437,8.516,8.455,8.480,8.406 check_pass_ms_frame=9.874 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.465
+TTW_TIMING b2b_ms_frame_median=8.464
+=== r1-la 7cbf73fc GSPLAT_TT_LA_PREFETCH=1  18:28:57 load=1.63
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.452 fps=118.32 ms_frame_median=8.448 pass_ms_frame=8.465,8.465,8.447,8.443,8.456,8.449,8.475,8.445,8.443,8.445,8.463,8.445,8.440,8.447,8.491,8.439,8.458,8.453,8.469,8.399 check_pass_ms_frame=9.804 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.452
+TTW_TIMING b2b_ms_frame_median=8.448
+=== r1-htl 7cbf73fc GSPLAT_TT_HTL=1  18:29:12 load=1.89
+run rc=0
+HTL wrote 1521 marks
+HTL wrote 2991 marks
+HTL wrote 4461 marks
+HTL wrote 5931 marks
+HTL wrote 7401 marks
+HTL wrote 8871 marks
+HTL wrote 10341 marks
+HTL wrote 11811 marks
+HTL wrote 13281 marks
+HTL wrote 14751 marks
+HTL wrote 16221 marks
+HTL wrote 17691 marks
+=== r1-lah 7cbf73fc GSPLAT_TT_LA_PREFETCH=1 GSPLAT_TT_HTL=1  18:29:27 load=1.92
+run rc=0
+HTL wrote 1521 marks
+HTL wrote 2991 marks
+HTL wrote 4461 marks
+HTL wrote 5931 marks
+HTL wrote 7401 marks
+HTL wrote 8871 marks
+HTL wrote 10341 marks
+HTL wrote 11811 marks
+HTL wrote 13281 marks
+HTL wrote 14751 marks
+HTL wrote 16221 marks
+HTL wrote 17691 marks
+=== done 1 18:29:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t628/tmp/ttw-state/logs/t628-r1-20261013-112832.log
