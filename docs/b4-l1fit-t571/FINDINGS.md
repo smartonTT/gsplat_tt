@@ -17,3 +17,23 @@
   deadlock. Hangs: the mailbox address itself is bad.
 - Arm 4 again with tt-triage callstacks: BRISC in the FIN loop with PACK in town_drain = PACK never
   sees GO (address or visibility mismatch); wild PCs = corruption.
+
+## Arms 5 and 4 (out-sibdbg54/, 67678223, bh-33, 2026-10-12 19:09-19:17 PDT)
+
+- Arm 5 (mailbox header writes only, PACK town off, no handshake): hangs at view 2, tt-triage shows
+  wild BRISC PCs (0x13ab94, 0x1de4ec, "not in range of any ELF") on several cores. So the crash
+  needs no sort body and no PACK town: ~20 BRISC word writes at the mailbox address are enough.
+- Arm 4 hangs the same way.
+- Host check: every arena region constant matches the CB sizes (CB5 = (2*16384+256)*4 = 132096 =
+  8192 cut + 123904; CB6, CB20, CB21, CB22 too), and the host's mailbox size (13632, NT = 3) is
+  larger than the kernel's (NT = 1). So either the computed address is not what the host placed,
+  or CB5's tail is live during blend(N).
+
+## Next run (out-sibdbg671/, 4d581ac6)
+
+- Arm 6: the same writes at CB21's base (BRISC's dead mat CB_BSORT).
+- Arm 7: the same writes at CB5's base + 8192 (start of the CB5 region past the alias cut).
+- Arm 1 again at this head (control: barrier only should still pass).
+- Reading: 6 passes and 7 hangs = CB5's tail is live during blend (move the mailbox and CB5
+  buffers out of CB5). Both hang = any BRISC L1 write after the barrier breaks it (look at the
+  address computation / CB interface on BRISC). 1 hangs = the control moved; recheck t571 changes.
