@@ -37,3 +37,9 @@ with GSPLAT_TT_B4A_FOLD=1 under ETH.
 - So the launch message and the config ring are not the cause. What differs is ETH itself and the
   core count (120 vs 110; ETH adds logical column 11). Probe 5 (probe5.sh) bisects under ETH:
   A grid 11x10, B grid 12x9, C one command queue (GSPLAT_TT_MAT_CQ1=0).
+- Probe 5 result (bh-30, 45ff1ff5, ETH, fold=1; viewer stopped 18:59, restarted 19:12 PDT, 8091 -> 200):
+  A grid 11x10 (110 cores), B grid 12x9 (108 cores), C one command queue (120 cores): all three hang at
+  view 2, the first folded view (rc=124, reset rc=0 each). Core count, logical column 11 and the
+  second CQ are ruled out. The hang needs only ETH dispatch + the fold program.
+- Conclusion: ETH default stays off (dispatch_select.h b4a_fold_on unchanged). Next: per-RISC watcher
+  waypoints / DPRINT inside the fold K2 path under ETH on one core to find which RISC stops where.
