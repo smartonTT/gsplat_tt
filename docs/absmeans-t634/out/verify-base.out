@@ -12,7 +12,7 @@
 [ttw 2026-10-13T12:39:24-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=486a7397 bin=392c5b1c1990f32b t634 486a7397 ABS_MEANS gate (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t634-verify-base  timeout=480s  worry=600s  ts=2026-10-13T12:39:27-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=450 bash /localdev/smarton/gstt2-t513/docs/absmeans-t634/remote_ab.sh 0 dump base
