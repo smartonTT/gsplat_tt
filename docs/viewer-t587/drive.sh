@@ -6,12 +6,13 @@
 # from the Mac through localhost:8091 and a 23 s sweep on the box (ws://127.0.0.1:8080, no
 # link). Then the viewer is stopped for pipeline_probe (fold 0 and 1), and restarted with
 # FINAL_FOLD (default 0). SWEEP_HZS (default 240): box sweep rates, one timeline burst each;
-# MAC_PY: python with msgspec for the Mac sweep; SKIP_PROBE=1 skips pipeline_probe.
+# MAC_PY: python with msgspec for the Mac sweep; SKIP_PROBE=1 skips pipeline_probe;
+# PROBE_ARGS: extra pipeline_probe args (e.g. --short); arms "-": probe only.
 # Holds resource 'viewer' only: no reserve/extend/release, never the
 # p100 lock or the measurement box. Strict host-key checking.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
-N=${1:?out name}; ARMS=${2:-0 1 0 1}
+N=${1:?out name}; ARMS=${2:-0 1 0 1}; [ "$ARMS" = "-" ] && ARMS=""
 D=docs/viewer-t587; V=/localdev/smarton/viewer; B=$V/t587/$N
 SSHO=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 SSH=(ssh "${SSHO[@]}" bh-30)
@@ -19,7 +20,7 @@ L=$D/out/$N; mkdir -p "$L"
 ts() { TZ=America/Los_Angeles date +%T%Z; }
 "${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight" bh-30 || { echo "preflight failed: viewer untouched"; exit 3; }
 "${SSH[@]}" "mkdir -p $B" || exit 3
-for f in gsplat/nerfview_viewer.py opt/viewer/pipeline_probe.py opt/viewer/timeline_stats.py opt/viewer/ws_sweep_t532.py; do
+for f in gsplat/nerfview_viewer.py gsplat/viewer.py opt/viewer/pipeline_probe.py opt/viewer/timeline_stats.py opt/viewer/ws_sweep_t532.py; do
   scp -q "${SSHO[@]}" $f bh-30:$V/tree/$f.t587tmp && "${SSH[@]}" "mv $V/tree/$f.t587tmp $V/tree/$f" || exit 3
 done
 scp -q "${SSHO[@]}" $D/probe587.sh bh-30:$B/.probe587.sh.tmp && "${SSH[@]}" "mv $B/.probe587.sh.tmp $B/probe587.sh" || exit 3
@@ -47,7 +48,7 @@ for arm in $ARMS; do
 done
 if [ -z "${SKIP_PROBE:-}" ]; then
   echo "=== viewer stop for pipeline_probe $(ts)"; VIEWER_HOST=bh-30 bash opt/viewer/viewer.sh stop
-  "${SSH[@]}" "setsid nohup bash $B/probe587.sh $B/probe > $B/probe587.log 2>&1 < /dev/null &"
+  "${SSH[@]}" "setsid nohup bash $B/probe587.sh $B/probe ${PROBE_ARGS:-} > $B/probe587.log 2>&1 < /dev/null &"
   for _ in $(seq 300); do "${SSH[@]}" "test -e $B/probe/probe.rc" && break; sleep 5; done
   "${SSH[@]}" "cat $B/probe587.log; grep -h -E '^PIPE' $B/probe/probe-fold*.log" | tee "$L/probe.txt"
 fi

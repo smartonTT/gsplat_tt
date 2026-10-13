@@ -53,6 +53,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--passes", type=int, default=4, help="passes per mode; pass 0 is the check pass")
     ap.add_argument("--port", type=int, default=8097)
+    ap.add_argument("--short", action="store_true",
+                    help="task #587: only viewer_on, viewer_on_nosend, bench_on, with render_fn sections")
     ap.add_argument("--reference", default=str(REPO / "benchmarks" / "reference_v2" / "hero.png"))
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -164,12 +166,18 @@ def main() -> int:
               f"xview_hits={h} xview_misses={m}", flush=True)
         if "stage_ms" in extra:
             print(f"PIPE_TL mode={mode} " + json.dumps({k: extra[k] for k in (
-                "call_ms_mean", "gap_ms_mean", "gap_ms_p50", "gap_ms_p90", "stage_ms")}), flush=True)
+                "call_ms_mean", "gap_ms_mean", "gap_ms_p50", "gap_ms_p90", "stage_ms",
+                "render_fn_ms") if k in extra}), flush=True)
 
-    def viewer_loop(mode, pipelined):
-        """FastRenderer.render_once("move") over the bench views (the live path)."""
+    def viewer_loop(mode, pipelined, nosend=False):
+        """FastRenderer.render_once("move") over the bench views (the live path).
+        nosend: the sender thread skips letterbox and JPEG (its GIL share, task #587)."""
         os.environ["GSPLAT_VIEWER_PIPELINE"] = "1" if pipelined else "0"
         fr = FastRenderer(viewer=v, client=_Client(), lock=v.lock)
+        post0 = v.frame_post_fn
+        if nosend:
+            fr._encode_jpeg = lambda img, q: b""
+            v.frame_post_fn = lambda img, cs: img
         for _ in range(3):  # warm (JIT, caches), unhinted
             gv.pipeline.render(gauss, w2cs[0], K_bench, H, W)
         h0, m0 = xv()
@@ -181,6 +189,8 @@ def main() -> int:
             if p == 1:
                 calls.clear()
                 st0 = stage_snap()
+                if gv._prof is not None:
+                    gv._prof.clear()
             t0 = time.perf_counter()
             for cs in states:
                 fr.render_once(RenderTask("move", cs))
@@ -190,8 +200,12 @@ def main() -> int:
                 shots[mode] = frames[0].copy()
                 u8_0 = [f.copy() for f in frames]
         fr.running = False
+        v.frame_post_fn = post0
         h1, m1 = xv()
         tl = timeline(st0, stage_snap()) if args.passes > 1 else {}
+        if gv._prof:
+            n = max(1, gv._prof.get("n", 1))
+            tl["render_fn_ms"] = {k: round(x * 1000.0 / n, 3) for k, x in gv._prof.items() if k != "n"}
         report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape), **tl)
 
     def bench_loop(mode, pipeline, hinted):
@@ -225,24 +239,32 @@ def main() -> int:
         return {k: getattr(pl, k, None) for k in ("contrib_floor", "transmittance_threshold",
                                                    "min_opacity", "max_radius", "k_cap")}
 
+    if args.short:
+        print(f"PIPE settings viewer {settings(pipe)}", flush=True)
+        viewer_loop("viewer_on", True)
+        viewer_loop("viewer_on_nosend", True, nosend=True)
+        bench_loop("bench_on", pipe, True)
+        viewer_loop("viewer_on_2", True)
+        hero = shots["viewer_on"]
     # 1) The viewer's own render settings (slider defaults).
-    print(f"PIPE settings viewer {settings(pipe)}", flush=True)
-    viewer_loop("viewer_off", False)
-    viewer_loop("viewer_on", True)
-    bench_loop("viewer_settings_bench_off", pipe, False)
-    bench_loop("viewer_settings_bench_on", pipe, True)
-    # 2) The bench's settings (render/run.py: Pipeline(CleanBackend, 32, contrib_floor)) on
-    # the same backend, swapped into the viewer: the pipelined viewer path vs the golden.
-    from gsplat.pipeline import Pipeline
-    bp = Pipeline(pipe.backend, tile_size=32, contrib_floor=float(cam["contrib_floor"]))
-    print(f"PIPE settings bench {settings(bp)}", flush=True)
-    gv.pipeline = bp
-    bench_loop("bench_off", bp, False)
-    bench_loop("bench_on", bp, True)
-    viewer_loop("bench_settings_viewer_off", False)
-    viewer_loop("bench_settings_viewer_on", True)
-    hero = shots["bench_settings_viewer_on"]
-    pipe = bp
+    if not args.short:
+        print(f"PIPE settings viewer {settings(pipe)}", flush=True)
+        viewer_loop("viewer_off", False)
+        viewer_loop("viewer_on", True)
+        bench_loop("viewer_settings_bench_off", pipe, False)
+        bench_loop("viewer_settings_bench_on", pipe, True)
+        # 2) The bench's settings (render/run.py: Pipeline(CleanBackend, 32, contrib_floor)) on
+        # the same backend, swapped into the viewer: the pipelined viewer path vs the golden.
+        from gsplat.pipeline import Pipeline
+        bp = Pipeline(pipe.backend, tile_size=32, contrib_floor=float(cam["contrib_floor"]))
+        print(f"PIPE settings bench {settings(bp)}", flush=True)
+        gv.pipeline = bp
+        bench_loop("bench_off", bp, False)
+        bench_loop("bench_on", bp, True)
+        viewer_loop("bench_settings_viewer_off", False)
+        viewer_loop("bench_settings_viewer_on", True)
+        hero = shots["bench_settings_viewer_on"]
+        pipe = bp
 
     ref = np.asarray(Image.open(args.reference).convert("RGB"))
     Image.fromarray(hero).save(args.out / "hero.png")
