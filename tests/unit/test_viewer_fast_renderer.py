@@ -317,6 +317,62 @@ def test_hint_next_pose_matches_bench_extrinsics():
     assert backend.next_extrinsics is None and gv._hints == 1
 
 
+def test_render_fn_reuses_the_hinted_pose_mats():
+    """Task #597: the frame that renders the last hinted pose reuses the hint's K and
+    w2c (no host rebuild while the B4a-folded device idles), bit-equal to a fresh build;
+    any other pose, size or fov builds them anew."""
+    from collections import deque
+    import torch
+    import nerfview
+    from gsplat.pipeline import RenderResult
+    from gsplat.viewer import GaussianViewer
+
+    calls = []
+    backend = types.SimpleNamespace(next_extrinsics=None)
+
+    def render(g, extr, intr, H, W):
+        calls.append((extr, intr, backend.next_extrinsics))
+        backend.next_extrinsics = None  # used by this render only, as CleanBackend does
+        return RenderResult(image=np.zeros((H, W, 3), np.uint8), timings={"total": 1.0})
+
+    gv = GaussianViewer.__new__(GaussianViewer)
+    gv.__dict__.update(
+        _frames_rendered=0, force_square=None, verbose=False, gaussians=None, _hints=0,
+        _hinted=None, _k_cache={}, _prof=None, _render_ms=deque(), _host_ms=deque(),
+        _frame_samples=[], pipeline=types.SimpleNamespace(render=render, backend=backend),
+        viewer=types.SimpleNamespace(next_camera_state=None, frame_post_fn=lambda *a: None))
+    gv._update_stats = lambda *a: None
+    tab = types.SimpleNamespace(render_width=320, render_height=256)
+
+    def cam(x, fov=0.9):
+        c2w = np.eye(4)
+        c2w[:3, 3] = [x, -1.5, 3.0]
+        return nerfview.CameraState(fov=fov, aspect=320 / 256, c2w=c2w)
+
+    def fresh(cs):
+        return (torch.tensor(cs.get_K((320, 256)), dtype=torch.float32),
+                GaussianViewer._render_fn.__globals__["c2w_to_w2c"](
+                    torch.from_numpy(np.asarray(cs.c2w, dtype=np.float32))))
+
+    a, b, c = cam(0.25), cam(0.5), cam(0.75)
+    gv.viewer.next_camera_state = b
+    GaussianViewer._render_fn(gv, a, tab)  # a fresh, hints b
+    gv.viewer.next_camera_state = c
+    GaussianViewer._render_fn(gv, b, tab)  # b from the hint, hints c
+    gv.viewer.next_camera_state = None
+    GaussianViewer._render_fn(gv, cam(0.75), tab)  # c's values, other object: fresh
+    (ea, ka, ha), (eb, kb, hb), (ec, kc, hc) = calls
+    assert eb is ha and kb is gv._k_cache[(0.9, 320, 256)] and hc is None
+    for (e, k), cs in (((ea, ka), a), ((eb, kb), b), ((ec, kc), c)):
+        fk, fe = fresh(cs)
+        assert torch.equal(e, fe) and torch.equal(k, fk)
+    assert gv._hinted is None  # consumed or replaced by every render
+
+    gv.viewer.next_camera_state = cam(0.1, fov=1.1)  # fov change: no hint, no reuse
+    GaussianViewer._render_fn(gv, a, tab)
+    assert calls[-1][2] is None and gv._hinted is None
+
+
 def test_camera_burst_renders_only_the_moving_client():
     """One client's camera drag bursts only that client: an idle page in another tab
     must not render back to back and take half the device (task #459). A render

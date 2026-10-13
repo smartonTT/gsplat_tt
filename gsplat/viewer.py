@@ -242,6 +242,12 @@ def _apply_opencv_c2w(
         client.camera.fov = _fov_deg_to_viser_vertical(fov_deg, client.camera.aspect)
 
 
+def _w2c(cs) -> torch.Tensor:
+    """Camera ``cs``'s w2c, inverted in float32 torch exactly as the bench (render/run.py)
+    does, so a viewer frame is bit-identical to the bench's for the same camera."""
+    return c2w_to_w2c(torch.from_numpy(np.asarray(cs.c2w, dtype=np.float32)))
+
+
 class GaussianViewer:
     """Interactive viewer for 3D Gaussian Splatting scenes.
 
@@ -304,6 +310,11 @@ class GaussianViewer:
         self._host_ms: deque[float] = deque(maxlen=30)
         self._encode_ms: deque[float] = deque(maxlen=30)
         self._hints = 0
+        # Task #597: the last hint's (camera state, W, H, K, w2c), reused when that pose
+        # renders next, and K per (fov, W, H): host time between renders idles the
+        # device under the B4a fold (pfwc(N+1) already ran inside blend(N)).
+        self._hinted = None
+        self._k_cache = {}
         # Task #587: GSPLAT_VIEWER_PROF=1 sums _render_fn's host sections (s) per frame.
         self._prof = {} if os.environ.get("GSPLAT_VIEWER_PROF") == "1" else None
         self._last_hud = 0.0
@@ -780,13 +791,13 @@ class GaussianViewer:
         if W <= 0 or H <= 0:
             return np.zeros((max(H, 1), max(W, 1), 3), dtype=np.uint8)
 
-        render_c2w = camera_state.c2w
-        intrinsics = torch.tensor(
-            camera_state.get_K((W, H)), dtype=torch.float32,
-        )
-        # Invert in float32 torch exactly as the bench (render/run.py) does, so a
-        # viewer frame is bit-identical to the bench's for the same camera.
-        extrinsics = c2w_to_w2c(torch.from_numpy(np.asarray(render_c2w, dtype=np.float32)))
+        hinted, self._hinted = getattr(self, "_hinted", None), None
+        if (hinted is not None and hinted[0] is camera_state and hinted[1] == (W, H)
+                and hinted[2] == getattr(camera_state, "fov", None)):
+            intrinsics, extrinsics = hinted[3], hinted[4]  # built by the last hint
+        else:
+            intrinsics = self._intrinsics(camera_state, W, H)
+            extrinsics = _w2c(camera_state)
         t_pose = time.perf_counter()
         self._hint_next_pose(W, H, intrinsics)
         t_hint = time.perf_counter()
@@ -847,12 +858,28 @@ class GaussianViewer:
         backend = self.pipeline.backend
         if nxt is None or not hasattr(backend, "next_extrinsics"):
             return
-        k_next = torch.tensor(nxt.get_K((W, H)), dtype=torch.float32)
-        if not torch.equal(k_next, intrinsics):
+        k_next = GaussianViewer._intrinsics(self, nxt, W, H)
+        if k_next is not intrinsics and not torch.equal(k_next, intrinsics):
             return
-        backend.next_extrinsics = c2w_to_w2c(
-            torch.from_numpy(np.asarray(nxt.c2w, dtype=np.float32)))
+        w2c = _w2c(nxt)
+        backend.next_extrinsics = w2c
+        self._hinted = (nxt, (W, H), getattr(nxt, "fov", None), k_next, w2c)
         self._hints += 1
+
+    def _intrinsics(self, cs, W: int, H: int) -> torch.Tensor:
+        """K for camera ``cs`` at W x H (float32), cached per (fov, W, H) (task #597).
+        nerfview's get_K depends on nothing else. Callers never write to it."""
+        fov = getattr(cs, "fov", None)
+        cache = getattr(self, "_k_cache", None)
+        if fov is None or cache is None:
+            return torch.tensor(cs.get_K((W, H)), dtype=torch.float32)
+        key = (float(fov), W, H)
+        k = cache.get(key)
+        if k is None:
+            if len(cache) > 64:
+                cache.clear()
+            k = cache[key] = torch.tensor(cs.get_K((W, H)), dtype=torch.float32)
+        return k
 
     def _log_verbose(
         self,
