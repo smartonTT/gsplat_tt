@@ -285,7 +285,8 @@ class FastRenderer(Renderer):
         """Render one task under the viewer lock and queue it for sending."""
         te = time.perf_counter()
         cs, nxt = task.camera_state, None
-        get_cs = getattr(self.viewer, "get_camera_state", None)
+        get_cs = getattr(self.viewer, "latest_camera_state", None) or \
+            getattr(self.viewer, "get_camera_state", None)
         if self.pipeline_frames and task.action in ("move", "rerender") and get_cs is not None:
             # Continuous motion: render the pose hinted last frame (its pfwc is already
             # on the device) and hint the newest pose for the next frame.
@@ -409,6 +410,12 @@ class GsplatViewer(nerfview.Viewer):
         self.next_camera_state = None
         # Optional (img, camera_state) -> img run on the sender thread (letterbox).
         self.frame_post_fn: Optional[Callable] = None
+        # Task #597: optional camera_state -> None run in the camera-update callback (viser's
+        # thread, while the render thread waits on the device with the GIL released), so the
+        # render thread finds the pose's matrices built. _latest_cs: per client, the state
+        # that callback built; the render loop reads it instead of rebuilding one.
+        self.camera_prepare_fn: Optional[Callable] = None
+        self._latest_cs: dict[int, object] = {}
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
         self._ui_active_deadline = 0.0  # all clients (render settings changed)
@@ -462,14 +469,28 @@ class GsplatViewer(nerfview.Viewer):
 
         @client.camera.on_update
         def _(_: viser.CameraHandle) -> None:
-            self._last_move_time = time.time()
-            self.mark_ui_active(client_id)
-            with self.server.atomic():
-                camera_state = self.get_camera_state(client)
-                self._renderers[client_id].submit(RenderTask("move", camera_state))
+            self._camera_moved(client)
+
+    def _camera_moved(self, client: viser.ClientHandle) -> None:
+        client_id = client.client_id
+        self._last_move_time = time.time()
+        self.mark_ui_active(client_id)
+        with self.server.atomic():
+            camera_state = self.get_camera_state(client)
+            if self.camera_prepare_fn is not None:
+                self.camera_prepare_fn(camera_state)
+            self._latest_cs[client_id] = camera_state
+            self._renderers[client_id].submit(RenderTask("move", camera_state))
+
+    def latest_camera_state(self, client: viser.ClientHandle):
+        """The newest pose's state built by the camera-update callback (task #597), else
+        a fresh get_camera_state."""
+        cs = self._latest_cs.get(client.client_id)
+        return cs if cs is not None else self.get_camera_state(client)
 
     def _disconnect_client(self, client: viser.ClientHandle) -> None:
         self._client_active_deadline.pop(client.client_id, None)
+        self._latest_cs.pop(client.client_id, None)
         super()._disconnect_client(client)
 
     def stop_burst(self) -> None:

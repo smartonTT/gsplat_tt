@@ -248,6 +248,22 @@ def _w2c(cs) -> torch.Tensor:
     return c2w_to_w2c(torch.from_numpy(np.asarray(cs.c2w, dtype=np.float32)))
 
 
+def _prepare_w2c(cs) -> None:
+    """Camera-update callback hook (task #597): build ``cs``'s w2c off the render thread,
+    while it waits on the device. Under the B4a fold the device idles during the render
+    thread's host time between frames, so the hint must not build it there."""
+    try:
+        cs._gsplat_w2c = _w2c(cs)
+    except AttributeError:  # a CameraState that takes no attributes: built at render time
+        pass
+
+
+def _cached_w2c(cs) -> torch.Tensor:
+    """``cs``'s w2c from _prepare_w2c, else built now (same function, same bits)."""
+    w2c = getattr(cs, "_gsplat_w2c", None)
+    return w2c if w2c is not None else _w2c(cs)
+
+
 class GaussianViewer:
     """Interactive viewer for 3D Gaussian Splatting scenes.
 
@@ -530,6 +546,7 @@ class GaussianViewer:
         )
         # Letterbox on the sender thread, not between device frames (task #457).
         self.viewer.frame_post_fn = lambda img, cs: letterbox_for_aspect(img, cs.aspect)
+        self.viewer.camera_prepare_fn = _prepare_w2c
         _sync_sliders_to_pipeline()
         self._request_rerender()
 
@@ -797,7 +814,7 @@ class GaussianViewer:
             intrinsics, extrinsics = hinted[3], hinted[4]  # built by the last hint
         else:
             intrinsics = self._intrinsics(camera_state, W, H)
-            extrinsics = _w2c(camera_state)
+            extrinsics = _cached_w2c(camera_state)
         t_pose = time.perf_counter()
         self._hint_next_pose(W, H, intrinsics)
         t_hint = time.perf_counter()
@@ -861,7 +878,7 @@ class GaussianViewer:
         k_next = GaussianViewer._intrinsics(self, nxt, W, H)
         if k_next is not intrinsics and not torch.equal(k_next, intrinsics):
             return
-        w2c = _w2c(nxt)
+        w2c = _cached_w2c(nxt)
         backend.next_extrinsics = w2c
         self._hinted = (nxt, (W, H), getattr(nxt, "fov", None), k_next, w2c)
         self._hints += 1

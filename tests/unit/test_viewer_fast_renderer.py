@@ -373,6 +373,61 @@ def test_render_fn_reuses_the_hinted_pose_mats():
     assert calls[-1][2] is None and gv._hinted is None
 
 
+def test_camera_update_prepares_w2c_off_the_render_thread():
+    """Task #597: the camera-update callback builds the pose's w2c (on viser's thread) and
+    keeps that state as the client's latest; the render loop hints and renders from it, so
+    no w2c or camera state is rebuilt on the render thread while the folded device idles."""
+    import contextlib
+    import torch
+    import nerfview
+    from gsplat.nerfview_viewer import GsplatViewer
+    from gsplat.viewer import _cached_w2c, _prepare_w2c, _w2c
+
+    submitted, built = [], []
+    client = types.SimpleNamespace(client_id=7)
+
+    def get_cs(c):
+        c2w = np.eye(4)
+        c2w[:3, 3] = [0.3 * (len(built) + 1), -1.5, 3.0]
+        built.append(nerfview.CameraState(fov=0.9, aspect=1.25, c2w=c2w))
+        return built[-1]
+
+    gv = types.SimpleNamespace(
+        _latest_cs={}, camera_prepare_fn=_prepare_w2c, get_camera_state=get_cs,
+        mark_ui_active=lambda cid: None,
+        server=types.SimpleNamespace(atomic=contextlib.nullcontext),
+        _renderers={7: types.SimpleNamespace(submit=submitted.append)})
+    GsplatViewer._camera_moved(gv, client)
+    cs = built[-1]
+    assert submitted[-1].camera_state is cs and gv._latest_cs[7] is cs
+    w2c = cs._gsplat_w2c
+    assert torch.equal(w2c, _w2c(cs)) and _cached_w2c(cs) is w2c
+    assert GsplatViewer.latest_camera_state(gv, client) is cs and len(built) == 1
+    other = types.SimpleNamespace(client_id=8)  # no update yet: a fresh state
+    assert GsplatViewer.latest_camera_state(gv, other) is built[-1] and len(built) == 2
+    assert _cached_w2c(built[-1]) is not None  # not prepared: built now
+
+    class Slotted:  # a state that takes no attributes: w2c built at render time
+        __slots__ = ("c2w",)
+
+    st = Slotted()
+    st.c2w = cs.c2w
+    _prepare_w2c(st)
+    assert torch.equal(_cached_w2c(st), w2c)
+
+    # The render loop takes the hint from latest_camera_state, not get_camera_state.
+    import threading
+    from nerfview._renderer import RenderTask
+    from gsplat.nerfview_viewer import FastRenderer
+    seen = []
+    pv = _PoseViewer(lambda c, t: (seen.append(pv.next_camera_state), _test_image())[1])
+    pv.latest_camera_state = lambda c: cs
+    fr = FastRenderer(viewer=pv, client=_Client(), lock=threading.Lock())
+    fr.render_once(RenderTask("move", cs))
+    assert seen == [cs] and pv.polled == 0
+    fr.running = False
+
+
 def test_camera_burst_renders_only_the_moving_client():
     """One client's camera drag bursts only that client: an idle page in another tab
     must not render back to back and take half the device (task #459). A render
