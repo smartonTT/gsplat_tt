@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include "sort.h"
 #include "sort_mover_speed.h"
+#include "fold_sort.h"
 #include "blend_claim_order.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
@@ -3526,7 +3527,7 @@ bool sort_device_ready() { return ensure_context() != nullptr; }
 bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
                                   uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
                                   uint32_t keep_addr, uint32_t pairs_P_addr,
-                                  const std::vector<uint64_t>& acc) {
+                                  const std::vector<uint64_t>& acc, bool drain_before_grow) {
     if (!env_config::sort_ol_early()) return false;
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
@@ -3558,6 +3559,18 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
     }
     if (why != 0) return false;
     if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
+    if (drain_before_grow) {
+        // Task #643: a queued mat+blend still reads these buffers (#552 rule).
+        namespace fs = gsplat_tt::fold_sort;
+        const std::size_t rows = static_cast<std::size_t>(num_cores) * stride * 4u;
+        if (fs::must_drain(ctx->cap_ol_bucket_bytes,
+                           static_cast<std::size_t>(num_tiles) * g_ol_tile_cap * 32u,
+                           ctx->buf_ol_bucket != nullptr) ||
+            fs::must_drain(ctx->cap_ol_rows_bytes, rows, ctx->buf_ol_counts != nullptr) ||
+            fs::must_drain(ctx->cap_ol_totals_bytes, static_cast<std::size_t>(stride) * 8u,
+                           ctx->buf_ol_totals != nullptr))
+            distributed::Finish(*ctx->cq);
+    }
     ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
     const std::vector<uint32_t> noc_xy = core_noc_xy(ctx, num_cores);
     Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;

@@ -114,6 +114,9 @@ void tile_assign_fold_cancel();
 // when it does not apply (the normal call then does the usual work).
 bool tile_assign_fold_prefetch(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                                uint32_t screen_tiles);
+// Task #643 (GSPLAT_TT_SORT_IN_FOLD, fold_sort.h): the blend's after-hook;
+// enqueues the next view's early sort behind the folded K2. True if enqueued.
+bool tile_assign_fold_enqueue_sort();
 
 bool tile_assign_device_ready();
 

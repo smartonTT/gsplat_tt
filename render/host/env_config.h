@@ -209,6 +209,15 @@ inline bool sort_ol_early() {
     static const bool v = env_uint("GSPLAT_TT_SORT_OL_EARLY", 1u) != 0u;
     return v;
 }
+// Task #643 (L-A', fold_sort.h): with the B4a fold and CQ1, enqueue the next
+// view's early sort in the blend's after-hook, behind the mat+blend that ran
+// its K2, instead of at the start of that view. Default on since task #649;
+// 0 = off. With L-A on, L-A's hook does the sort and this only covers the
+// views L-A skips.
+inline bool sort_in_fold() {
+    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_SORT_IN_FOLD", 1u) != 0u;
+    return v;
+}
 // Second command queue (needs sort_ol_early): CQ1 waits for the K2, reads
 // proj_M and the K2 count rows; the host sums the bucket totals from the rows
 // and uploads the bin layout and the mat work list on CQ1 while the sort runs
@@ -221,9 +230,9 @@ inline bool mat_cq1() {
 // Task #628 (L-A): with the B4a fold, the blend's after-hook enqueues the next
 // view's early sort and proj_M read right behind this view's mat+blend, so the
 // device does not idle while the next view's host work reaches the sort.
-// Default off; 1 = on.
+// Default on since task #649 (iter 228); 0 = off.
 inline bool la_prefetch() {
-    static const bool v = env_uint("GSPLAT_TT_LA_PREFETCH", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_LA_PREFETCH", 1u) != 0u;
     return v;
 }
 // Task #355: read the fold K2's count rows on CQ1 through a 4 KB-page view

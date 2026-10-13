@@ -428,12 +428,16 @@ py::tuple render_view(
             });
             gsplat_tt::blend_set_after_enqueue_hook([] {
                 // Task #628 (L-A): the next view's sort + proj_M read behind
-                // this view's mat+blend.
-                if (!gsplat_tt::env_config::la_prefetch()) return;
-                gsplat_tt::PfwcFuseInfo fi;
-                if (gsplat_tt::pfwc_ran_fused(&fi))
-                    (void)gsplat_tt::tile_assign_fold_prefetch(fi.num_cores, fi.num_tiles,
-                                                               fi.tiles_x, fi.screen_tiles);
+                // this view's mat+blend. Task #643 (GSPLAT_TT_SORT_IN_FOLD):
+                // when L-A did not run, only the next view's sort goes there.
+                if (gsplat_tt::env_config::la_prefetch()) {
+                    gsplat_tt::PfwcFuseInfo fi;
+                    if (gsplat_tt::pfwc_ran_fused(&fi) &&
+                        gsplat_tt::tile_assign_fold_prefetch(fi.num_cores, fi.num_tiles,
+                                                             fi.tiles_x, fi.screen_tiles))
+                        return;
+                }
+                (void)gsplat_tt::tile_assign_fold_enqueue_sort();
             });
         } else if (have_next) {
             gsplat_tt::blend_set_after_enqueue_hook([&] {
