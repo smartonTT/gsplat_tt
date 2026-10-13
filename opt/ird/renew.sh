@@ -20,8 +20,8 @@ PORT=46483
 TIMEOUT=14:00:00
 IRD_USER=${IRD_USER:-$USER}
 RROOT=/localdev/$IRD_USER
-# The viewer starts with the tree's B4a fold default (on since task #577 fixed the ETH hang,
-# #556/#562). VIEWER_B4A_FOLD=0 turns it off, 1 forces it on.
+# Forwarded to viewer.sh, which keeps the B4a fold off in the viewer unless it is 1 (task #577:
+# fold on cost page FPS on bh-30).
 VIEWER_B4A_FOLD=${VIEWER_B4A_FOLD-}
 VIEWER_BOX=bh-30
 RESERVE_WAIT=${IRD_RESERVE_WAIT:-240}

@@ -52,5 +52,27 @@ Arms: base = best-iter-226 (90268457), new = a0478ed6 (this branch, includes the
 smarton/tt-project-opt; the K2_CNT16 change adds nothing measurable on the bench path.
 Bench headline does not improve: no new best-iter tag.
 
+## Live viewer, bh-30, 614abe85 deployed (renew.sh viewer), 2026-10-12 22:49-23:05 PDT
+Page FPS through localhost:8091 (`opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:8091
+--subprotocol viser-v1.0.27 --no-decode --secs 23`), same build, same session; the arm switched by
+restarting the viewer with/without VIEWER_B4A_FOLD=0. Outputs in viewer/.
+
+| arm | runs (page FPS) | median | HUD device ms | HUD sent FPS |
+|---|---|---|---|---|
+| fold on (r1-r3) | 108.73, 114.20, 114.95 | 114.20 | 8.00-8.20 | 113-118 |
+| fold off (off1-off3) | 118.57, 118.89, 119.01 | **118.89** | 8.04-8.09 | 116-118 |
+| fold on (r4-r6) | 115.33, 115.50, 115.44 | 115.44 | 8.10-8.19 | 113-118 |
+
+The fold ran on every hinted frame (120/120 cores, no `prepared=1 ... ran=0` line, about 8,000
+frames), with no hang. It still costs about 3.5 page FPS (-3%) in the viewer, where the b2b bench on
+the same box shows it 0.27 ms/view faster. Likely cause (not profiled): with the fold, the next
+frame's pfwc is enqueued ahead of this frame's blend, so the device is idle during the viewer's
+host gap between frames, which pfwc used to fill when it ran behind the blend. The bench's b2b loop
+has almost no host gap, so it only sees the saving.
+
+Change: opt/viewer/viewer.sh keeps the fold off in the viewer unless VIEWER_B4A_FOLD=1 (empty or
+unset = off, so renew.sh redeploys keep it off); tests in opt/ird/test_renew.sh case 13.
+
 ## Verdict
-Keep: land on smarton/tt-project-opt. The viewer gets the fold (-0.27 ms/view device time).
+Fix kept (landed on smarton/tt-project-opt at 614abe85): the fold no longer hangs under ETH dispatch.
+Fold in the live viewer: shelved (-3% page FPS measured); the viewer runs fold off. No new best-iter.
