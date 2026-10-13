@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=7cbf73fc bin=14b97a8c6aa85bfd t628 7cbf73fc L-A prefetch (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t628-r2  timeout=400s  worry=600s  ts=2026-10-13T11:29:51-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/la-prefetch-t628/remote.sh 2 la base lah htl

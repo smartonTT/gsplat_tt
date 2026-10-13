@@ -34,7 +34,7 @@ opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.
 tail -2 "$O/sync.log"
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t628 $sha L-A prefetch ($H)"
 $SSH "$H" "rm -rf $T/tmp/t628 /localdev/smarton/.cache/ttmc-t628; mkdir -p $T/tmp/t628"
-pat="^(===|run rc|B2B |SUMMARY|HTL |HANG|Trace|TT_FATAL|TT_THROW|error:)"
+pat="^(===|run rc|B2B |SUMMARY|HTL |LA |LA_INERT|HANG|Trace|TT_FATAL|TT_THROW|error:)"
 rc=0
 step() {  # name timeout round arms...
   local n=$1 to=$2; shift 2

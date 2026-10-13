@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=62b173b1 bin=4f5be285defb1c39 t614 60475709 b2b floor probes (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t614-warm  timeout=400s  worry=600s  ts=2026-10-13T09:56:17-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2b-floor-t614/remote.sh 0 base htl

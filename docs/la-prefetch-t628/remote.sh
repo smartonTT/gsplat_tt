@@ -42,10 +42,15 @@ for arm in "$@"; do
     timeout ${RUN_TIMEOUT:-200} python3 render/run.py --no-ref --iter-dir t628-$tag --back-to-back ${args[@]+"${args[@]}"} > $S/run-$tag.log 2>&1
   rc=$?
   echo "run rc=$rc"
-  grep -E "^(B2B |SUMMARY|HTL )|TTW_TIMING (b2b_ms_frame|b2b_ms_frame_median)=|Traceback|TT_THROW|TT_FATAL|error:" $S/run-$tag.log | cut -c1-300 | head -12
+  grep -E "^(B2B |SUMMARY|HTL |\[LA\] )|TTW_TIMING (b2b_ms_frame|b2b_ms_frame_median)=|Traceback|TT_THROW|TT_FATAL|error:" $S/run-$tag.log | cut -c1-300 | head -12
   if [ $rc = 124 ] || [ $rc = 137 ]; then echo "HANG in $tag: tt-smi -r"; tt-smi -r > $S/reset-$tag.log 2>&1; echo "reset rc=$?"; exit 124; fi
   [ -f $S/htl-$tag.txt ] && gzip -f $S/htl-$tag.txt
   [ $rc = 0 ] || fail=1
+  case $arm in la|lah)  # t639: an inert lever must not be measured again
+    n=$(grep -c '\[LA\] prefetch' $S/run-$tag.log); no=$(grep -c '\[LA\] pair overflow' $S/run-$tag.log)
+    echo "LA prefetch lines=$n overflow lines=$no"
+    [ "$n" -gt 0 ] || { echo "LA_INERT in $tag: no '[LA] prefetch' lines"; fail=1; } ;;
+  esac
 done
 echo "=== done $r $(date +%T)"
 exit $fail
