@@ -48,17 +48,17 @@ step() {  # name bench-args...
   [ "$s" = 124 ] && exit 124
   return 0
 }
-E=GSPLAT_TT_KCFG_EXTRA_KB=36
+# Run 2 result: KCFG_EXTRA_KB=36 fits the kcfg but static CBs then overflow L1 by 1920 B
+# (1574784 > 1572864), and 35 KB is below the 106528 B program. So run 3 goes straight to the
+# fallback: GSPLAT_TT_B4A_FOLD=0 (K2 as its own program, t224 shape) at the default profiler kcfg.
+# (Run 2 also had a bug: grep "device csv P0" matched "no device csv P0", so the fallback never ran.)
+E=GSPLAT_TT_B4A_FOLD=0
 step p0 tracy P0 0 5 $E
-if ! grep -q "device csv P0" "$O/p0.out"; then
-  E=GSPLAT_TT_B4A_FOLD=0; echo "=== kcfg 36 failed; fallback $E"
-  step p0 tracy P0 0 5 $E
-fi
 echo "=== profiler env: $E"
-if grep -q "device csv P0" "$O/p0.out"; then
+if grep -q "device csv P0 rows" "$O/p0.out"; then
   for v in 5 10 15 20 25; do step p$v tracy P$v $v $((v + 5)) $E; done
   step m0 tracy M0 0 5 $E GSPLAT_TT_MATCULL_PROF=1
-  if grep -q "device csv M0" "$O/m0.out"; then
+  if grep -q "device csv M0 rows" "$O/m0.out"; then
     for v in 10 20; do step m$v tracy M$v $v $((v + 5)) $E GSPLAT_TT_MATCULL_PROF=1; done
   fi
 fi

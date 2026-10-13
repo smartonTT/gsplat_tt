@@ -1,14 +1,12 @@
 ================ BUILD ID ================
-  cpp : #124 sha=cdc57f43 bin=f463cbc791d85a95 t595 094262a8 b2b profile (bh-33)
+  cpp : #125 sha=25a7756e bin=f463cbc791d85a95 t595 25a7756e b2b profile (bh-33)
   data: # sha= 
 =========================================
-host=bh-33  tag=t595-p0  timeout=380s  worry=600s  ts=2026-10-13T00:51:25-0700
-cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh tracy P0 0 5
+host=bh-33  tag=t595-p0  timeout=380s  worry=600s  ts=2026-10-13T01:05:41-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t227/bench.sh tracy P0 0 5 GSPLAT_TT_KCFG_EXTRA_KB=36
 -----------------------------------------
-=== tracy P0 0:5 [plain] 094262a8 07:51:26 card=p100a load=1.40 0.78 0.40
-tracy P0 rc=1 07:51:41
-2026-10-13 07:51:41.786 | critical |          Always | TT_FATAL: Program size (106528) too large for kernel config buffer (103424) on TENSIX (assert.hpp:104)
-[gsplat_tt::sort] resident-pairs path failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+=== tracy P0 0:5 [GSPLAT_TT_KCFG_EXTRA_KB=36] 25a7756e 08:05:42 card=p100a load=2.41 0.94 0.68
+tracy P0 rc=1 08:05:47
 Traceback (most recent call last):
 no device csv P0
-[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-p0-20261013-005124.log
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t595/tmp/ttw-state/logs/t595-p0-20261013-010540.log
