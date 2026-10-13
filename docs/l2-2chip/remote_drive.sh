@@ -21,7 +21,7 @@ unset GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_S
 T=${T:-$R/gstt2}; S=$T/tmp/t582; C=$R/.cache/ttmc-t582
 # The IRD container shows only its two boards (/dev/tenstorrent/5 and 6) and UMD numbers them 0 and 1.
 DA=${DA:-0}; DB=${DB:-1}
-mkdir -p "$S"; rm -f "$S/DONE"
+mkdir -p "$S"; rm -f "$S/DONE" "$S/steps.txt"
 first=0
 trap 'echo "$first" > "$S/DONE"; echo "=== remote_drive done first_rc=$first $(date +%T)"' EXIT
 cd "$T" || { first=1; exit 1; }
