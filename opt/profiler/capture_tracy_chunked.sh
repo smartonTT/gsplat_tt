@@ -5,7 +5,7 @@
 #
 #   bash opt/profiler/capture_tracy_chunked.sh <iter-dir> [chunk_views=10] [timeout_s=480]
 #
-# Box tree: $GSTT2_REPO (default /localdev/smarton/gstt2). Output on the box:
+# Box tree: $GSTT2_REPO (default /localdev/$USER/gstt2-sync, opt/sync_remote.sh). Output on the box:
 #   opt/profiler/<iter-dir>/chunks/<a>-<b>/{render.tracy,profile_log_device.csv}
 #   opt/profiler/<iter-dir>/profile_log_device.csv   (stitched, warmups dropped)
 # Each chunk re-runs one warmup hero render (JIT cache warm); the stitcher drops it.
@@ -16,7 +16,7 @@ ITER_DIR="${1:?usage: capture_tracy_chunked.sh <iter-dir> [chunk_views] [timeout
 CHUNK="${2:-10}"
 TIMEOUT="${3:-480}"
 NVIEWS=30
-REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"
+REPO="${GSTT2_REPO:-/localdev/$USER/gstt2-sync}"
 DEVRUN="${DEVRUN:-$HOME/dev/tt-workflows/scripts/devrun.sh}"
 HOST="$(awk -F'"' '/^device_host/{print $2}' ttw.toml)"
 

@@ -1,0 +1,7 @@
+================ BUILD ID ================
+=========================================
+=== shot t667-229-hero sha=0f372f5 env:  03:26:40
+run rc=0
+VIEWS=30 SWEEP_MD5=077caaba
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/t667-229/hero.png diff=opt/metal-screenshots/t667-229/hero_diff10.png commit=0f372f52 env='defaults' size=1024x1024 sweep_md5=077caaba ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.85 golden_match=true max_lsb_vs_golden=0

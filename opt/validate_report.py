@@ -345,6 +345,16 @@ def main() -> int:
         checks.append(f"every ttw iter > {br.B2B_REQUIRED_AFTER} records b2b ms/view "
                       f"(median of >= {br.B2B_MIN_PASSES} passes); headline section present")
 
+        # --- 9b. Optional train-NN b2b column (#667/#683) --------------------
+        tn_errors = br.check_train_nn(ttw_rows)
+        if tn_errors:
+            raise Invalid(f"{len(tn_errors)} train-NN column problem(s): " + "; ".join(tn_errors))
+        if br.TRAIN_NN_LABEL not in html:
+            raise Invalid(f"REPORT.html has no '{br.TRAIN_NN_LABEL}' column")
+        n_tn = sum(1 for r in ttw_rows if "ms_view_b2b_train_nn" in (r.get("metrics") or {}))
+        checks.append(f"'{br.TRAIN_NN_LABEL}' column present; {n_tn} row(s) filled, each a positive "
+                      "median of its passes; other rows empty")
+
         # 6. Every <img src> and viewer image path in REPORT.html and the
         # opt/ttw/ mirror resolves; nothing loads from outside the repo.
         broken = broken_img_srcs()
