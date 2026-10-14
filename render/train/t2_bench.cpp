@@ -99,6 +99,21 @@ int main(int argc, char** argv) {
         return 2;
     }
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
+    // Slot page q -> DRAM pages 2q (hi: fp32 with the low 13 mantissa bits cleared, exact in the
+    // tf32 matmul source registers) and 2q+1 (lo = x - hi, exact in fp32; tf32 keeps its top 11
+    // bits). The FPU sums hi + lo, ~2^-21 relative to the fp32 slot (#713). The T1 producer emits
+    // this pair; here the host splits.
+    std::vector<uint32_t> slots2(slots.size() * 2);
+    for (size_t q = 0; q < nsp; q++)
+        for (size_t i = 0; i < 1024; i++) {
+            const uint32_t x = slots[q * 1024 + i], h = x & 0xFFFFE000u;
+            float xf, hf;
+            std::memcpy(&xf, &x, 4);
+            std::memcpy(&hf, &h, 4);
+            const float lf = xf - hf;
+            slots2[q * 2048 + i] = h;
+            std::memcpy(&slots2[q * 2048 + 1024 + i], &lf, 4);
+        }
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
@@ -111,7 +126,7 @@ int main(int argc, char** argv) {
     auto b_m = make_dram(dev.get(), uint64_t(ng) * MV_PAGE, MV_PAGE);
     auto b_v = make_dram(dev.get(), uint64_t(ng) * MV_PAGE, MV_PAGE);
     auto b_meta = make_dram(dev.get(), uint64_t(ng) * META_PAGE, META_PAGE);
-    auto b_s = make_dram(dev.get(), uint64_t(nsp) * SLOT_PAGE, SLOT_PAGE);
+    auto b_s = make_dram(dev.get(), 2ull * nsp * SLOT_PAGE, SLOT_PAGE);
     auto b_vis = make_dram(dev.get(), uint64_t(nb) * VIS_PAGE, VIS_PAGE);
     auto b_f = make_dram(dev.get(), 13ull * ng * F_PAGE, F_PAGE);
     auto b_g = make_dram(dev.get(), uint64_t(ng) * P_PAGE, P_PAGE);
@@ -119,7 +134,7 @@ int main(int argc, char** argv) {
     distributed::EnqueueWriteMeshBuffer(*cq, b_m, m, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_v, v, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_meta, meta, true);
-    distributed::EnqueueWriteMeshBuffer(*cq, b_s, slots, true);
+    distributed::EnqueueWriteMeshBuffer(*cq, b_s, slots2, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_vis, vis, true);
     std::vector<uint32_t> zf(size_t(13) * ng * 64, 0u);
     distributed::EnqueueWriteMeshBuffer(*cq, b_f, zf, true);
@@ -130,7 +145,7 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_P, P_PAGE, 2);
     add_cb(prog, cores, CB_M, MV_PAGE, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_V, MV_PAGE, 2, DataFormat::Float16_b);
-    add_cb(prog, cores, CB_K, P_PAGE, 2);
+    add_cb(prog, cores, CB_K, P_PAGE, 4);
     add_cb(prog, cores, CB_WH, 64, 2);
     add_cb(prog, cores, CB_WS, VIS_PAGE + META_PAGE + A_ENTRIES * 64 * 2, 1);
     add_cb(prog, cores, CB_A, A_TILE, 4 * A_ENTRIES, DataFormat::Float16_b);

@@ -74,3 +74,28 @@ def test_segment_matmul_layout():
             for i in range(64):
                 ref = slots[P[i]:P[i] + cnt[i], s].sum()
                 assert abs(out[64 * s + i] - ref) < 1e-9, (trial, s, i)
+
+
+def tf32(x):  # matmul source registers keep 10 mantissa bits (truncation)
+    return (np.asarray(x, np.float32).view(np.uint32) & np.uint32(0xFFFFE000)).view(np.float32)
+
+
+def hi_lo(x):  # t2_bench.cpp slot split: hi exact in tf32, lo = x - hi exact in fp32
+    x = np.asarray(x, np.float32)
+    hi = tf32(x)
+    return hi, x - hi
+
+
+def test_hi_lo_split_precision():
+    # One raw fp32 page through tf32 loses ~2^-11 relative (#713 run 1 failed the T0 oracle, worst
+    # grad 0.17); the hi + lo pair keeps the fp32 slot to ~2^-21.
+    rng = np.random.default_rng(7131)
+    x = (rng.standard_normal(1 << 16) * np.exp(rng.uniform(-20, 20, 1 << 16))).astype(np.float32)
+    hi, lo = hi_lo(x)
+    assert (tf32(hi) == hi).all()
+    assert (hi + lo == x).all()
+    ref = x.astype(np.float64)
+    raw = np.abs(tf32(x).astype(np.float64) - ref) / np.abs(ref)
+    pair = np.abs(hi.astype(np.float64) + tf32(lo).astype(np.float64) - ref) / np.abs(ref)
+    assert raw.max() > 2.0 ** -12
+    assert pair.max() < 2.0 ** -20
