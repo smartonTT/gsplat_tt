@@ -47,6 +47,43 @@ T1 0.058 ms, T2 0.043 ms, chained T1+T2 (one Finish) 0.085 ms, host re-pack 0. O
 crop this is almost all dispatch overhead. The sustained multi-view bicycle ms/view run and
 the 1-2k-iteration loss curve have not been done yet.
 
+## #750: hero full view and the dump-free chain
+
+Hero (bicycle hero view 1237x822, 1,809,729 visible rows, 4,478,225 slots, 1014 tiles), run
+2026-10-14 11:07 PDT on bh-49 before the radius fix:
+
+| stage | result |
+|---|---|
+| T1 blend backward v2 vs ref_slots_fast(ties) | PASS, rel 4.4e-3 (bar 1e-2), 0 NaN slots, 55,108 tie slots |
+| T2 grads vs t2_step | opacity 3.6e-4, sh0 1.4e-6; means/scales/quats NaN in the *reference* |
+| T2 Adam m/v/params | FAIL: m = v = 0 on 77 rows, all with 663-1014 slots |
+| timing (5 reps) | T1 87.8 ms, T2 98.4 ms, chain 186.2 ms per step |
+
+Two causes, both fixed in this commit (device rerun pending):
+- `t2_radius` in t2g_compute.cpp / t2_compute.cpp clamped the 3-sigma radius at 30000 px. The
+  bad rows are near-camera Gaussians centred up to 46,000 px off screen whose footprint still
+  covers every tile, so the device marked them invisible and sparse Adam skipped them. Now the
+  ceil is exact at any size (int16 path to 30000, 2^23 add/subtract above it).
+- The host reference gave NaN grads on 4 rows with no slots and a degenerate cov2d (0 * inf).
+  A row with no slots now gets exactly zero grads, as the device writes
+  (test_degenerate_cov2d_row_without_slots_has_zero_grads).
+
+Dump-free chain on the crops (blend_fwd_bench -> loss_bench LOSS_MODE=ssim -> train_step,
+loop_box.sh): forward image vs oracle 8.6e-6 / 7.7e-6 (sh0 / sh3, bar 1e-4), device loss equals
+oracle loss to 7e-6 relative, dL/dimage max error 3.2e-5 of its max (fp32 device vs fp64 oracle).
+T1 and T2 PASS on both. T0 on sh0 first failed at sh0 grad 1.02e-2 (bar 1e-2, floor 1e-4 of max).
+The host fp32 reference fed the same device image and loss gradient misses autograd by the
+same 0.98e-2, at an element 3.8e-4 of the tensor's max, so the gap is the fp32 loss gradient,
+not the device chain. Chain dumps now carry `chain_dl_dimage_max_rel` and their T0 gate uses:
+relative error floored at 1e-3 of the max (bar 1e-2), grad L2 relative error <= 1e-3, Adam delta
+<= one bf16 ulp (2^-8), loss gradient <= 1e-4 of its max. sh0 then passes: worst grad 3.8e-3,
+grad L2 4.9e-5, delta 3.5e-3. sh3 T0 stays reported, not gated (SH bands 1-3 are a separate task).
+
+Crop host steps per view (loop_box.sh STEP lines): fwd prep ~65 ms, loss prep ~58 ms (target
+constants 3.9 ms, once per dataset), chain dump ~64 ms, T1/T2 prep ~80 ms. These are python
+process launches on 64x64 crops; the device stages run 0.16 ms (forward), 0.069 ms (loss b2b)
+and 0.086 ms (T1+T2). Not a ms/view number yet.
+
 ## Ranked next levers
 
 1. Hero full-view chain check. Extend hero.py with T2 inputs: ply rows of `sel` as params,

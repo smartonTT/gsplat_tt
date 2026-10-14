@@ -179,6 +179,12 @@ def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: in
     gsh = np.zeros_like(np.asarray(params["sh"], f32))
     gsh[:, 0] = np.where(keep, SH_C0 * g[:, 6:9], f32(0))
     grads = {"means": gmeans, "log_scales": gls, "quats": gq, "opacity_logits": gol, "sh": gsh}
+    # A row with no slots has exactly zero grads (the device writes 0); without this a degenerate
+    # cov2d (det 0, idet inf; 4 rows of the #750 hero view) turns 0 * inf into NaN.
+    zero = ~(g != 0).any(1)
+    if zero.any():
+        grads = {k: np.where(zero.reshape((-1,) + (1,) * (a.ndim - 1)), f32(0), a).astype(f32)
+                 for k, a in grads.items()}
     return grads, F["visible"]
 
 

@@ -109,3 +109,21 @@ def test_pfwc_epilogue_layout():
         assert t2.rel_error(pf[k][:n], cov[:, i, j]) <= 1e-4
     raw = o.SH_C0 * p["sh"][:, 0].astype(np.float64) + 0.5
     assert t2.rel_error(pf["col_r"][:n], np.clip(raw[:, 0], 0, 1)) <= 1e-5
+
+
+def test_degenerate_cov2d_row_without_slots_has_zero_grads():
+    # #750 hero: rows with det(cov2d) 0 or overflowing a/c and no slots gave NaN grads (0 * inf).
+    f = np.float32
+    K = np.array([[1100, 0, 600], [0, 1100, 400], [0, 0, 1]], f)
+    p = {"means": np.array([[0.05, 0.02, 0.25], [0.0, 0.0, 4.0]], f),
+         "log_scales": np.array([[20, 20, 20], [-3, -3, -3]], f),
+         "quats": np.array([[1, 0, 0, 0], [1, 0, 0, 0]], f),
+         "opacity_logits": np.zeros(2, f), "sh": np.zeros((2, 1, 3), f)}
+    g2d = np.zeros((2, 9), f)
+    g2d[1] = 1e-3
+    with np.errstate(all="ignore"):
+        grads, _ = t2.projection_backward_sh0(p, g2d, np.eye(4, dtype=f), K, 800, 1200)
+    for k, a in grads.items():
+        assert np.array_equal(a[0], np.zeros_like(a[0])), k
+        assert np.isfinite(a[1]).all(), k
+    assert np.abs(grads["means"][1]).max() > 0

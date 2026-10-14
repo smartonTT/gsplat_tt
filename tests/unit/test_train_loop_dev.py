@@ -27,6 +27,9 @@ def test_chain_glue_round_trip(tmp_path):
     rep = train_loop_dev.chain_dump(str(DUMP), str(tmp_path / "loss"), str(tmp_path / "c.npz"))
     assert rep["loss"] == 0.5 and rep["grad_finite"] and abs(rep["grad_l2rel_vs_oracle"] - 1.0) < 1e-5
     c = np.load(tmp_path / "c.npz")
-    assert set(c.files) == set(d.files)
+    # The chain marker switches train_step_dev check to the chain T0 gate (fp32 loss gradient).
+    assert set(c.files) == set(d.files) | {"chain_dl_dimage_max_rel"}
+    assert abs(float(c["chain_dl_dimage_max_rel"]) - 1.0) < 1e-5
+    assert abs(rep["grad_max_rel_vs_oracle"] - 1.0) < 1e-5
     assert np.array_equal(c["image"], img) and np.array_equal(c["dL_dimage"], g)
     assert np.array_equal(c["grad_means"], d["grad_means"])

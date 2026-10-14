@@ -71,7 +71,9 @@ def chain_dump(dump: str, loss_dir: str, out: str) -> dict:
     rep = {"loss": loss, "oracle_loss": float(keys["loss"]) if "loss" in keys else None,
            "grad_l2rel_vs_oracle": float(np.linalg.norm(g - ref) / max(np.linalg.norm(ref), 1e-30)),
            "grad_finite": bool(np.isfinite(g).all())}
+    rep["grad_max_rel_vs_oracle"] = float(np.abs(g - ref).max() / max(np.abs(ref).max(), 1e-30))
     keys["image"], keys["dL_dimage"] = x, g
+    keys["chain_dl_dimage_max_rel"] = np.float64(rep["grad_max_rel_vs_oracle"])
     np.savez(out, **keys)
     rep["host_ms"] = round((time.perf_counter() - t) * 1e3, 3)
     return rep

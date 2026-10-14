@@ -79,9 +79,23 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
     band0 = lambda k, a: np.asarray(a)[:, :1, :] if k == "sh" else np.asarray(a)  # noqa: E731
     t0 = {}
+    # #750 chain dumps (train_loop_dev chain-dump) carry the device fp32 dL/dimage in place of the
+    # oracle's fp64 one (max error 3e-5 of its max on sh0). Fed the same inputs the host fp32
+    # reference misses autograd's smallest grads (4e-4 of the max) by 1%, as the device does, so
+    # the chain's T0 gate floors the relative error at 1e-3 of each tensor's max (not 1e-4), adds
+    # an L2 bar, and gates the loss gradient itself at 1e-4 of its max.
+    chain = "chain_dl_dimage_max_rel" in d.files
+    floor = 1e-3 if chain else 1e-4
+    if chain:
+        t0["dl_dimage_max_rel"] = float(d["chain_dl_dimage_max_rel"])
+        t0["floor_frac"] = floor
     if (outdir / "grads.f32").exists():
         g = t2_dev.from_cols(t2_dev.from_pages(rd("grads.f32", f32), N, t2_dev.STREAMS))
-        t0["grads"] = {k: t2.rel_error(g[k], band0(k, d[f"grad_{k}"])) for k in t2.PARAM_NAMES}
+        t0["grads"] = {k: t2.rel_error(g[k], band0(k, d[f"grad_{k}"]), floor)
+                       for k in t2.PARAM_NAMES}
+        t0["grads_l2rel"] = {k: float(np.linalg.norm(np.asarray(g[k], np.float64) - band0(k, d[f"grad_{k}"]))
+                                      / max(np.linalg.norm(band0(k, d[f"grad_{k}"])), 1e-30))
+                             for k in t2.PARAM_NAMES}
     p = t2_dev.from_cols(t2_dev.from_pages(rd("params_out.f32", f32), N, t2_dev.STREAMS))
     t0["params"] = {k: t2.rel_error(p[k], band0(k, d[f"adam_bf16_param_{k}"])) for k in t2.PARAM_NAMES}
     pin = {k: band0(k, d[f"param_{k}"]) for k in t2.PARAM_NAMES}
@@ -89,7 +103,13 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
                    for k in t2.PARAM_NAMES}
     t0["worst_grad"] = max(t0.get("grads", {"-": 0.0}).values())
     t0["worst_param"] = max(max(t0["params"].values()), max(t0["delta"].values()))
-    t0["pass"] = bool(t0["worst_grad"] <= grad_bar and t0["worst_param"] <= adam_bar)
+    # Chain: a 1e-2 grad change on autograd's smallest grads can flip one bf16 ulp (2^-8) of
+    # m or v, and Adam's step-0 delta (lr * m / sqrt(v)) moves by that ulp whatever the grad size.
+    t0["adam_bar"] = 2.0 ** -8 if chain else adam_bar
+    t0["pass"] = bool(t0["worst_grad"] <= grad_bar and t0["worst_param"] <= t0["adam_bar"])
+    if chain:
+        t0["pass"] = bool(t0["pass"] and t0["dl_dimage_max_rel"] <= 1e-4
+                          and max(t0.get("grads_l2rel", {"-": 0.0}).values()) <= 1e-3)
     # T2 owns SH band 0 only: with sh_degree > 0 the oracle's dL/dmeans has the view-direction
     # term of bands 1-3 and its dL/dsh0 uses the full-colour clamp mask, so T0 is reported, not gated.
     t0["gated"] = int(d.get("sh_degree", 0)) == 0

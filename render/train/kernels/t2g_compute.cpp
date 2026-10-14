@@ -88,13 +88,19 @@ sfpi_inline vFloat t2_exp(vFloat a) {
     return setexp(r, e);
 }
 
-// ceil(3 sqrt(max(a, 0))), clamped at 30000 (only compared against the image extent).
+// ceil(3 sqrt(max(a, 0))), exact at any size: #750's hero view has visible Gaussians whose
+// centre is 40k px off screen, so a radius clamp (was 30000) wrongly culled them from Adam.
+// Up to 30000 via int16; up to 2^23 via the 2^23 add/subtract (floor or nearest under any
+// rounding, then the +1 fix-up); above 2^23 every fp32 is already an integer.
 sfpi_inline vFloat t2_radius(vFloat a) {
     vFloat r = 3.0f * t2_sqrt(a);
-    v_if(r > 30000.0f) { r = 30000.0f; }
+    vFloat f = r;
+    v_if(r <= 30000.0f) {
+        vInt i = float_to_int16(r, RoundMode::NearestEven);
+        f = int32_to_float(i, RoundMode::NearestEven);
+    }
+    v_elseif(r < 8388608.0f) { f = (r + 8388608.0f) - 8388608.0f; }
     v_endif;
-    vInt i = float_to_int16(r, RoundMode::NearestEven);
-    vFloat f = int32_to_float(i, RoundMode::NearestEven);
     v_if(f < r) { f = f + 1.0f; }
     v_endif;
     return f;
