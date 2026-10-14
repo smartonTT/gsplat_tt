@@ -43,11 +43,15 @@ if [ $brc = 0 ]; then
       # #750 hero: dump + prep built on the Mac (tmp/t750, docs/t685/hero.py + train_step_dev prep),
       # pushed over ssh (tar), run, checked on the box, big files deleted there (keep disk lean).
       [ -s tmp/t750/hero.npz ] && [ -s tmp/t750/in-hero/chain.json ] || { echo "no tmp/t750 hero prep"; continue; }
-      tar -C tmp/t750 -cf - hero.npz in-hero | timeout 1200 "${SSH[@]}" "rm -rf $T/tmp/t748/hero && mkdir -p $T/tmp/t748/hero && tar -C $T/tmp/t748/hero -xf -"
-      echo "push hero rc=$?"
+      # The link through the jump host runs ~0.8 MB/s: push zstd-compressed (1.6 GB -> ~0.37 GB) and
+      # only a stub of hero.npz (the check reads cfg_json and the key list from it, no arrays).
+      python3 -c "import numpy as np;d=np.load('tmp/t750/hero.npz');np.savez('tmp/t750/hero_check.npz',**{k:d[k] for k in ('H','W','N','sh_degree','cfg_json')})" || continue
+      t0=$(date +%s)
+      COPYFILE_DISABLE=1 tar -C tmp/t750 --no-xattrs -cf - hero_check.npz in-hero | zstd -3 -T4 -q | timeout 1800 "${SSH[@]}" "rm -rf $T/tmp/t748/hero && mkdir -p $T/tmp/t748/hero && zstd -dc | tar -C $T/tmp/t748/hero -xf -"
+      prc=$?; echo "push hero rc=$prc $(( $(date +%s) - t0 ))s"; [ $prc = 0 ] || { timeout 60 "${SSH[@]}" "rm -rf $T/tmp/t748/hero"; continue; }
       timeout 2400 "${SSH[@]}" "$ENV && cd tmp/t748/hero && mkdir -p out && (timeout ${RUN_TIMEOUT:-600} ../../../render/train/build/train_step in-hero out ${CORES:-110} ${REPS:-5} grads > out/run.log 2>&1; rc=\$?; tail -20 out/run.log; \
         if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > out/reset.log 2>&1; echo \"reset rc=\$?\"; exit \$rc; fi; \
-        cd ../../.. && nice -n 19 python3 -m gsplat.train_step_dev check tmp/t748/hero/hero.npz tmp/t748/hero/in-hero tmp/t748/hero/out > tmp/t748/hero/check.log 2>&1; echo \"CHECK hero rc=\$?\"; tail -60 tmp/t748/hero/check.log); \
+        cd ../../.. && nice -n 19 python3 -m gsplat.train_step_dev check tmp/t748/hero/hero_check.npz tmp/t748/hero/in-hero tmp/t748/hero/out > tmp/t748/hero/out/check.json 2> tmp/t748/hero/check.log; echo \"CHECK hero rc=\$?\"; cat tmp/t748/hero/out/check.json; tail -20 tmp/t748/hero/check.log); \
         rc=\$?; mkdir -p tmp/t748/out-hero && cp tmp/t748/hero/out/*.json tmp/t748/hero/out/run.log tmp/t748/hero/check.log tmp/t748/out-hero/ 2>/dev/null; rm -rf tmp/t748/hero; exit \$rc"
       echo "run hero rc=$?"; continue
     fi
