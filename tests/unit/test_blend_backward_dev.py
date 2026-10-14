@@ -122,3 +122,16 @@ def test_fast_ref_flags_threshold_ties():
     assert not tie.any()                                   # 1e-5 off t_min is a clear decision
     rep = dev.compare_slots(hi, lo, skip=tie_at)
     assert rep["tie_slots"] == 3 and rep["rel_err"] == 0.0 and rep["rel_err_all"] > 1e-2
+
+
+def test_ramp_vectors_repeat_for_kernel_reads():
+    """#747: blend_bwd_compute reads x of vector V from V & 9 and y from V & ~9, and keeps its
+    constants (DR_K) in x ramp vectors 16-31; both rely on this layout of prep's ramps."""
+    d, cfg = dev.load_dump(DUMPS[0])
+    p = dev.prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
+                 d["image"], d["dL_dimage"], cfg)
+    lanes = dev.vector_lanes().reshape(32, 32)
+    xr, yr = p["ramps"][0][lanes], p["ramps"][1][lanes]
+    for V in range(32):
+        assert (xr[V] == xr[V & 9]).all() and (yr[V] == yr[V & ~9]).all(), V
+    assert max(V & 9 for V in range(32)) < 16  # DR_K = x ramp vector 16 is never read as x
