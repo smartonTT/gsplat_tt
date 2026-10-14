@@ -1,4 +1,4 @@
-# Task #730: fp32 op/colour cost in train mode (status: code done, device A/B pending)
+# Task #730: fp32 op/colour cost in train mode (status: writer gather measured, loses; side slab next)
 
 Bound (#727, bh-49 p150, b2b): the reader's random 64 B gather + L1 copy cost
 1.42 ms/view (14.681 on vs 13.261 with no gather; gather 1.06, copy 0.36).
@@ -32,4 +32,6 @@ there). Bound: the d2 arm (13.26 ms/view) if the writer fully hides the gather.
 Default off until the device A/B.
 
 Unit test: tests/unit/test_train_opc_writer_t730.py (loop replay + wiring).
-Device A/B, md5 3fada021, oracle, JIT check and screenshot: not run yet (follow-up).
+Device A/B (#734, docs/t734/RESULTS.md, bh-49 p150a): lossless (md5 3fada021,
+check_dump PASS, JIT OK, 42.52 dB) but slower: wr 14.801, wrb (batch 128) 14.777 vs on
+14.682 ms/view (A/A 14.679, spreads <= 0.014). Default stays off. Next: the side slab.

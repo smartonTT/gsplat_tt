@@ -1,0 +1,13 @@
+== on vs aa
+A/A reader_alpha_blend_mb_devcull: same hashes ['15630090622801204332'] in on and aa
+A/A writer_alpha_blend: same hashes ['1745087671397032483'] in on and aa
+A/A all 13 kernels identical between on and aa
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+== on vs wr
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] wr=['5802443917626548915']
+OK writer_alpha_blend: on=['1745087671397032483'] wr=['12480235443597764076']
+JIT-HASH OK
+== on vs wrb
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] wrb=['1732180128239627965']
+OK writer_alpha_blend: on=['1745087671397032483'] wrb=['9915377810311991872']
+JIT-HASH OK

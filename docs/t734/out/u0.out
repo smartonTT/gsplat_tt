@@ -1,0 +1,22 @@
+================ BUILD ID ================
+  cpp : #124 sha=600c109b bin=60a714a58b91dea1 t734 600c109b writer-side opc gather A/B (bh-49)
+  data: # sha=
+=========================================
+host=bh-49  tag=t734-u0  timeout=300s  worry=600s  ts=2026-10-14T04:36:13-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t734-remote.sh 0 dump dumpwr
+-----------------------------------------
+=== r0-dump 600c109b GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t734/train-v0-on.bin --dump-views t734-dump --view-range 0:1 11:36:16 load=0.22
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t734-on
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.9 p50_ms=31.9 min_ms=31.9 max_ms=31.9 n_views=1 warmup_s=9.8 out=/localdev/smarton/gstt2-sync/tmp/t734-r0-dump
+TTW_TIMING ms_view=31.865
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 11:36 /localdev/smarton/gstt2-sync/tmp/t734/train-v0-on.bin
+=== r0-dumpwr 600c109b GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_OPC_WRITER=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t734/train-v0-wr.bin --dump-views t734-dumpwr --view-range 0:1 11:36:28 load=0.73
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t734-wr
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.4 p50_ms=32.4 min_ms=32.4 max_ms=32.4 n_views=1 warmup_s=9.7 out=/localdev/smarton/gstt2-sync/tmp/t734-r0-dumpwr
+TTW_TIMING ms_view=32.374
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 11:36 /localdev/smarton/gstt2-sync/tmp/t734/train-v0-on.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 11:36 /localdev/smarton/gstt2-sync/tmp/t734/train-v0-wr.bin
+=== done 0 11:36:40
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t734/tmp/ttw-state/logs/t734-u0-20261014-043612.log
