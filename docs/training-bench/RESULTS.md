@@ -16,8 +16,10 @@ dataset also `360_v2/bicycle/images_4/` (1237x822 JPEGs).
 
 ## Ready tooling
 - `scripts/training_cameras.py --colmap <sparse/0> | --gs-cameras <cameras.json> [--seed 0]` writes
-  `benchmarks/cameras_train_shuffled.json`, `cameras_test.json` and `cameras_orbit_1237.json`
-  (orbit at 1237x822, control). Intrinsics: the dataset's fx/fy/cx/cy scaled to 1237x822, stored
+  `benchmarks/cameras_train_shuffled.json` (reference only), `cameras_train_nn.json` (same train
+  views as a greedy nearest-neighbour tour over position + view direction, per user msg #358:
+  view coherence is allowed), `cameras_test.json` and `cameras_orbit_1237.json` (orbit at
+  1237x822, control). Synthetic ring test: the NN tour walks the ring in 15-degree steps. Intrinsics: the dataset's fx/fy/cx/cy scaled to 1237x822, stored
   as `"intrinsics"`; split = sorted names, index % 8 == 0 is test. It checks that `_DSC8679`
   matches the cameras_v2 hero c2w (synthetic round-trip test: 6e-8).
 - `render/run.py`: a camera file's optional `"intrinsics"` {fx, fy, cx, cy} overrides the

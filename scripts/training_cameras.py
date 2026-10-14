@@ -5,6 +5,8 @@ dataset's images_4 size), with the dataset's own intrinsics scaled to that size
 and stored as "intrinsics" {fx, fy, cx, cy} (render/run.py uses them over fov_deg):
 
   benchmarks/cameras_train_shuffled.json  train split (all but every 8th image), seeded order
+  benchmarks/cameras_train_nn.json        same train split, greedy nearest-neighbour tour over
+                                          camera position + view direction (max view coherence)
   benchmarks/cameras_test.json            test split (every 8th image, Mip-NeRF360 protocol)
   benchmarks/cameras_orbit_1237.json      the cameras_v2 orbit at 1237x822 (control, same fov)
 
@@ -81,6 +83,22 @@ def read_gs_cameras(p: Path):
     return out
 
 
+def nn_order(names, views, dir_weight):
+    """Greedy nearest-neighbour tour from the first name: next = the unvisited camera
+    minimising |dpos| / scene_scale + dir_weight * (1 - cos(view directions))."""
+    pos = {n: np.asarray(views[n]["c2w"])[:3, 3] for n in names}
+    fwd = {n: np.asarray(views[n]["c2w"])[:3, 2] for n in names}  # +z = view dir (OpenCV)
+    P = np.stack(list(pos.values()))
+    scale = float(np.linalg.norm(P - P.mean(0), axis=1).mean()) or 1.0
+    tour, left = [names[0]], set(names[1:])
+    while left:
+        c = tour[-1]
+        nxt = min(sorted(left), key=lambda n: np.linalg.norm(pos[n] - pos[c]) / scale
+                  + dir_weight * (1.0 - float(fwd[n] @ fwd[c])))
+        tour.append(nxt); left.remove(nxt)
+    return tour
+
+
 def _file(base, names, views, intr, fov):
     return {"bicycle": {
         "ply": base["ply"], "image_size": [W_OUT, H_OUT], "fov_deg": fov,
@@ -94,6 +112,8 @@ def main():
     g.add_argument("--colmap", type=Path)
     g.add_argument("--gs-cameras", type=Path)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--nn-dir-weight", type=float, default=1.0,
+                    help="weight of (1 - cos) view-direction distance vs position/scene_scale")
     ap.add_argument("--out-dir", type=Path, default=REPO / "benchmarks")
     a = ap.parse_args()
 
@@ -111,11 +131,13 @@ def main():
              for n, c2w, *_ in recs}
     test = [key(r[0]) for i, r in enumerate(recs) if i % 8 == 0]
     train = [key(r[0]) for i, r in enumerate(recs) if i % 8 != 0]
+    train_nn = nn_order(train, views, a.nn_dir_weight)  # tour starts at the first sorted name
     random.Random(a.seed).shuffle(train)
     if "_DSC8679" in views:
         d = np.abs(np.asarray(views["_DSC8679"]["c2w"]) - np.asarray(base["views"]["hero"]["c2w"]))
         print(f"hero check: max |c2w(_DSC8679) - cameras_v2 hero| = {d.max():.2e}")
-    for fname, names in (("cameras_train_shuffled.json", train), ("cameras_test.json", test)):
+    for fname, names in (("cameras_train_shuffled.json", train), ("cameras_train_nn.json", train_nn),
+                         ("cameras_test.json", test)):
         p = a.out_dir / fname
         p.write_text(json.dumps(_file(base, names, {n: views[n] for n in names}, intr, fov), indent=1))
         print(f"wrote {p} ({len(names)} views, first {names[0]})")
