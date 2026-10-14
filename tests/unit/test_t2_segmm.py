@@ -119,11 +119,44 @@ def test_slot_split_precision():
     assert (sum(q.astype(np.float64) for q in p) == ref).all()
 
 
-def test_dest_transpose_uses_fp32_src_formats():
-    # #726: transpose_wh_dest<true> moves each value's low 16 bits through SrcB in the current SrcB
-    # format; left at the bf16 matmul format it flips mantissa bits 7-14 (~2^-10 relative error).
-    import pathlib, re
-    src = (pathlib.Path(__file__).resolve().parents[2] / "render/train/kernels/t2_compute.cpp").read_text()
-    i = src.index("transpose_wh_dest_init_short<true>")
-    j = src.rindex("matmul_tiles", 0, i)
-    assert re.search(r"reconfig_data_format\(CB_K, CB_P, CB_A, CB_P\)", src[j:i])
+def bfp_pieces(page):  # t2_bench.cpp slot split (#726): pieces on a grid shared by each stream column
+    x = np.asarray(page, np.float32).reshape(-1, 16)
+    mx = np.abs(x).max(0)
+    e = np.where(mx > 0, np.floor(np.log2(np.where(mx > 0, mx, 1))), 0)
+    r, out = x.astype(np.float64), []
+    for k in range(3):
+        g = 2.0 ** (e - 7 - 8 * k)
+        out.append((np.trunc(r / g) * g).astype(np.float32))
+        r = r - out[-1]
+    return out, e
+
+
+def fpu_sum(terms, w=12):  # model of the FPU inner sum: terms aligned to the largest, w bits kept
+    t = np.asarray(terms, np.float64)
+    em = np.floor(np.log2(np.abs(t[t != 0]).max())) if (t != 0).any() else 0
+    q = 2.0 ** (em - w)
+    return (np.trunc(t / q) * q).sum()
+
+
+def test_slot_split_shared_grid():
+    # #726: lanes with one slot were exact on device, lanes with 2+ slots off by ~2^-11: the matmul
+    # sums one piece of several slots at once, and per-slot pieces of different exponents do not
+    # survive the FPU's alignment. Block-float pieces share a grid per page column, so any
+    # alignment that keeps the column's top 8+log2(64) bits sums them exactly.
+    rng = np.random.default_rng(726)
+    page = (rng.standard_normal(1024) * np.exp(rng.uniform(-8, 0, 1024))).astype(np.float32)
+    p, e = bfp_pieces(page)
+    x = page.reshape(-1, 16).astype(np.float64)
+    for k, q in enumerate(p):
+        assert (bf16_trunc(q) == q).all()
+        steps = q / 2.0 ** (e - 7 - 8 * k)
+        assert (steps == np.trunc(steps)).all() and (np.abs(steps) < 256).all()
+    assert (np.abs(sum(q.astype(np.float64) for q in p) - x) < 2.0 ** (e - 23)).all()
+    a, b = 0, 1  # one lane summing slots 0 and 1 of column 3, a magnitude apart
+    x[b, 3] = x[a, 3] * 2.0 ** -7 * 1.37
+    page = x.astype(np.float32).reshape(-1)
+    xs = page.reshape(-1, 16)[[a, b], 3].astype(np.float64)
+    old = sum(fpu_sum(t) for t in zip(*[pieces(page[[i * 16 + 3]]) for i in (a, b)]))
+    new = sum(fpu_sum([q.reshape(-1, 16)[a, 3], q.reshape(-1, 16)[b, 3]]) for q in bfp_pieces(page)[0])
+    assert abs(old - xs.sum()) > 2.0 ** -16 * abs(xs.sum())
+    assert abs(new - xs.sum()) <= 2.0 ** -23 * np.abs(page.reshape(-1, 16)[:, 3]).max()

@@ -5,6 +5,7 @@
 //   t2_bench <in_dir> <out_dir> [n_cores] [reps] [grads]
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -99,25 +100,36 @@ int main(int argc, char** argv) {
         return 2;
     }
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
-    // Slot page q -> DRAM pages 3q..3q+2: bf16 pieces hi, mid, lo with hi + mid + lo == x exactly
-    // (each piece the bf16 truncation of what the earlier ones left). The matmul puts the slots in
-    // SrcA, which keeps only 8 explicit mantissa bits even at HiFi4 (tech_reports/matrix_engine), so
-    // a fp32 or tf32 page loses ~2^-9 (#713 runs 1-2 failed the T0 oracle); bf16 pieces are exact.
-    // The T1 producer emits the pieces; here the host splits.
+    // Slot page q -> DRAM pages 3q..3q+2: bf16 pieces hi, mid, lo of each slot on a block-float
+    // grid shared by the page's stream column: E = exponent of the column's largest |x|, piece k =
+    // truncation of what the earlier ones left to a multiple of 2^(E-7-8k) (< 256 steps, so bf16
+    // exact; the rest is < 2^(E-23)). The FPU sums a matmul's products with limited alignment, so
+    // per-slot pieces of different exponents summed in one matmul lost ~2^-11 (#726: back-solved
+    // device g2d wrong only for lanes with 2+ slots); on a shared grid the sums are exact. SrcA
+    // keeps only 8 explicit mantissa bits even at HiFi4 (tech_reports/matrix_engine), so a fp32 or
+    // tf32 page loses ~2^-9 (#713 runs 1-2). The T1 producer emits the pieces; here the host splits.
     std::vector<uint32_t> slots3(slots.size() * 3 / 2);
     auto* s3 = reinterpret_cast<uint16_t*>(slots3.data());
     for (size_t q = 0; q < nsp; q++)
-        for (size_t i = 0; i < 1024; i++) {
-            float r;
-            std::memcpy(&r, &slots[q * 1024 + i], 4);
-            for (size_t k = 0; k < 3; k++) {
-                uint32_t b;
-                std::memcpy(&b, &r, 4);
-                b &= 0xFFFF0000u;
-                float h;
-                std::memcpy(&h, &b, 4);
-                s3[(q * 3 + k) * 1024 + i] = uint16_t(b >> 16);
-                r -= h;
+        for (size_t c = 0; c < 16; c++) {
+            float mx = 0.0f;
+            for (size_t i = c; i < 1024; i += 16) {
+                float x;
+                std::memcpy(&x, &slots[q * 1024 + i], 4);
+                mx = std::max(mx, std::fabs(x));
+            }
+            const int e = mx > 0.0f ? std::ilogb(mx) : 0;
+            for (size_t i = c; i < 1024; i += 16) {
+                float r;
+                std::memcpy(&r, &slots[q * 1024 + i], 4);
+                for (int k = 0; k < 3; k++) {
+                    const float g = std::ldexp(1.0f, e - 7 - 8 * k);
+                    const float h = std::trunc(r / g) * g;
+                    uint32_t b;
+                    std::memcpy(&b, &h, 4);
+                    s3[(q * 3 + k) * 1024 + i] = uint16_t(b >> 16);
+                    r -= h;
+                }
             }
         }
     auto dev = distributed::MeshDevice::create_unit_mesh(0);

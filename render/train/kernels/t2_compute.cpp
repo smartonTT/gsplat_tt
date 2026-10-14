@@ -6,7 +6,7 @@
 // Segment reduce (#713): per slot page window, twelve FPU matmuls (bf16 0/1 segment tiles from CB_A
 // x the page's exact bf16 pieces hi, mid, lo from CB_K, HiFi4, fp32 Dst) accumulate into tiles 4-7 (lanes 0-31 /
 // 32-63 of the left / right page column halves, rows = lanes, columns = streams); the right
-// halves fold into the left on the SFPU, tiles 4 and 5 are transposed in Dst (fp32 Src formats), and SFPTRANSP
+// halves fold into the left on the SFPU, tiles 4 and 5 are transposed in Dst, and SFPTRANSP
 // regroups the four 16-lane chunks into the stream layout of tile 3.
 // The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
 // Runtime args: group count, then NCONST fp32 constants (bits, t2_dev.consts order).
@@ -478,9 +478,6 @@ void kernel_main() {
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_fold()));
         MATH((_llk_math_eltwise_unary_sfpu_done_()));
-        // 32-bit Dst transpose moves the low 16 bits through SrcB in the SrcB format: with the bf16
-        // matmul formats still set it corrupts mantissa bits 7-14 (#726); use the fp32 CB's formats.
-        reconfig_data_format(CB_K, CB_P, CB_A, CB_P);
         transpose_wh_dest_init_short<true>();
         transpose_wh_dest<true>(4);
         transpose_wh_dest<true>(5);

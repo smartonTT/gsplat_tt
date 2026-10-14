@@ -39,3 +39,25 @@ separate JIT caches (ttmc-t726-fix / ttmc-t726-gather): `ab_jit_check --kernel t
 Speedup 2.25x at K=8, 1.16x at K=1; the fix costs nothing measurable (run 3: 6.21 / 2.71).
 The gate's oracle outputs were deleted on the box by a drive.sh quoting bug (fixed in 3371c380),
 so sh0/sh3 were rerun separately (below). Raw: run4-fp32src/.
+
+Run 4 oracle (3371c380, 03:59 PDT): sh0 grad 1.17e-3 / Adam 1.14e-3 FAIL, sh3 2.70e-3 / 5.97e-4 PASS,
+the same to every printed digit as run 3. The fp32-Src reconfig changed nothing (the LLK's 32-bit
+transpose sets its own Src formats), so the transpose diagnosis above was wrong.
+
+## t726, second diagnosis: the FPU sums one matmul's products with limited alignment
+
+Back-solving device g2d from the run-4 grads (docs/t726/backsolve.py; grads are linear in g2d,
+lstsq residual 6e-9) and comparing with the fp64 segment sum: lanes with ONE slot are exact (to
+back-solve noise), lanes with 2 or 4 slots are off by ~4096 fp32 ulps (~2^-11 relative), e.g. a
+2-slot lane -2.1e-3 + -1.7e-5 gives xor 0x1000. A transpose fault would hit 1-slot lanes as well.
+So hi + mid + lo of one slot accumulate exactly across matmuls in fp32 Dst, but the products of
+several slots summed inside ONE matmul (one piece of every slot of the lane) lose the low bits of
+the smaller ones: the FPU aligns them before adding. Per-slot pieces have per-slot exponents, so
+their sum needs more alignment width than the FPU keeps.
+
+Fix (this commit): block-float pieces. Per page and stream column, E = exponent of the column's
+largest |x|; piece k is the truncation of the remainder to a multiple of 2^(E-7-8k) (< 256 steps, so
+bf16 exact). All terms one matmul sums share a grid, so alignment loses nothing; the split itself
+drops < 2^(E-23) per slot. Offline with exact sums (tmp model): sh0 grad 1.3e-4, sh3 3.5e-4, Adam
+delta exact. Host-only change (t2_bench.cpp; the T1 producer would emit the same pieces); the
+no-op transpose reconfig is reverted. Model test: tests/unit/test_t2_segmm.py::test_slot_split_shared_grid.
