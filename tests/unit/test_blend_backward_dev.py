@@ -52,3 +52,17 @@ def test_synth_dump_emulates(tmp_path):
                  d["image"], d["dL_dimage"], cfg)
     assert p["n_slots"] > 100
     assert dev.compare_slots(dev.emulate(p), dev.ref_slots(d, cfg))["rel_err"] < 1e-2
+
+
+def test_pack_v2_matches_host_finish():
+    """#704 v2: on-device finish + lane reduce + writer gather (modelled) equals the v1 host
+    reduce and finish for a full pack of 16 pairs."""
+    rng = np.random.default_rng(7)
+    n = dev.BATCH
+    acc = rng.standard_normal((n, 9, 4, 8)).astype(np.float32)
+    A, B, C = (rng.uniform(0.1, 2.0, n).astype(np.float32) for _ in range(3))
+    _, got = dev.pack_v2(acc, -0.5 * A, -B, -0.5 * C)
+    S = acc.astype(np.float64).sum((2, 3))
+    want = np.stack([A * S[:, 7] + B * S[:, 8], B * S[:, 7] + C * S[:, 8], -0.5 * S[:, 4], -S[:, 5],
+                     -0.5 * S[:, 6], S[:, 0], S[:, 1], S[:, 2], S[:, 3]], 1)
+    np.testing.assert_allclose(got, want, rtol=1e-4, atol=1e-4)

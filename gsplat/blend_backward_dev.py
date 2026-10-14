@@ -34,7 +34,7 @@ from gsplat.blend_backward_ref import (BlendCfg, blend_backward, cov_diag_from_c
                                        rel_error, tile_rects)
 
 TILE = 32
-BATCH = 7          # pairs per ACC pack (3 result vectors each, vectors 9..29)
+BATCH = 16         # pairs per ACC pack (v2: 3 result vectors per 8 pairs, vectors 24..29)
 REC_WORDS = 16
 N_PLANES = 5
 f32 = np.float32
@@ -194,6 +194,43 @@ def emulate(p: dict, exp=np.exp) -> np.ndarray:
             slots[int(rec[13])] = [A * Su + B * Sv, B * Su + C * Sv, f32(-0.5) * Suu, -Suv,
                                    f32(-0.5) * Svv, dw, ag0, ag1, ag2]
     return slots
+
+
+def pack_v2(acc: np.ndarray, Af, Bf, Cf) -> tuple[np.ndarray, np.ndarray]:
+    """numpy model of the v2 on-device finish (#704) for the NB pairs of one ACC pack.
+    acc: (n, 9, 4, 8) per-lane term sums (LREG row j, column k) of pair i.
+    Returns (packed ACC tile (1024,), slots (n, 9)) where slots is what bwd_writer gathers.
+    Models blend_bwd_compute.cpp bwd_finish: per-lane finish, SFPTRANSP (reg i row j <- reg j
+    row i), add tree, row rotate-add by 1, 2, 4 (SFPSHFT2 SUBVEC_SHFLROR1), column select."""
+    acc = np.asarray(acc, f32)
+    Af, Bf, Cf = (np.broadcast_to(np.asarray(x, f32), (acc.shape[0],)) for x in (Af, Bf, Cf))
+    tile = np.zeros(1024, f32)
+    lanes = vector_lanes()                                   # (32, 4, 8)
+    for i, a in enumerate(acc):
+        t = Af[i] * a[7]
+        dmx = -((t + t) + Bf[i] * a[8])
+        t = Cf[i] * a[8]
+        dmy = -((t + t) + Bf[i] * a[7])
+        z = np.zeros_like(a[0])
+        groups = [(a[0], a[1], a[2], a[3]),
+                  (a[4] * f32(-0.5), -a[5], a[6] * f32(-0.5), dmx), (dmy, z, z, z)]
+        V0, q = 24 + 3 * (i // 8), i % 8
+        for gk, g in enumerate(groups):
+            r = np.stack(g)                                  # (reg, row, col)
+            r = r.transpose(1, 0, 2)                         # SFPTRANSP
+            s = (r[0] + r[1]) + (r[2] + r[3])
+            for sh in (1, 2, 4):
+                s = s + np.roll(s, sh, axis=1)
+            tile[lanes[V0 + gk][:, q]] = s[:, q]
+    o = tile
+    lane = lambda V, j, k: 64 * (V >> 1) + 16 * j + 2 * k + (V & 1)  # noqa: E731
+    slots = np.zeros((acc.shape[0], 9), f32)
+    for k in range(acc.shape[0]):
+        V, q = 24 + 3 * (k >> 3), k & 7
+        slots[k] = [o[lane(V + 1, 3, q)], o[lane(V + 2, 0, q)], o[lane(V + 1, 0, q)],
+                    o[lane(V + 1, 1, q)], o[lane(V + 1, 2, q)], o[lane(V, 0, q)],
+                    o[lane(V, 1, q)], o[lane(V, 2, q)], o[lane(V, 3, q)]]
+    return tile, slots
 
 
 def exp21f(x: np.ndarray) -> np.ndarray:

@@ -3,9 +3,14 @@
 // and the x/y ramps sit in Dst; per pair (forward order) the SFPU visits only the vectors in
 // the pair's mask and accumulates 9 per-lane term sums. v1: the ACC tile (dst 7) is packed per
 // pair and the host does the lane reduction and the finish (A Su + B Sv, ...).
+// v2 (#704): the finish is applied per lane, the 32 lanes are reduced on the SFPU (SFPTRANSP
+// + add tree + row rotate-add) and each pair's 9 floats land in column q of 3 out vectors;
+// the ACC tile is packed once per NB pairs and the writer scatters 9 floats per pair.
 // Dst (fp32, full sync, 8 tiles, dst_reg index = tile * 32 + vector):
 //   0 T, 1 BH, 2-4 g, 5 x ramp, 6 y ramp,
-//   7 ACC: 0-8 term sums, 9-17 pair scalars, 18-23 scratch (u, v, w, ga, 1 - alpha, alpha).
+//   7 ACC: 0-8 term sums, 9-17 pair scalars, 18-23 scratch (u, v, w, ga, 1 - alpha, alpha),
+//          24-29 out: pair i of a pack -> column i % 8 of vectors 24 + 3 (i / 8) + {0, 1, 2}
+//          (group 0 rows: dop dr dg db; group 1: dA dB dC dmx; group 2 row 0: dmy).
 // Compile defines: BWD_AMAX_BITS, BWD_AMIN_BITS, BWD_TMIN_BITS (fp32 bits of the blend cfg).
 #include <cstdint>
 
@@ -27,6 +32,7 @@ constexpr uint32_t DR_S = DR_ACC + 9;  // Af Bf Cf mx my op cr cg cb
 constexpr uint32_t S_AF = 0, S_BF = 1, S_CF = 2, S_MX = 3, S_MY = 4, S_OP = 5, S_CR = 6, S_CG = 7, S_CB = 8;
 constexpr uint32_t DR_U = DR_ACC + 18, DR_V = DR_ACC + 19, DR_W = DR_ACC + 20, DR_GA = DR_ACC + 21,
                    DR_OM = DR_ACC + 22, DR_AL = DR_ACC + 23;
+constexpr uint32_t DR_O = DR_ACC + 24, NB = 16;  // out vectors, pairs per ACC pack
 constexpr float kAmax = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_AMAX_BITS));
 constexpr float kAmin = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_AMIN_BITS));
 constexpr float kTmin = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_TMIN_BITS));
@@ -142,6 +148,78 @@ __attribute__((noinline)) void bwd_body() {
     v_endif;
 }
 
+// Sum of a's 32 lanes ... d's into row j = lane sum of the j-th argument, in all 8 columns.
+sfpi_inline sfpi::vFloat bwd_lane_sum(sfpi::vFloat a, sfpi::vFloat b, sfpi::vFloat c, sfpi::vFloat d) {
+    using namespace sfpi;
+    subvec_transp(a, b, c, d);  // reg i row j = old reg j row i
+    a = (a + b) + (c + d);      // row j: 8 column partials of argument j
+    vFloat r = subvec_shflror1(a);
+    a = a + r;
+    r = subvec_shflror1(a);
+    r = subvec_shflror1(r);
+    a = a + r;
+    r = subvec_shflror1(a);
+    r = subvec_shflror1(r);
+    r = subvec_shflror1(r);
+    r = subvec_shflror1(r);
+    return a + r;
+}
+
+// Column select: the pack's column value 2q + 0.5 is staged in scratch vector DR_U.
+template <uint32_t O>
+sfpi_inline void bwd_put(sfpi::vFloat s) {
+    using namespace sfpi;
+    vFloat qx = dst_reg[DR_U];
+    vFloat o = dst_reg[O];
+    vFloat x = dst_reg[DR_X];  // vector 0 of the x ramp: column k holds 2k + 0.5
+    v_if (x == qx) { o = s; }
+    v_endif;
+    dst_reg[O] = o;
+}
+
+// Pair finish (linear, so applied per lane before the reduce): A = -2 Af, B = -Bf, C = -2 Cf
+// exactly. dmx = A Su + B Sv, dmy = B Su + C Sv, dA = -Suu/2, dB = -Suv, dC = -Svv/2.
+template <uint32_t H>
+__attribute__((noinline)) void bwd_finish() {
+    using namespace sfpi;
+    constexpr uint32_t O = DR_O + 3 * H;
+    {
+        vFloat a0 = dst_reg[DR_ACC + 0], a1 = dst_reg[DR_ACC + 1], a2 = dst_reg[DR_ACC + 2],
+               a3 = dst_reg[DR_ACC + 3];
+        bwd_put<O>(bwd_lane_sum(a0, a1, a2, a3));
+    }
+    {
+        vFloat su = dst_reg[DR_ACC + 7], sv = dst_reg[DR_ACC + 8];
+        vFloat af = dst_reg[DR_S + S_AF];
+        vFloat t = af * su;
+        t = t + t;
+        vFloat bf = dst_reg[DR_S + S_BF];
+        vFloat dmx = -(t + bf * sv);
+        dst_reg[DR_ACC + 7] = dmx;
+        vFloat cf = dst_reg[DR_S + S_CF];
+        t = cf * sv;
+        t = t + t;
+        vFloat dmy = -(t + bf * su);
+        dst_reg[DR_ACC + 8] = dmy;
+    }
+    {
+        vFloat a4 = dst_reg[DR_ACC + 4], a5 = dst_reg[DR_ACC + 5], a6 = dst_reg[DR_ACC + 6],
+               a7 = dst_reg[DR_ACC + 7];
+        a4 = a4 * -0.5f;
+        a5 = -a5;
+        a6 = a6 * -0.5f;
+        bwd_put<O + 1>(bwd_lane_sum(a4, a5, a6, a7));
+    }
+    {
+        vFloat a8 = dst_reg[DR_ACC + 8];
+        bwd_put<O + 2>(bwd_lane_sum(a8, vConst0, vConst0, vConst0));
+    }
+}
+
+// x ramp value of column q (2q + 0.5), as fp32 bits.
+constexpr uint32_t kColX[8] = {0x3F000000u, 0x40200000u, 0x40900000u, 0x40D00000u,
+                               0x41080000u, 0x41280000u, 0x41480000u, 0x41680000u};
+
 using BwdBodyFn = void (*)();
 // Filled at runtime: a const initializer would need dynamic relocations (kernel loader).
 BwdBodyFn g_bwd_bodies[32];
@@ -221,11 +299,18 @@ void kernel_main() {
             uint32_t s[9];
             const uint32_t mask = bwd_read_record(ra, s);
             bwd_pair(s, mask);
+            sfpi::dst_reg[DR_U] = ckernel::sfpu::Converter::as_float(kColX[p & 7u]);
+            if ((p & 8u) == 0u) {
+                bwd_finish<0>();
+            } else {
+                bwd_finish<1>();
+            }
 #else
             (void)ra;
 #endif
             UNPACK(((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId)));
             cb_pop_front(CB_REC, 1);
+            if ((p % NB) != NB - 1u && p + 1 != cnt) continue;
 
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
             tile_regs_commit();

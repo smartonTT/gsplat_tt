@@ -1,7 +1,8 @@
 // T1 blend backward device bench (#693). Runs render/train/kernels/{bwd_reader,
 // blend_bwd_compute,bwd_writer} on the prep dir of `python3 -m gsplat.blend_backward_dev prep`,
-// does the per-pair lane reduction and finish on the host (v1) and writes slots.f32
-// (16 floats per slot, first 9 used) plus timing.json for `blend_backward_dev check`.
+// reads back the slots the device finished (v2 #704: lane reduce + finish on device, 9 floats
+// per 64 B slot page) and writes slots.f32 (16 floats per slot, first 9 used) plus timing.json
+// for `blend_backward_dev check`.
 //   blend_bwd_bench <prep_dir> [n_cores] [reps]
 #include <algorithm>
 #include <chrono>
@@ -26,7 +27,7 @@ using namespace tt::tt_metal;
 
 namespace {
 constexpr uint32_t SMALL = 64, TILE_B = 4096, N_PLANES = 5, REC_WORDS = 16;
-constexpr uint32_t CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16;
+constexpr uint32_t CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16, CB_WS = 17;
 
 template <class T>
 std::vector<T> load(const std::string& p) {
@@ -57,8 +58,6 @@ void add_cb(Program& prog, const CoreRangeSet& cores, uint32_t idx, uint32_t pag
     CreateCircularBuffer(prog, cores, c);
 }
 
-// Packed-tile element of SFPU vector V, row j, column k (blend_backward_dev.vector_lanes).
-inline uint32_t lane(uint32_t V, uint32_t j, uint32_t k) { return 64 * (V >> 1) + 16 * j + 2 * k + (V & 1); }
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -104,7 +103,7 @@ int main(int argc, char** argv) {
     auto b_recs = make_dram(dev.get(), uint64_t(n_recs) * SMALL, SMALL);
     auto b_planes = make_dram(dev.get(), uint64_t(n_tiles) * N_PLANES * TILE_B, TILE_B);
     auto b_ramps = make_dram(dev.get(), 2ull * TILE_B, TILE_B);
-    auto b_out = make_dram(dev.get(), uint64_t(n_recs) * TILE_B, TILE_B);
+    auto b_out = make_dram(dev.get(), uint64_t(n_slots) * SMALL, SMALL);  // v2: 64 B slot pages
     distributed::EnqueueWriteMeshBuffer(*cq, b_tiles, tiles, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_recs, recs, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_planes, planes, true);
@@ -117,10 +116,11 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_RAMP, TILE_B, 2);
     add_cb(prog, cores, CB_REC, SMALL, 4);
     add_cb(prog, cores, CB_OUT, TILE_B, 2);
+    add_cb(prog, cores, CB_WS, TILE_B, 1);  // writer scratch: header, 16 recs, 16 staging pages
 
     std::vector<uint32_t> rct, wct;
     for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
-    TensorAccessorArgs::create_dram_interleaved().append_to(wct);
+    for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
     const std::string kd = BWD_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "bwd_reader.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
@@ -153,7 +153,9 @@ int main(int argc, char** argv) {
             SetRuntimeArgs(prog, kr, CoreCoord{x, y},
                            {uint32_t(b_tiles->address()), uint32_t(b_recs->address()),
                             uint32_t(b_planes->address()), uint32_t(b_ramps->address()), ta, nt});
-            SetRuntimeArgs(prog, kw, CoreCoord{x, y}, {uint32_t(b_out->address()), r0, nr});
+            SetRuntimeArgs(prog, kw, CoreCoord{x, y},
+                           {uint32_t(b_out->address()), uint32_t(b_tiles->address()), uint32_t(b_recs->address()), ta, nt});
+            (void)r0;
             SetRuntimeArgs(prog, kc, CoreCoord{x, y}, {nt});
         }
 
@@ -170,33 +172,9 @@ int main(int argc, char** argv) {
     std::vector<float> out;
     distributed::EnqueueReadMeshBuffer(*cq, out, b_out, true);
     const auto h0 = std::chrono::steady_clock::now();
-    std::vector<float> slots(size_t(n_slots) * 16, 0.0f);
-    for (uint32_t r = 0; r < n_recs; r++) {
-        const float* o = out.data() + size_t(r) * 1024;
-        float S[9];
-        for (uint32_t q = 0; q < 9; q++) {
-            float s = 0.0f;  // lane order as np.sum over (4, 8) -> fp32 pairwise differs slightly; fine at 1e-2
-            for (uint32_t j = 0; j < 4; j++)
-                for (uint32_t k = 0; k < 8; k++) s += o[lane(q, j, k)];
-            S[q] = s;
-        }
-        const uint32_t* rec = recs.data() + size_t(r) * REC_WORDS;
-        float A, B, C;
-        std::memcpy(&A, &rec[9], 4);
-        std::memcpy(&B, &rec[10], 4);
-        std::memcpy(&C, &rec[11], 4);
-        float* d = slots.data() + size_t(rec[13]) * 16;
-        const float Su = S[7], Sv = S[8];
-        d[0] = A * Su + B * Sv;
-        d[1] = B * Su + C * Sv;
-        d[2] = -0.5f * S[4];
-        d[3] = -S[5];
-        d[4] = -0.5f * S[6];
-        d[5] = S[0];
-        d[6] = S[1];
-        d[7] = S[2];
-        d[8] = S[3];
-    }
+    // v2: the device writes finished slots (9 floats in a 64 B page); no host reduce.
+    std::vector<float> slots = std::move(out);
+    slots.resize(size_t(n_slots) * 16, 0.0f);
     const double host_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
     {
         std::ofstream f(dir + "/slots.f32", std::ios::binary);
@@ -208,7 +186,7 @@ int main(int argc, char** argv) {
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"cores\": %u, \"max_core_recs\": %u, "
                   "\"device_ms_first\": %.4f, \"device_ms_min\": %.4f, \"device_ms_med\": %.4f, "
-                  "\"host_reduce_ms\": %.4f, \"reps\": %zu}",
+                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"version\": \"v2\"}",
                   n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], s[s.size() / 2], host_ms, ms.size());
     std::ofstream(dir + "/timing.json") << buf << "\n";
     std::printf("[BWD] %s\n", buf);
