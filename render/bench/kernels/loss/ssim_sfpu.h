@@ -29,6 +29,9 @@
 #ifndef SSIM_K
 #define SSIM_K 1
 #endif
+#ifndef SSIM_VF
+#define SSIM_VF 0
+#endif
 
 #ifdef TRISC_MATH
 #ifndef SF_G0

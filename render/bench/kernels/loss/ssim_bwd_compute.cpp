@@ -6,7 +6,8 @@
 constexpr uint32_t CB_DIN = 0, CB_XY = 1, CB_HP = 6, CB_HQ = 9, CB_HR = 12, CB_G = 16, CB_PQ = 17;
 
 #ifdef TRISC_MATH
-// 3 = G*d_xy, 4 = P, 5 = Q, 6 = x, 7 = y -> 3 = grad.
+// GX = G*d_xy, 4 = P, QS = Q, 6 = x, 7 = y ({GX, QS} = {3, 5}) -> GX = grad.
+template <uint32_t GX = 3, uint32_t QS = 5>
 inline void grad_pt() {
     using namespace sfpi;
     if constexpr (SSIM_ABL & 4) return;
@@ -14,12 +15,12 @@ inline void grad_pt() {
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {
         const vFloat x = dst_reg[192], y = dst_reg[224];
-        vFloat g = (vFloat(dst_reg[128]) + (x + x) * dst_reg[160]) + y * dst_reg[96];
+        vFloat g = (vFloat(dst_reg[128]) + (x + x) * dst_reg[32 * QS]) + y * dst_reg[32 * GX];
         const vFloat d = x - y;
         v_if(d > 0.0f) { g = g + SS_WL1; }
         v_elseif(d < 0.0f) { g = g - SS_WL1; }
         v_endif;
-        dst_reg[96] = g;
+        dst_reg[32 * GX] = g;
         dst_reg++;
     }
     sfpu_end();
@@ -85,6 +86,24 @@ inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t c0) {
         cb_wait_front(CB_HQ + sl[k], SSIM_K);
         cb_wait_front(CB_HR + sl[k], SSIM_K);
     }
+#if SSIM_VF
+    // #753 SSIM_VF: one dest acquire (no CB_PQ round trip): 0..2 / 5..7 = P / Q rows -> 4 = P,
+    // 3 = Q; 0..2 = R rows, 6, 7 = x, y -> 5 = G*d_xy -> grad_pt -> 5.
+    cb_wait_front(CB_XY, 2);
+    tile_regs_acquire();
+    copy_tile_to_dst_init_short(CB_HP + a);
+    for (uint32_t k = 0; k < 3; k++) copy_tile(CB_HP + sl[k], c0, k);
+    for (uint32_t k = 0; k < 3; k++) copy_tile(CB_HQ + sl[k], c0, 5 + k);
+    MATH((sfpu_begin(), vfilt_body<0, 4>(), vfilt_body<5, 3>(), sfpu_end()));
+    copy_tile_to_dst_init_short(CB_HR + a);
+    for (uint32_t k = 0; k < 3; k++) copy_tile(CB_HR + sl[k], c0, k);
+    copy_n(CB_XY, 2, 6);
+    MATH((sfpu_begin(), vfilt_body<0, 5>(), sfpu_end(), grad_pt<5, 3>()));
+    cb_pop_front(CB_XY, 2);
+    const uint32_t d5 = 5;
+    commit_pack(CB_G, 1, &d5);
+    release();
+#else
     tile_regs_acquire();
     copy_tile_to_dst_init_short(CB_HP + a);
     for (uint32_t k = 0; k < 3; k++) copy_tile(CB_HP + sl[k], c0, k);
@@ -106,6 +125,7 @@ inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t c0) {
     const uint32_t d3 = 3;
     commit_pack(CB_G, 1, &d3);
     release();
+#endif
 }
 
 // Runtime args: u0, u1, nh, nw (as ssim_fwd_compute.cpp).

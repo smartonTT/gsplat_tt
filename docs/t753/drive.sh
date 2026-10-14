@@ -4,6 +4,7 @@
 #   ttp detach t753 -- docs/t753/drive.sh <rev>       (Mac, worktree root)
 # ARMS="name:VAR=v,VAR=v name2:..." timing arms (own JIT caches), ROUNDS alternated rounds on the 1237x822
 # syn case. CHECK=<arm name>: also run the 6 T0 oracle cases with that arm's env and check them on the Mac.
+# t753 run 2 (fused V pass): ARMS="k1:LOSS_SSIM_K=1 k1vf:LOSS_SSIM_K=1,LOSS_SSIM_VF=1 k4:LOSS_SSIM_K=4 k4vf:LOSS_SSIM_K=4,LOSS_SSIM_VF=1" CHECK=k4vf.
 # JITK: kernels opt/ab_jit_check.py checks on the first two arms. DISASM=1: objdump of each arm's ssim_fwd/bwd math (trisc1) ELF, SFPU opcode counts.
 # Same steps as docs/t736/drive.sh: ssh preflight @p100, opt/sync_remote.sh (one-way, repo-scoped), ssh+tar
 # (bh-49 has no rsync). Existing measurement reservation only (no ird reserve/extend/release), never bh-30,

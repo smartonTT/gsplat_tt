@@ -431,6 +431,10 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
     const char* ke = std::getenv("LOSS_SSIM_K");
     const uint32_t K = ke && ke[0] ? uint32_t(std::clamp(std::atoi(ke), 1, 8)) : 1u;
     defs["SSIM_K"] = std::to_string(K);
+    // #753 LOSS_SSIM_VF=1: each V pass in one dest acquire (no CB_M / CB_F / CB_PQ round trips).
+    const char* vfe = std::getenv("LOSS_SSIM_VF");
+    const bool vf = vfe && vfe[0] && vfe[0] != '0';
+    if (vf) defs["SSIM_VF"] = "1";
     const uint32_t ng = (nw + K - 1) / K, NU = 3 * ng * nh;
     std::vector<uint32_t> ub(ncores + 1, NU);  // core c: units [ub[c], ub[c + 1]), split by tile count
     for (uint32_t u = 0, c = 0, acc = 0; u < NU && c <= ncores; u++) {
@@ -438,7 +442,7 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
         acc += std::min(K, nw - (u / nh % ng) * K);
     }
     ub[0] = 0;
-    std::fprintf(stderr, "[LOSS] ssim reader SSIM_RD=%d cbd=%u K=%u units=%u\n", int(rd), cbd, K, NU);
+    std::fprintf(stderr, "[LOSS] ssim reader SSIM_RD=%d cbd=%u K=%u VF=%d units=%u\n", int(rd), cbd, K, int(vf), NU);
     float wmf = float(-lam / n);
     uint32_t wm_bits;
     std::memcpy(&wm_bits, &wmf, 4);

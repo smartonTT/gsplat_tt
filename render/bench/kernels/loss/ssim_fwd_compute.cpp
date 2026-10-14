@@ -46,8 +46,9 @@ inline void h_sfpu() {
     sfpu_end();
 }
 
-// 3 = E_xy, 4 = mu_x, 5 = E_xx, 6 = mu_y, 7 = vy -> 0 = S, 1 = F_mu, 2 = F_xx, 7 = F_xy with
-// d_mu = Sw F_mu, d_xx = Sw F_xx, d_xy = Sw F_xy (Sw = S wm, next block).
+// XY = E_xy, 4 = mu_x, XX = E_xx, 6 = mu_y, 7 = vy ({XY, XX} = {3, 5}) -> 0 = S, 1 = F_mu,
+// 2 = F_xx, 7 = F_xy with d_mu = Sw F_mu, d_xx = Sw F_xx, d_xy = Sw F_xy (Sw = S wm, next block).
+template <uint32_t XY = 3, uint32_t XX = 5>
 inline void ssim_pt() {
     using namespace sfpi;
     if constexpr (SSIM_ABL & 4) return;
@@ -58,26 +59,28 @@ inline void ssim_pt() {
             const vFloat mux = dst_reg[128], muy = dst_reg[192];
             const vFloat mxy = mux * muy;
             dst_reg[0] = mxy * 2.0f + SS_C1;                                     // A
-            dst_reg[32] = (vFloat(dst_reg[96]) - mxy) * 2.0f + SS_C2;            // B
+            dst_reg[32] = (vFloat(dst_reg[32 * XY]) - mxy) * 2.0f + SS_C2;       // B
             dst_reg[64] = mux * mux + muy * muy + SS_C1;                         // C
-            dst_reg[160] = (vFloat(dst_reg[160]) - mux * mux) + dst_reg[224] + SS_C2;  // D
+            dst_reg[32 * XX] = (vFloat(dst_reg[32 * XX]) - mux * mux) + dst_reg[224] + SS_C2;  // D
         }
         const vFloat rB = rcp(dst_reg[32]);
         dst_reg[224] = rB * 2.0f;  // F_xy
         {
             const vFloat rA = rcp(dst_reg[0]);
-            dst_reg[96] = vFloat(dst_reg[192]) * (rA - rB);
+            dst_reg[32 * XY] = vFloat(dst_reg[192]) * (rA - rB);
         }
-        const vFloat rC = rcp(dst_reg[64]), rD = rcp(dst_reg[160]);
+        const vFloat rC = rcp(dst_reg[64]), rD = rcp(dst_reg[32 * XX]);
         dst_reg[0] = (vFloat(dst_reg[0]) * dst_reg[32]) * (rC * rD);           // S
-        dst_reg[32] = (vFloat(dst_reg[96]) + vFloat(dst_reg[128]) * (rD - rC)) * 2.0f;  // F_mu
+        dst_reg[32] = (vFloat(dst_reg[32 * XY]) + vFloat(dst_reg[128]) * (rD - rC)) * 2.0f;  // F_mu
         dst_reg[64] = -rD;                                                     // F_xx
         dst_reg++;
     }
     sfpu_end();
 }
 
-// 0 = S, 1..3 = F_mu, F_xx, F_xy, 4 = wm, 5 = x, 6 = y, 7 = acc -> 1..3 = d maps, 7 += loss.
+// 0 = S, 1, 2, FXY = F_mu, F_xx, F_xy, 4 = wm, 5 = x, 6 = y, AC = acc ({FXY, AC} = {3, 7})
+// -> 1, 2, FXY = d maps, AC += loss.
+template <uint32_t FXY = 3, uint32_t AC = 7>
 inline void loss_pt() {
     using namespace sfpi;
     if constexpr (SSIM_ABL & 4) return;
@@ -87,9 +90,9 @@ inline void loss_pt() {
         const vFloat sw = vFloat(dst_reg[0]) * dst_reg[128];
         dst_reg[32] = sw * dst_reg[32];
         dst_reg[64] = sw * dst_reg[64];
-        dst_reg[96] = sw * dst_reg[96];
+        dst_reg[32 * FXY] = sw * dst_reg[32 * FXY];
         const vFloat d = vFloat(dst_reg[160]) - dst_reg[192];
-        dst_reg[224] = vFloat(dst_reg[224]) + (sw + sfpi::abs(d) * SS_WL1);
+        dst_reg[32 * AC] = vFloat(dst_reg[32 * AC]) + (sw + sfpi::abs(d) * SS_WL1);
         dst_reg++;
     }
     sfpu_end();
@@ -150,6 +153,38 @@ inline void push_zero(uint32_t q, uint32_t kw) {
 }
 
 // V pass of output column k (page k of the slots a, b, c = rows I-1, I, I+1).
+#if SSIM_VF
+// #753 SSIM_VF: the whole V pass in one dest acquire (no CB_M / CB_F round trips): 0..2 / 5..7 =
+// mu_x / E_xx rows -> 4 = mu_x, 3 = E_xx; 0..2 = E_xy rows, 6, 7 = mu_y, vy -> 5 = E_xy;
+// ssim_pt -> 0, 1, 2, 7; 4..6 = wm, x, y, 3 = acc -> loss_pt. Same fp32 ops (all CBs fp32).
+inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t k) {
+    wait3(CB_HX, a, b, c);
+    wait3(CB_HXX, a, b, c);
+    wait3(CB_HXY, a, b, c);
+    cb_wait_front(CB_C2, 2);
+    cb_wait_front(CB_C3, 3);
+    cb_wait_front(CB_ACC, 1);
+    tile_regs_acquire();
+    copy_tile_to_dst_init_short(CB_HX + a);
+    copy3(CB_HX, a, b, c, k, 0);
+    copy3(CB_HXX, a, b, c, k, 5);
+    MATH((sfpu_begin(), vfilt_body<0, 4>(), vfilt_body<5, 3>(), sfpu_end()));
+    copy_tile_to_dst_init_short(CB_HXY + a);
+    copy3(CB_HXY, a, b, c, k, 0);
+    copy_n(CB_C2, 2, 6);
+    MATH((sfpu_begin(), vfilt_body<0, 5>(), sfpu_end(), ssim_pt<5, 3>()));
+    copy_n(CB_C3, 3, 4);
+    copy_tile(CB_ACC, 0, 3);
+    MATH((loss_pt<7, 3>()));
+    cb_pop_front(CB_C2, 2);
+    cb_pop_front(CB_C3, 3);
+    cb_pop_front(CB_ACC, 1);
+    const uint32_t dd[3] = {1, 2, 7}, acc = 3;
+    commit_pack(CB_D, 3, dd);
+    pack_more(CB_ACC, 1, &acc);
+    release();
+}
+#else
 inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t k) {
     wait3(CB_HX, a, b, c);
     wait3(CB_HXX, a, b, c);
@@ -194,6 +229,7 @@ inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t k) {
     pack_more(CB_ACC, 1, &acc);
     release();
 }
+#endif
 
 // Runtime args: u0, u1 (work units u = (ch * ng + g) * nh + row of SSIM_K-column groups g, see
 // reader_ssim.cpp), nh, nw.
