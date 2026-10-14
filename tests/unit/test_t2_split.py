@@ -231,3 +231,10 @@ def test_device_plan_hero_counts():
     ng = meta.shape[0]
     assert p["b_max_weight"] <= (p["light_planes"] + 2 * ng) / 110 + 18
     assert (np.diff(p["bounds"]) >= 0).all() and p["bounds"][-1] == ng
+
+
+def test_train_step_defaults_split_on_kcap8():
+    """#792: the trainer runs T2 as the heavy-row split by default, at kcap 8."""
+    src = (ROOT / "render" / "train" / "train_step.cpp").read_text()
+    assert 'envu("T2_SPLIT", 1)' in src
+    assert 'envu("T2_KCAP", 8)' in src

@@ -9,8 +9,9 @@
 // <dir>/t1: blend_backward_dev prep files; <dir>/t2: t2_dev prep-dump files (slots.f32 unused).
 // Writes slots.f32 (16 floats per slot), params_out.f32, m_out.u16, v_out.u16, pfwc.f32,
 // [grads.f32] from the first step, and timing.json (per stage and chained, over reps steps).
-// #784 env knobs: T2_SPLIT=1 runs T2 as the heavy-row split (gsplat/t2_split.py, docs/t784):
-// program A sums rows with k > T2_KCAP (default 16) in heavy groups of T2_HL (16) lanes, LPT over
+// #784 env knobs: T2_SPLIT (default 1 since #792; 0 = the old one-program T2) runs T2 as the
+// heavy-row split (gsplat/t2_split.py, docs/t784, docs/t792):
+// program A sums rows with k > T2_KCAP (default 8 since #792, was 16) in heavy groups of T2_HL (16) lanes, LPT over
 // the cores, into the hsum buffer; program B runs the light groups, one contiguous range per core
 // balanced by planes + T2_OVH (2) per active group, heavy lanes taking hsum as plane 0.
 // T2_G2D=1 skips the projection backward + Adam, so pfwc.f32 holds the per-row slot sums (g2d).
@@ -143,8 +144,8 @@ int main(int argc, char** argv) {
     const auto cst = meta_consts(j2);
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
     auto envu = [](const char* k, uint32_t d) { const char* e = std::getenv(k); return e && *e ? uint32_t(std::atoi(e)) : d; };
-    const bool split = envu("T2_SPLIT", 0) != 0, g2d_only = envu("T2_G2D", 0) != 0;
-    const uint32_t kcap = envu("T2_KCAP", 16), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
+    const bool split = envu("T2_SPLIT", 1) != 0, g2d_only = envu("T2_G2D", 0) != 0;
+    const uint32_t kcap = envu("T2_KCAP", 8), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
     if (split && (HL == 0 || HL > 64 || 64 % HL != 0)) { std::fprintf(stderr, "T2_HL must divide 64\n"); return 2; }
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
