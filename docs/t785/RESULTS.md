@@ -39,7 +39,7 @@ Total work is unchanged; it is only redistributed. Modelled busiest/mean bodies 
   max abs 0.0625; small dumps max abs <= 6e-8.
 - Device T0 oracle (f32, bar 1e-2), all arms pass: sh0 3.79e-5 (all arms), sh3 1.28e-4 / 1.28e-4 /
   1.17e-4, s1 1.036e-3 / 1.036e-3 / 1.037e-3, s2 1.64e-3 (all arms).
-- Hero oracle on the merged split slots (`check --fast`, Mac): see below.
+- Hero oracle, merged split slots (round 4, `check --fast`, Mac): rel_err 0.00328, 55108 tie slots skipped, rel_err_all 0.0278, pass. Base/#747: 3.28e-3, 55,108 ties, 0.0278.
 
 ## JIT check
 
