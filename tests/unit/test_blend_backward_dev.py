@@ -66,3 +66,36 @@ def test_pack_v2_matches_host_finish():
     want = np.stack([A * S[:, 7] + B * S[:, 8], B * S[:, 7] + C * S[:, 8], -0.5 * S[:, 4], -S[:, 5],
                      -0.5 * S[:, 6], S[:, 0], S[:, 1], S[:, 2], S[:, 3]], 1)
     np.testing.assert_allclose(got, want, rtol=1e-4, atol=1e-4)
+
+
+def _synth(tmp_path, args=("64", "96", "120", "3")):
+    import subprocess
+    out = tmp_path / "s.npz"
+    subprocess.run([sys.executable, str(ROOT / "docs/t685/synth.py"), str(out), *args],
+                   check=True, env={**os.environ, "PYTHONPATH": str(ROOT)})
+    return dev.load_dump(str(out))
+
+
+@pytest.mark.parametrize("which", ["sh0", "sh3", "synth"])
+def test_vectorised_prep_and_fast_ref_match_loops(which, tmp_path):
+    """#707: vectorised prep == per-pair prep_loop, ref_slots_fast == blend_backward_ref (bit equal)."""
+    if which == "synth":
+        d, cfg = _synth(tmp_path)
+    else:
+        d, cfg = dev.load_dump(str(ROOT / f"benchmarks/train_oracle/t0_{which}_64x64_n50.npz"))
+    args = [d[k] for k in ("means2d", "conic", "opacity", "colors", "order", "valid", "image", "dL_dimage")]
+    a, b = dev.prep(*args, cfg), dev.prep_loop(*args, cfg)
+    assert a["n_slots"] == b["n_slots"]
+    for k in ("tiles", "recs", "planes", "ramps", "P", "counts"):
+        assert np.array_equal(a[k], b[k]), k
+    assert np.array_equal(dev.ref_slots_fast(d, cfg), dev.ref_slots(d, cfg))
+
+
+def test_forward_fast_matches_synth_forward(tmp_path):
+    """forward_fast (used for the hero image) reproduces synth.py's per-Gaussian fp32 forward."""
+    d, cfg = _synth(tmp_path)
+    H, W = d["image"].shape[:2]
+    img, st = dev.forward_fast(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
+                               H, W, cfg)
+    assert np.abs(img - d["image"]).max() < 1e-5
+    assert st["n_pairs"] > 100
