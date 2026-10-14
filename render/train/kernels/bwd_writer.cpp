@@ -13,6 +13,12 @@
 
 namespace {
 constexpr uint32_t CB_OUT = 16, CB_WS = 17, SMALL = 64, NB = 16, REC_WORDS = 16;
+// #748: BWD_SLOT_PAGE = DRAM page of the slot buffer. 64 (default): one slot per page (bench);
+// 4096: T2's slot-page layout (64 slots per page), so T2 reads T1's output without a host re-pack.
+#ifndef BWD_SLOT_PAGE
+#define BWD_SLOT_PAGE 64u
+#endif
+constexpr uint32_t SLOT_PAGE = BWD_SLOT_PAGE, SLOTS_PER_PAGE = SLOT_PAGE / SMALL;
 // Packed-tile element of SFPU vector V, row j, column k (blend_backward_dev.vector_lanes).
 constexpr uint32_t lane(uint32_t V, uint32_t j, uint32_t k) { return 64 * (V >> 1) + 16 * j + 2 * k + (V & 1); }
 constexpr uint32_t ST_PAGE = 128, ST_WORDS = 22;
@@ -27,7 +33,7 @@ void kernel_main() {
     constexpr auto out_args = TensorAccessorArgs<0>();
     constexpr auto tiles_args = TensorAccessorArgs<out_args.next_compile_time_args_offset()>();
     constexpr auto recs_args = TensorAccessorArgs<tiles_args.next_compile_time_args_offset()>();
-    const auto out = TensorAccessor(out_args, out_addr, SMALL);
+    const auto out = TensorAccessor(out_args, out_addr, SLOT_PAGE);
     const auto tiles = TensorAccessor(tiles_args, tiles_addr, SMALL);
     const auto recs = TensorAccessor(recs_args, recs_addr, SMALL);
     // Scratch (CB_WS, never pushed): tile header, NB records, NB staging pages.
@@ -63,7 +69,9 @@ void kernel_main() {
                 d[6] = o[lane(V, 1, q)];      // dr
                 d[7] = o[lane(V, 2, q)];      // dg
                 d[8] = o[lane(V, 3, q)];      // db
-                noc_async_write(stg_l1 + k * SMALL, get_noc_addr(rec[k * REC_WORDS + 13], out), SMALL);
+                const uint32_t sl = rec[k * REC_WORDS + 13];
+                noc_async_write(stg_l1 + k * SMALL,
+                                get_noc_addr(sl / SLOTS_PER_PAGE, out, (sl % SLOTS_PER_PAGE) * SMALL), SMALL);
             }
             cb_pop_front(CB_OUT, 1);
         }

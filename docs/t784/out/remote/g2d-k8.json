@@ -1,0 +1,1 @@
+{"rows": 1809792, "words": 16288128, "bit_mismatch": 160978, "zero_sign_only": 160978, "max_abs_diff": 0.0, "heavy_rows": 10193, "hsum_bit_equal": false, "plan_matches_mirror": true, "a_max_planes": 1014, "b_max_weight": 1937, "heavy_planes": 82649, "light_planes": 156050, "pass": false}
