@@ -1,0 +1,220 @@
+SSH_PREFLIGHT=ok
+=== t743 HEAD=289d1869be060a7da971e2c129f213292fd426dc to bh-49:/localdev/smarton/gstt2-sync mesh=P150 arms='base:LOSS_SSIM_ABL=0 nofma:LOSS_SSIM_ABL=1 notconv:LOSS_SSIM_ABL=8 novfilt:LOSS_SSIM_ABL=9 notransp:LOSS_SSIM_ABL=2 nopt:LOSS_SSIM_ABL=4 floor:LOSS_SSIM_ABL=15' check='' Wed Oct 14 08:26:10 PDT 2026
+sync rc=3 (stale-build heuristic), resync
+sync rc=0
+[sync_remote] 289d1869be060a7da971e2c129f213292fd426dc from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t743: 1162 files, 65101575 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 1 of 1164 files, 165 bytes (tar)
+[sync_remote] sha=289d1869be060a7da971e2c129f213292fd426dc so_md5=3f19c57ec21c809ca4c673ace30abebd 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+prep syn (822, 1237, 3)
+[ORACLE] hero skipped: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t707/tmp/t707/hero.npz or /Users/smarton/dev/gsplat_tt/scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG missing
+build+prep rc=0
+round 1 base rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3064 fwd_b2b_ms=0.6633 launch_ms_med=1.3199 launch_ms_min=1.2993 iters=50
+round 1 nofma rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229018989 b2b_ms=1.2807 fwd_b2b_ms=0.6574 launch_ms_med=1.3183 launch_ms_min=1.3020 iters=50
+round 1 notconv rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.0538206049 b2b_ms=1.2999 fwd_b2b_ms=0.6552 launch_ms_med=1.3291 launch_ms_min=1.3134 iters=50
+round 1 novfilt rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229015416 b2b_ms=1.2705 fwd_b2b_ms=0.6402 launch_ms_med=1.2899 launch_ms_min=1.2716 iters=50
+round 1 notransp rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.140202988 b2b_ms=1.3001 fwd_b2b_ms=0.6600 launch_ms_med=1.3306 launch_ms_min=1.3125 iters=50
+round 1 nopt rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2985 fwd_b2b_ms=0.6545 launch_ms_med=1.3080 launch_ms_min=1.2938 iters=50
+round 1 floor rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2415 fwd_b2b_ms=0.6135 launch_ms_med=1.2772 launch_ms_min=1.2634 iters=50
+round 2 base rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3100 fwd_b2b_ms=0.6651 launch_ms_med=1.3445 launch_ms_min=1.3189 iters=50
+round 2 nofma rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229018989 b2b_ms=1.2801 fwd_b2b_ms=0.6488 launch_ms_med=1.3184 launch_ms_min=1.2976 iters=50
+round 2 notconv rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.0538206049 b2b_ms=1.2978 fwd_b2b_ms=0.6551 launch_ms_med=1.3296 launch_ms_min=1.3188 iters=50
+round 2 novfilt rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229015416 b2b_ms=1.2716 fwd_b2b_ms=0.6412 launch_ms_med=1.3065 launch_ms_min=1.2935 iters=50
+round 2 notransp rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.140202988 b2b_ms=1.2975 fwd_b2b_ms=0.6579 launch_ms_med=1.3298 launch_ms_min=1.3147 iters=50
+round 2 nopt rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.3040 fwd_b2b_ms=0.6543 launch_ms_med=1.3154 launch_ms_min=1.2943 iters=50
+round 2 floor rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2423 fwd_b2b_ms=0.6142 launch_ms_med=1.2798 launch_ms_min=1.2597 iters=50
+timing done
+objdump=/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-objdump
+== base ssim_fwd_compute 21168 lines
+   2615 sfpload
+    968 sfpadd
+    966 sfpmad
+    685 sfpstore
+    224 sfpmul
+    118 sfptransp
+     84 sfploadi
+     34 sfpconfig
+      8 sfpaddi
+      4 sfparecip
+      2 sfpmuli
+      1 sfpmov
+      1 sfpabs
+== base ssim_bwd_compute 20237 lines
+   2597 sfpload
+    964 sfpadd
+    962 sfpmad
+    674 sfpstore
+    192 sfpmul
+    120 sfptransp
+     64 sfploadi
+     21 sfpconfig
+      3 sfpsetcc
+      1 sfpencc
+      1 sfpcompc
+== nofma ssim_fwd_compute 7854 lines
+    511 sfpload
+    501 sfpstore
+    120 sfptransp
+     66 sfploadi
+     37 sfpconfig
+     32 sfpmul
+      8 sfpaddi
+      8 sfpadd
+      6 sfpmad
+      4 sfparecip
+      2 sfpmuli
+      1 sfpmov
+      1 sfpabs
+== nofma ssim_bwd_compute 6888 lines
+    485 sfpload
+    482 sfpstore
+    120 sfptransp
+     34 sfploadi
+     21 sfpconfig
+      4 sfpadd
+      3 sfpsetcc
+      2 sfpmad
+      1 sfpencc
+      1 sfpcompc
+== notconv ssim_fwd_compute 17978 lines
+   2143 sfpload
+    968 sfpadd
+    966 sfpmad
+    224 sfpmul
+    213 sfpstore
+     84 sfploadi
+     34 sfpconfig
+      8 sfpaddi
+      4 sfparecip
+      2 sfpmuli
+      1 sfpmov
+      1 sfpabs
+== notconv ssim_bwd_compute 16997 lines
+   2117 sfpload
+    964 sfpadd
+    962 sfpmad
+    194 sfpstore
+    192 sfpmul
+     64 sfploadi
+     21 sfpconfig
+      3 sfpsetcc
+      1 sfpencc
+      1 sfpcompc
+== novfilt ssim_fwd_compute 4441 lines
+     72 sfploadi
+     40 sfpconfig
+     32 sfpmul
+     31 sfpload
+     21 sfpstore
+      8 sfpaddi
+      8 sfpadd
+      6 sfpmad
+      4 sfparecip
+      2 sfpmuli
+      1 sfpmov
+      1 sfpabs
+== novfilt ssim_bwd_compute 3571 lines
+     40 sfploadi
+     24 sfpconfig
+      5 sfpload
+      4 sfpadd
+      3 sfpsetcc
+      2 sfpstore
+      2 sfpmad
+      1 sfpencc
+      1 sfpcompc
+== notransp ssim_fwd_compute 20404 lines
+   2615 sfpload
+    968 sfpadd
+    966 sfpmad
+    685 sfpstore
+    224 sfpmul
+    118 sfptransp
+     84 sfploadi
+     34 sfpconfig
+      8 sfpaddi
+      4 sfparecip
+      2 sfpmuli
+      1 sfpmov
+      1 sfpabs
+== notransp ssim_bwd_compute 19007 lines
+   2597 sfpload
+    964 sfpadd
+    962 sfpmad
+    674 sfpstore
+    192 sfpmul
+    120 sfptransp
+     58 sfploadi
+     21 sfpconfig
+      3 sfpsetcc
+      1 sfpencc
+      1 sfpcompc
+== nopt ssim_fwd_compute 20580 lines
+   2576 sfpload
+    960 sfpmad
+    960 sfpadd
+    658 sfpstore
+    192 sfpmul
+    116 sfptransp
+     50 sfploadi
+     23 sfpconfig
+== nopt ssim_bwd_compute 20142 lines
+   2592 sfpload
+    960 sfpmad
+    960 sfpadd
+    673 sfpstore
+    192 sfpmul
+    120 sfptransp
+     60 sfploadi
+     20 sfpconfig
+== floor ssim_fwd_compute 3123 lines
+     30 sfploadi
+     23 sfpconfig
+      2 sfpstore
+== floor ssim_bwd_compute 2221 lines
+     30 sfploadi
+     20 sfpconfig
+      1 sfpstore
+pull rc=0
+remote cleanup rc=0
+OK ssim_fwd_compute: base=['14767535707262322691'] nofma=['14301201410996662252']
+OK ssim_bwd_compute: base=['2102512295792033469'] nofma=['2335913141010992278']
+JIT-HASH OK
+ab_jit_check rc=0
+-- base
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3064 fwd_b2b_ms=0.6633 launch_ms_med=1.3199 launch_ms_min=1.2993 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3100 fwd_b2b_ms=0.6651 launch_ms_med=1.3445 launch_ms_min=1.3189 iters=50
+-- nofma
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229018989 b2b_ms=1.2807 fwd_b2b_ms=0.6574 launch_ms_med=1.3183 launch_ms_min=1.3020 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229018989 b2b_ms=1.2801 fwd_b2b_ms=0.6488 launch_ms_med=1.3184 launch_ms_min=1.2976 iters=50
+-- notconv
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.0538206049 b2b_ms=1.2999 fwd_b2b_ms=0.6552 launch_ms_med=1.3291 launch_ms_min=1.3134 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.0538206049 b2b_ms=1.2978 fwd_b2b_ms=0.6551 launch_ms_med=1.3296 launch_ms_min=1.3188 iters=50
+-- novfilt
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229015416 b2b_ms=1.2705 fwd_b2b_ms=0.6402 launch_ms_med=1.2899 launch_ms_min=1.2716 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.229015416 b2b_ms=1.2716 fwd_b2b_ms=0.6412 launch_ms_med=1.3065 launch_ms_min=1.2935 iters=50
+-- notransp
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.140202988 b2b_ms=1.3001 fwd_b2b_ms=0.6600 launch_ms_med=1.3306 launch_ms_min=1.3125 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.140202988 b2b_ms=1.2975 fwd_b2b_ms=0.6579 launch_ms_med=1.3298 launch_ms_min=1.3147 iters=50
+-- nopt
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2985 fwd_b2b_ms=0.6545 launch_ms_med=1.3080 launch_ms_min=1.2938 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.3040 fwd_b2b_ms=0.6543 launch_ms_med=1.3154 launch_ms_min=1.2943 iters=50
+-- floor
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2415 fwd_b2b_ms=0.6135 launch_ms_med=1.2772 launch_ms_min=1.2634 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=1.2423 fwd_b2b_ms=0.6142 launch_ms_med=1.2798 launch_ms_min=1.2597 iters=50
+=== done Wed Oct 14 08:29:37 PDT 2026

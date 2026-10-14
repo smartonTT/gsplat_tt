@@ -1,0 +1,4 @@
+run 2 (d71565d8, tf32 hi + fp32 lo pair), bh-49 p150a 110 cores
+syn K=8: device_ms_med 6.2937 (min 6.2659)
+syn K=1: device_ms_med 2.8104 (min 2.7587)
+oracle: FAIL sh0 worst grad 0.110 Adam 0.027; sh3 worst grad 0.135 Adam 0.25
