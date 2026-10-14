@@ -1,0 +1,57 @@
+[ttw 2026-10-14T09:22:02-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T09:22:02-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-14T09:22:02-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T09:22:02-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T09:22:02-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T09:22:02-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T09:22:02-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T09:22:02-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T09:22:02-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T09:22:02-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T09:22:02-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T09:22:02-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=091bc3b1 bin=22c179f4f97f1693 t741 091bc3b1 opc side bucket A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t741-d2  timeout=500s  worry=600s  ts=2026-10-14T09:22:04-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t741-remote.sh 2 r32d2 rec32off sided2 side
+-----------------------------------------
+=== r2-r32d2 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_T727_DIAG=2 --back-to-back 16:22:07 load=1.54
+run rc=5
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-r32d2
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.476 fps=74.21 ms_frame_median=13.479 pass_ms_frame=13.466,13.449,13.456,13.462,13.478,13.486,13.480,13.484,13.477,13.484,13.485,13.486,13.495,13.493,13.493,13.471,13.477,13.489,13.479,13.432 check_pass_ms_frame=13.545 raw_md5=e1207b10 gap_ms=0.00 render_ms_frame=13.476 xview_hits=659 xview_misses=0 identical_across_passes=NO out=/
+TTW_TIMING b2b_ms_frame=13.476
+TTW_TIMING b2b_ms_frame_median=13.479
+=== r2-rec32off 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 --back-to-back 16:22:21 load=1.72
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-rec32off
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.905 fps=67.09 ms_frame_median=14.911 pass_ms_frame=14.912,14.902,14.915,14.912,14.916,14.919,14.922,14.898,14.898,14.902,14.910,14.896,14.910,14.896,14.903,14.912,14.916,14.914,14.914,14.841 check_pass_ms_frame=14.962 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.905 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.905
+TTW_TIMING b2b_ms_frame_median=14.911
+=== r2-sided2 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_T727_DIAG=2 --back-to-back 16:22:36 load=1.63
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-sided2
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=698752 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.907 fps=67.08 ms_frame_median=14.910 pass_ms_frame=14.905,14.918,14.910,14.904,14.913,14.912,14.900,14.906,14.911,14.902,14.910,14.910,14.914,14.903,14.914,14.898,14.913,14.909,14.923,14.863 check_pass_ms_frame=14.972 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.907 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.907
+TTW_TIMING b2b_ms_frame_median=14.910
+=== r2-side 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 --back-to-back 16:22:52 load=1.57
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-side
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=698752 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.923 fps=67.01 ms_frame_median=14.925 pass_ms_frame=14.921,14.916,14.926,14.923,14.905,14.915,14.941,14.932,14.930,14.944,14.924,14.929,14.936,14.910,14.928,14.939,14.928,14.921,14.923,14.868 check_pass_ms_frame=14.969 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.923 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.923
+TTW_TIMING b2b_ms_frame_median=14.925
+=== done 2 16:23:07
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t745/tmp/ttw-state/logs/t741-d2-20261014-092202.log

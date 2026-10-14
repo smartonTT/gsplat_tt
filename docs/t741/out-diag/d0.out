@@ -1,0 +1,28 @@
+================ BUILD ID ================
+  cpp : #125 sha=091bc3b1 bin=22c179f4f97f1693 t741 091bc3b1 opc side bucket A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t741-d0  timeout=400s  worry=600s  ts=2026-10-14T09:20:01-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t741-remote.sh 0 dumpsided2 dumpr32d2
+-----------------------------------------
+=== r0-dumpsided2 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_T727_DIAG=2 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t741/train-v0-sided2.bin --dump-views t741-dumpsided2 --view-range 0:1 16:20:03 load=0.50
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-sided2
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=698752 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.7 p50_ms=32.7 min_ms=32.7 max_ms=32.7 n_views=1 warmup_s=9.8 out=/localdev/smarton/gstt2-sync/tmp/t741-r0-dumpsided2
+TTW_TIMING ms_view=32.707
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:20 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-sided2.bin
+=== r0-dumpr32d2 091bc3b1 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_T727_DIAG=2 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t741/train-v0-r32d2.bin --dump-views t741-dumpr32d2 --view-range 0:1 16:20:15 load=0.66
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-r32d2
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.1 p50_ms=32.1 min_ms=32.1 max_ms=32.1 n_views=1 warmup_s=9.8 out=/localdev/smarton/gstt2-sync/tmp/t741-r0-dumpr32d2
+TTW_TIMING ms_view=32.150
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:20 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-r32d2.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:20 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-sided2.bin
+=== done 0 16:20:27
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t745/tmp/ttw-state/logs/t741-d0-20261014-092000.log

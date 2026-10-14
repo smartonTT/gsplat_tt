@@ -30,8 +30,18 @@ on 13.43-13.45, rec32off 13.63-13.65, side 13.63-13.66; sort 0.51-0.54 in all ar
   42.52 dB vs benchmarks/reference_v2/hero.png, 30-view sweep md5 cc822a42, 0 of 30 views
   differ. Looked at it: no tile artifacts; the diff shows only the usual edge/spoke structure.
 
-## Open question
-The side blend time equals rec32off's, so either the reader falls back to the per-record
-gather (stamps missing) or the windowed side read costs as much as the gather. A diagnostic
-run (PHASE=diag in drive.sh) answers it: GSPLAT_TT_T727_DIAG=2 drops the gather fallback, so
-the side dump keeps md5 3fada021 only if every subchunk took the side read.
+## Diagnostic: the side read engages (PHASE=diag, 091bc3b1, bh-49, 2026-10-14 09:20 PDT)
+GSPLAT_TT_T727_DIAG=2 compiles out the per-record gather fallback (reader_alpha_blend_mb_devcull.cpp).
+- side + DIAG=2: dump md5 3fada021 (unchanged, lossless), so every subchunk took the windowed
+  side read. b2b 14.909 / 14.907 ms/view, the same as side without DIAG (14.918 / 14.923).
+- rec32off + DIAG=2 (no side, no gather): dump md5 1a68b0a8 (wrong, expected), 13.479 / 13.476
+  ms/view; rec32off with the gather: 14.903 / 14.905.
+- So the side slab removes the gather but the contiguous side read costs the same ~1.43 ms/view:
+  the cost is moving/waiting on the fp32 op/colour bytes in the blend reader, not the scattered
+  64 B reads. Logs: out-diag/ (d0-d2.out, run-*.log, dump-md5.txt).
+
+## Verdict
+Lossless (md5 3fada021, check_dump PASS, 42.52 dB, no tile artifacts) but slower: side 14.92 vs
+default 14.70 ms/view (+0.22, well above the 0.002 A/A gap). Shelved; GSPLAT_TT_TRAIN_OPC_SIDE
+stays off by default. A further gain needs the op/colour data off the blend reader's critical
+path (e.g. prefetch one subchunk ahead, or read it in a different RISC), not a different layout.
