@@ -72,12 +72,12 @@ struct TConv<t, g1, g1> {
 template <int r>
 inline void filt_row(const sfpi::vFloat& c3, const sfpi::vFloat& c4, const sfpi::vFloat& c5) {
     using namespace sfpi;
-    vFloat acc = (dst_reg[stackslot(r - 5)] + dst_reg[stackslot(r + 5)]) * vConstFloatPrgm0;
-    acc = (dst_reg[stackslot(r - 4)] + dst_reg[stackslot(r + 4)]) * vConstFloatPrgm1 + acc;
-    acc = (dst_reg[stackslot(r - 3)] + dst_reg[stackslot(r + 3)]) * vConstFloatPrgm2 + acc;
-    acc = (dst_reg[stackslot(r - 2)] + dst_reg[stackslot(r + 2)]) * c3 + acc;
-    acc = (dst_reg[stackslot(r - 1)] + dst_reg[stackslot(r + 1)]) * c4 + acc;
-    acc = dst_reg[stackslot(r)] * c5 + acc;
+    vFloat acc = (vFloat(dst_reg[stackslot(r - 5)]) + dst_reg[stackslot(r + 5)]) * vConstFloatPrgm0;
+    acc = (vFloat(dst_reg[stackslot(r - 4)]) + dst_reg[stackslot(r + 4)]) * vConstFloatPrgm1 + acc;
+    acc = (vFloat(dst_reg[stackslot(r - 3)]) + dst_reg[stackslot(r + 3)]) * vConstFloatPrgm2 + acc;
+    acc = (vFloat(dst_reg[stackslot(r - 2)]) + dst_reg[stackslot(r + 2)]) * c3 + acc;
+    acc = (vFloat(dst_reg[stackslot(r - 1)]) + dst_reg[stackslot(r + 1)]) * c4 + acc;
+    acc = vFloat(dst_reg[stackslot(r)]) * c5 + acc;
     dst_reg[rowslot(3, r)] = acc;
 }
 
