@@ -162,3 +162,39 @@ def test_float64_lanes_match_float32_on_well_conditioned_rows():
     assert g64["means"].dtype == np.float64
     for k in t2.PARAM_NAMES:
         assert t2.rel_error(g32[k], g64[k]) <= 1e-2, k
+
+
+def test_jacobian_clamp_vjp_matches_oracle_autograd():
+    # #797: rows whose camera-space mean lies past the 3DGS Jacobian clamp (|x/z| > 1.3 tan
+    # half-FOV, per axis, both signs) vs train_oracle autograd through means2d/conic/opacity/colors.
+    cam = o.make_camera(64, 64)
+    R, t = cam.w2c[:3, :3], cam.w2c[:3, 3]
+    lim_x = 1.3 * cam.width / (2 * cam.K[0, 0].item())
+    lim_y = 1.3 * cam.height / (2 * cam.K[1, 1].item())
+    z = torch.tensor([3.0, 2.5, 4.0, 3.5, 2.0], dtype=torch.float64)
+    xz = torch.tensor([0.1, 1.6 * lim_x, -1.3 * lim_x, 0.2, 1.2 * lim_x], dtype=torch.float64)
+    yz = torch.tensor([-0.05, 0.1, -0.2, 1.5 * lim_y, -1.4 * lim_y], dtype=torch.float64)
+    pc = torch.stack([xz * z, yz * z, z], 1)
+    rng = np.random.default_rng(3)
+    n = pc.shape[0]
+    p = {"means": ((pc - t) @ R).numpy(),  # world = R^T (pc - t)
+         "log_scales": rng.uniform(-1.5, -0.5, (n, 3)), "quats": rng.normal(size=(n, 4)),
+         "opacity_logits": rng.normal(size=n), "sh": rng.normal(size=(n, 1, 3))}
+    tp = {k: torch.tensor(v, dtype=torch.float64, requires_grad=True) for k, v in p.items()}
+    out = o.render(tp, cam, o.RenderConfig(sh_degree=0))
+    g2d = rng.normal(size=(n, 9))
+    gt = torch.tensor(g2d)
+    (gt[:, :2] * out.means2d).sum().add_((gt[:, 2:5] * out.conic).sum()) \
+        .add_((gt[:, 5] * out.opacity).sum()).add_((gt[:, 6:9] * out.colors).sum()).backward()
+    w2c, K = cam.w2c.numpy(), cam.K.numpy()
+    g, _ = t2.projection_backward_sh0(p, g2d, w2c, K, cam.height, cam.width, ft=np.float64)
+    for k in t2.PARAM_NAMES:
+        assert t2.rel_error(g[k], tp[k].grad.numpy()) <= 1e-9, k
+    # The clamp is exercised: without it the T2 means grads of the clamped rows differ.
+    g0, _ = t2.projection_backward_sh0(p, g2d, w2c, K, cam.height, cam.width, ft=np.float64,
+                                       jclamp=None)
+    clamped = (np.abs(xz.numpy()) > lim_x) | (np.abs(yz.numpy()) > lim_y)
+    assert clamped.sum() == 4
+    for i in range(n):
+        same = np.allclose(g0["means"][i], g["means"][i], rtol=1e-6, atol=0)
+        assert same != clamped[i], i
