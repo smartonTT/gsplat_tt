@@ -349,6 +349,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         if (opc_skip != nullptr && opc_skip[0] == '1') {
             reader_defines["TRAIN_OPC_SKIP_DEAD"] = "1";
         }
+        if (gsplat_tt::blend_train::opc_side()) {
+            reader_defines["TRAIN_OPC_SIDE"] = "1";  // task #741: side bucket read, gather fallback
+        }
         if (gsplat_tt::blend_train::opc_on_writer()) {
             reader_defines["TRAIN_OPC_WRITER"] = "1";
             writer_defines["TRAIN_OPC_WRITER"] = "1";
@@ -942,6 +945,13 @@ static double process_frame_mb_devcull_resident(
         }
         train_opc_addr = static_cast<uint32_t>(buf_opc->address());
     }
+    // Task #741: this frame's sort wrote the fp32 op/colour side bucket (one-launch frames).
+    uint32_t side_addr = 0u, side_cap = 0u;
+    if (gsplat_tt::blend_train::opc_side()) {
+        auto buf_side = ds::get_buffer("train_opc_side");
+        side_cap = buf_side ? gsplat_tt::blend_train::side_tile_cap() : 0u;
+        side_addr = buf_side ? static_cast<uint32_t>(buf_side->address()) : 0u;
+    }
     const auto t_rt0 = std::chrono::steady_clock::now();
     {
         GSPLAT_HOST_ZONE("host_blend_setup");
@@ -983,6 +993,9 @@ static double process_frame_mb_devcull_resident(
                         // Task #717: fp32 op/colour per scene index (arg 28, not fused).
                         reader_args.resize(gsplat_tt::blend_train::kOpcReaderArg, 0u);
                         reader_args.push_back(train_opc_addr);
+                        // Task #741: side bucket (arg 29, 0 = gather) and its tile cap (arg 30).
+                        reader_args.push_back(side_cap != 0u ? side_addr : 0u);
+                        reader_args.push_back(side_cap);
                     }
                     if (fz) {
                         // Mat args first, blend args from the kDmRtaBase /

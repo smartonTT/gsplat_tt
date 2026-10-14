@@ -90,6 +90,9 @@
 #ifndef OL_RING_TILES
 #define OL_RING_TILES 1024u  // tiles with a ring (CB_RING size); more: rings off
 #endif
+#ifndef TRAIN_OPC_SIDE
+#define TRAIN_OPC_SIDE 0  // task #741: CB_RING also holds the TOWN's 16 B fp32 op/colour side ring
+#endif
 #ifndef OL_RING_DEPTH
 #define OL_RING_DEPTH OL_RING  // task #479: ring records per tile (a multiple of OL_RING)
 #endif
@@ -455,7 +458,7 @@ void kernel_main() {
                 noc_semaphore_wait(arrive, num_cores - 1u);
                 noc_semaphore_set(arrive, 0u);
                 for (uint32_t r = 1; r < num_cores; r++) {
-                    const uint32_t xy = get_arg_val<uint32_t>(30 + r);
+                    const uint32_t xy = get_arg_val<uint32_t>(31 + r);  // 30: side slab (#741)
                     sem_inc(xy & 0xFFFFu, xy >> 16, release_id);
                 }
                 noc_async_atomic_barrier();
@@ -635,12 +638,25 @@ void kernel_main() {
         for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
     }
     const uint32_t tile_pages = tile_cap / REC_PAGE_RECS;
+#if TRAIN_OPC_SIDE
+    // Task #741: the TOWN's fp32 op/colour side ring (16 B per record, after the
+    // run starts) goes with each run to the "train_opc_side" bucket (1 KB pages
+    // of 64 entries == the record pages, so the run stays inside one page).
+    static_assert(REC_PAGE_RECS == 64u, "side pages hold one record page's entries");
+    const uint32_t side_l1 = ring_l1 + OL_RING_TILES * D * REC_BYTES + OL_RING_TILES * 4u;
+    const InterleavedAddrGen<true> side_gen{get_arg_val<uint32_t>(30), 1024u};
+#endif
     auto flush_run = [&](uint32_t t, uint32_t last) {
         const uint32_t s0 = sort_ol::ring_run_start(startp[t], last, R);
         noc_async_write(ring_l1 + (t * D + (s0 & (D - 1u))) * REC_BYTES,
                         get_noc_addr(t * tile_pages + s0 / REC_PAGE_RECS, bucket_acc) +
                             (s0 % REC_PAGE_RECS) * REC_BYTES,
                         (last + 1u - s0) * REC_BYTES);
+#if TRAIN_OPC_SIDE
+        noc_async_write(side_l1 + (t * D + (s0 & (D - 1u))) * 16u,
+                        get_noc_addr(t * tile_pages + s0 / REC_PAGE_RECS, side_gen) + (s0 % REC_PAGE_RECS) * 16u,
+                        (last + 1u - s0) * 16u);
+#endif
     };
 
     // Per-gaussian invariant words of the 32B record (== sort_bin.cpp); the

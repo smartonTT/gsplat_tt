@@ -35,6 +35,17 @@
 #ifndef OL_EMIT_PROF
 #define OL_EMIT_PROF 0
 #endif
+#ifndef TRAIN_OPC_SIDE
+#define TRAIN_OPC_SIDE 0
+#endif
+#ifndef OL_RING_TILES
+#define OL_RING_TILES 1024u
+#endif
+// Task #741 TRAIN_OPC_SIDE: the 64 B blendrec's fp32 [op, r, g, b] (words
+// 5..8) per record into a side ring after the record ring and run starts
+// (16 B at (t*D + c%D)*16); the mover writes it with the run. rec[6] bits
+// 16..31 carry slot c + 1 (0: no side entry), the cull reads bits 0..15.
+static_assert(!(TRAIN_OPC_SIDE && PFWC_REC32), "TRAIN_OPC_SIDE needs the 64 B blendrec (PFWC_REC32=0)");
 
 namespace {
 
@@ -109,6 +120,10 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
     asm volatile("" ::: "memory");  // the list and blendrec pages are complete (READY read, fence)
     uint32_t off_c = 0xFFFFFFFFu, ty_c = 0xFFFFFFFFu;
     uint32_t cov0 = 0, cov1 = 0, cov2 = 0, dep = 0, mxb = 0, myb = 0, opr = 0, cgb = 0, myt = 0;
+#if TRAIN_OPC_SIDE
+    const uint32_t sring = ring + OL_RING_TILES * D * REC_BYTES + OL_RING_TILES * 4u;
+    uint32_t so = 0, sr = 0, sg = 0, sb = 0;
+#endif
     for (uint32_t j = 0; j < n; j++) {
         const uint32_t e = list[j];
         const uint32_t t = e >> 16;
@@ -125,6 +140,12 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             opr = cp[PFWC_REC32 ? 5 : 10];
             cgb = cp[PFWC_REC32 ? 6 : 11];
             dep = cp[PFWC_REC32 ? 7 : 12];
+#if TRAIN_OPC_SIDE
+            so = cp[5];
+            sr = cp[6];
+            sg = cp[7];
+            sb = cp[8];
+#endif
             ty_c = 0xFFFFFFFFu;
             TP_CNT(TP_NG, 1u);
         }
@@ -159,7 +180,16 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
         d[3] = dep;
         d[4] = mx;
         d[5] = myt;
+#if TRAIN_OPC_SIDE
+        d[6] = (c + 1u <= 0xFFFFu) ? ((opr & 0xFFFFu) | ((c + 1u) << 16)) : (opr & 0xFFFFu);
+        auto sd = reinterpret_cast<volatile uint32_t*>(sring + (t * D + (c & (D - 1u))) * 16u);
+        sd[0] = so;
+        sd[1] = sr;
+        sd[2] = sg;
+        sd[3] = sb;
+#else
         d[6] = opr;
+#endif
         d[7] = cgb;
         if (ri == R - 1u) {
             if (qwp == qlim) {

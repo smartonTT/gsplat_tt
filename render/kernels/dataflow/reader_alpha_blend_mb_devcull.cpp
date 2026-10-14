@@ -95,6 +95,14 @@ static_assert(TRAIN_OPC_BATCH >= 1u && TRAIN_OPC_BATCH * 64u <= 128u * 1024u, "s
 #define TRAIN_OPC_WRITER 0
 #endif
 constexpr uint32_t CB_OPC_REQ = BLEND_CB_BASE + 14;
+// Task #741: 1 = read the sort's fp32 op/colour side bucket ("train_opc_side",
+// args 29/30) for subchunks whose records all carry a slot stamp (rec[6] >> 16 =
+// bucket slot + 1), 1 KB pages of 64 entries in windows of TRAIN_OPC_SIDE_WIN
+// pages; any unstamped record (or arg 29 == 0) keeps the per-record gather.
+#ifndef TRAIN_OPC_SIDE
+#define TRAIN_OPC_SIDE 0
+#endif
+constexpr uint32_t TRAIN_OPC_SIDE_WIN = 128u;  // 128 KB staging
 #endif
 constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
@@ -182,6 +190,10 @@ void kernel_main() {
     const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(23);
 #if defined(BLEND_TRAIN) && BLEND_TRAIN
     const uint32_t train_opc_addr = get_arg_val<uint32_t>(28);  // task #717: scene_train_opc
+#if TRAIN_OPC_SIDE
+    const uint32_t side_addr = get_arg_val<uint32_t>(29);  // task #741: train_opc_side (0: gather)
+    const uint32_t side_cap = get_arg_val<uint32_t>(30);   // its tile cap (entries per tile)
+#endif
 #endif
 
     constexpr auto a_args        = TensorAccessorArgs<BLEND_CTA_BASE>();
@@ -503,8 +515,54 @@ void kernel_main() {
                 auto recs = reinterpret_cast<volatile uint32_t*>(buck);
                 auto dst = reinterpret_cast<volatile uint32_t*>(side);
                 auto stg = reinterpret_cast<volatile uint32_t*>(side + TRAIN_OPC_STAGE);
+#if TRAIN_OPC_SIDE
+                bool side_ok = side_addr != 0u;
+                uint32_t cmin = 0xFFFFFFFFu, cmax = 0u;
+                for (uint32_t g = 0; side_ok && g < L_sub; ++g) {
+                    const uint32_t st = recs[g * 8u + 6u] >> 16;
+                    side_ok = st != 0u;
+                    cmin = (st - 1u) < cmin ? st - 1u : cmin;
+                    cmax = (st - 1u) > cmax ? st - 1u : cmax;
+                }
+                if (side_ok) {
+                    // Contiguous 1 KB pages of the tile's side entries, windows of
+                    // TRAIN_OPC_SIDE_WIN pages; only pages holding a record of this
+                    // subchunk are read. Entry c of the tile -> dst[g] for its record g.
+                    const InterleavedAddrGen<true> side_gen{side_addr, 1024u};
+                    const uint32_t spage0 = tile_id * (side_cap / 64u);
+                    const uint32_t pz = cmax / 64u;
+                    for (uint32_t pa = cmin / 64u; pa <= pz; pa += TRAIN_OPC_SIDE_WIN) {
+                        const uint32_t pe = (pz - pa < TRAIN_OPC_SIDE_WIN) ? pz + 1u : pa + TRAIN_OPC_SIDE_WIN;
+                        uint32_t need[TRAIN_OPC_SIDE_WIN / 32u] = {};
+                        for (uint32_t g = 0; g < L_sub; ++g) {
+                            const uint32_t p = ((recs[g * 8u + 6u] >> 16) - 1u) / 64u;
+                            if (p >= pa && p < pe) need[(p - pa) >> 5] |= 1u << ((p - pa) & 31u);
+                        }
+                        for (uint32_t p = pa; p < pe; ++p) {
+                            if (need[(p - pa) >> 5] & (1u << ((p - pa) & 31u))) {
+                                noc_async_read(get_noc_addr(spage0 + p, side_gen),
+                                               side + TRAIN_OPC_STAGE + (p - pa) * 1024u, 1024u);
+                            }
+                        }
+                        noc_async_read_barrier();
+                        invalidate_l1_cache();
+                        const uint32_t c0 = pa * 64u, c1 = pe * 64u;
+                        for (uint32_t g = 0; g < L_sub; ++g) {
+                            const uint32_t c = (recs[g * 8u + 6u] >> 16) - 1u;
+                            if (c < c0 || c >= c1) continue;
+                            const uint32_t s = (c - c0) * 4u;
+                            dst[g * 4u + 0u] = stg[s + 0u];
+                            dst[g * 4u + 1u] = stg[s + 1u];
+                            dst[g * 4u + 2u] = stg[s + 2u];
+                            dst[g * 4u + 3u] = stg[s + 3u];
+                        }
+                    }
+                }
+#else
+                constexpr bool side_ok = false;
+#endif
 #if T727_DIAG != 2
-                uint32_t g0 = 0;
+                uint32_t g0 = side_ok ? L_sub : 0u;
                 while (g0 < L_sub) {
                     // Issue up to TRAIN_OPC_BATCH reads (stage slot n), one barrier, then copy.
                     uint32_t n = 0;

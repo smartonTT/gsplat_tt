@@ -18,6 +18,7 @@
 // so a future device blend can consume them resident.
 
 #include "blend.h"
+#include "blend_train.h"
 #include "config.h"
 #include "env_config.h"
 #include <stdexcept>
@@ -309,6 +310,10 @@ struct SortDeviceContext {
     bool ol_built = false;
     bool ol_frame = false;  // this frame's materialize reads the tile buckets
     std::shared_ptr<distributed::MeshBuffer> buf_ol_bucket;  // tile t at slot t * tile cap
+    // Task #741 (GSPLAT_TT_TRAIN_OPC_SIDE): fp32 [op, r, g, b] of bucket slot t * tile cap + c
+    // at entry t * tile cap + c (16 B, 1 KB pages); null when the knob is off.
+    std::shared_ptr<distributed::MeshBuffer> buf_ol_side;
+    std::size_t cap_ol_side_bytes = 0;
     std::size_t cap_ol_bucket_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_ol_counts;  // per-core count rows
     std::shared_ptr<distributed::MeshBuffer> buf_ol_bases;   // per-core base rows
@@ -952,6 +957,9 @@ static bool launch_subchunk_materialize(
                 // Built with SORT_ONELAUNCH: bucket capacity (0 = legacy frame)
                 // and this mover's whole-tile sort capacity.
                 args.push_back(ctx->ol_frame ? g_ol_tile_cap : 0u);
+                // Task #741: the blend reads the side bucket only for one-launch frames.
+                gsplat_tt::blend_train::side_tile_cap() =
+                    (ctx->ol_frame && ctx->buf_ol_side) ? g_ol_tile_cap : 0u;
                 args.push_back(ncrisc ? render_config::kOverflowL1Cap : kMatMover0Cap);
             }
             if (fused) {
@@ -997,7 +1005,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const uint32_t ring = gsplat_tt::env_config::ol_ring();
     const uint32_t win = gsplat_tt::env_config::ol_win_pages();
     const uint32_t depth = gsplat_tt::env_config::ol_ring_depth();
-    const uint32_t ring_bytes = kOneLaunchRingTiles * (depth * 32u + 4u);
+    // Task #741: the side ring (16 B fp32 op/colour per ring record) follows the run starts.
+    const bool opc_side = gsplat_tt::blend_train::opc_side();
+    const uint32_t ring_bytes = kOneLaunchRingTiles * (depth * 32u + 4u) + (opc_side ? kOneLaunchRingTiles * depth * 16u : 0u);
     // Task #196: GSPLAT_TT_OL_BREC_BULK=0 is the kill switch of the fast fold
     // emit's per-bank blendrec reads (default on; same output either way). On:
     // ring halves of 256 pages, so a batch's g run may have gaps.
@@ -1016,6 +1026,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const bool rec32 = gsplat_tt::env_config::pfwc_rec32();
     if (rec32 && (!town || !brec_bulk))
         throw std::runtime_error("[gsplat_tt::sort] GSPLAT_TT_PFWC_REC32=1 needs OL_EMIT_TOWN and OL_BREC_BULK");
+    if (opc_side && (rec32 || !town || ring == 0u))
+        throw std::runtime_error(
+            "[gsplat_tt::sort] GSPLAT_TT_TRAIN_OPC_SIDE=1 needs GSPLAT_TT_PFWC_REC32=0, OL_EMIT_TOWN and OL_RING");
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
         mover_bytes = 0;
@@ -1062,6 +1075,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
     defines["OL_BREC_HALF"] = std::to_string(brec_half) + "u";
     if (rec32) defines["PFWC_REC32"] = "1";
+    if (opc_side) defines["TRAIN_OPC_SIDE"] = "1";
     // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
     // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
     // kernel binary as before.
@@ -1087,6 +1101,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
                                                     {"OL_RING_DEPTH", std::to_string(depth) + "u"}};
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         if (rec32) tdef["PFWC_REC32"] = "1";
+        if (opc_side) {
+            tdef["TRAIN_OPC_SIDE"] = "1";
+            tdef["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
+        }
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
                      ComputeConfig{.defines = tdef});
     }
@@ -2195,6 +2213,15 @@ static void ensure_onelaunch_buffers(SortDeviceContext* ctx, uint32_t num_tiles,
             device_state::register_buffer("sort_l1_recs", ctx->buf_ol_bucket);
         }
     }
+    if (gsplat_tt::blend_train::opc_side()) {
+        const std::size_t side_bytes =
+            static_cast<std::size_t>(num_tiles) * g_ol_tile_cap * gsplat_tt::blend_train::kSideBytes;
+        if (!ctx->buf_ol_side || ctx->cap_ol_side_bytes < side_bytes) {
+            ctx->buf_ol_side = make_dram_paged(dev, side_bytes, gsplat_tt::blend_train::kSidePageBytes);
+            ctx->cap_ol_side_bytes = side_bytes;
+            device_state::register_buffer("train_opc_side", ctx->buf_ol_side);
+        }
+    }
     // The blend's argument lists name sort_l1_recs and sort_tile_recs; a
     // run with only one-launch frames never creates them (not read here).
     if (!device_state::get_buffer("sort_l1_recs")) {
@@ -2503,6 +2530,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 : static_cast<uint32_t>(ctx->buf_ol_counts->address());
 
             Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+            const uint32_t side_addr = ctx->buf_ol_side ? static_cast<uint32_t>(ctx->buf_ol_side->address()) : 0u;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 const uint32_t lo = r_lo[c], mid = r_mid[c], hi = r_hi[c];
@@ -2521,6 +2549,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
                     noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u, 0u, 0u,
+                    side_addr,  // arg 30 (task #741; coordinator noc_xy from 31)
                 };
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
@@ -3593,6 +3622,7 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
             ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
             noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, 1u,
             static_cast<uint32_t>(acc[2u * c + 2u]), static_cast<uint32_t>(acc.back()),
+            ctx->buf_ol_side ? static_cast<uint32_t>(ctx->buf_ol_side->address()) : 0u,  // arg 30 (task #741)
         };
         SetRuntimeArgs(oprog, ctx->kol, core, a);
         a[10] = static_cast<uint32_t>(acc[2u * c]);
