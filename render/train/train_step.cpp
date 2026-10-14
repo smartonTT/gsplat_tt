@@ -491,6 +491,12 @@ int main(int argc, char** argv) {
             distributed::EnqueueReadMeshBuffer(*cq, o, b_g, true);
             save(odir + "/grads.f32", o);
         }
+        if (split) {  // #784: the host plan, for the check against gsplat.t2_split.device_plan
+            save(odir + "/split_heavy.u32", heavy);
+            save(odir + "/split_bounds.u32", core_g);
+            distributed::EnqueueReadMeshBuffer(*cq, o, b_hs, true);
+            save(odir + "/hsum.f32", o);
+        }
     }
     // Sustained steps on the same buffers (params / m / v keep updating; same view inputs).
     for (int i = 0; i < reps; i++) staged();

@@ -153,3 +153,81 @@ def test_t0_oracle_passes_with_split(dump, monkeypatch):
                         lambda s, P, c: sp.segment_reduce_split(s, P, c, kcap=1))
     rep = t2.check(d)
     assert rep["pass"], rep
+
+
+# ---- #784: the on-device split (train_step T2_SPLIT=1), mirrored by device_plan / device_split_sums
+
+def _dev_inputs(counts, active=None):
+    c = np.asarray(counts, np.int64)
+    ng = -(-c.size // 64)
+    cp = np.concatenate([c, np.zeros(ng * 64 - c.size, np.int64)])
+    P = np.concatenate([[0], np.cumsum(cp)[:-1]])
+    meta = np.concatenate([P.reshape(ng, 64), cp.reshape(ng, 64)], 1).astype(np.uint32)
+    act = np.ones(ng, bool) if active is None else np.asarray(active, bool)
+    vis = np.zeros((-(-ng // 16), 32), np.uint32)
+    g = np.flatnonzero(act)
+    vis[g // 16, 2 * (g % 16)] = 1
+    return meta, vis, act
+
+
+def _assert_bits_equal_but_zero_sign(ref, got):
+    """Bit-equal, except that the device copies plane 0 (as today's T2 does): a row whose sum
+    is a lone -0.0 slot keeps -0.0 where the reference's +0.0 + -0.0 gives +0.0."""
+    rb, gb = _bits(ref), _bits(got)
+    diff = rb != gb
+    assert ((ref[diff] == 0) & (got[diff] == 0)).all()
+    return int(diff.sum())
+
+
+@pytest.mark.parametrize("n,kcap,hl,cores", [(5000, 16, 16, 110), (4999, 8, 16, 7), (777, 1, 8, 3),
+                                             (3000, 16, 64, 5), (130, 0, 4, 200)])
+def test_device_split_sums_bit_equal(n, kcap, hl, cores):
+    s, P, c = _case(_heavy_tail_counts(n, n), seed=n)
+    act = np.random.default_rng(n).random(-(-n // 64)) < 0.8
+    meta, vis, act = _dev_inputs(c, act)
+    got = sp.device_split_sums(s, meta, vis, kcap=kcap, hl=hl, n_cores=cores)[:n]
+    ref = t2.segment_reduce(s, P, c)
+    live = np.repeat(act, 64)[:n]
+    _assert_bits_equal_but_zero_sign(ref[live], got[live])
+    assert not got[~live].any()
+    # without -0.0 slots the sums are bit-equal outright
+    s2 = np.where(s == 0, np.float32(0), s)
+    got2 = sp.device_split_sums(s2, meta, vis, kcap=kcap, hl=hl, n_cores=cores)[:n]
+    assert np.array_equal(_bits(t2.segment_reduce(s2, P, c)[live]), _bits(got2[live]))
+
+
+def test_device_split_catches_wrong_heavy_merge():
+    """The bit test sees a heavy sum taken from the wrong record (h off by one)."""
+    s, P, c = _case(_heavy_tail_counts(3000, 5), seed=5)
+    meta, vis, _ = _dev_inputs(c)
+    p = sp.device_plan(meta, vis)
+    h = p["heavy"]
+    bad = meta.copy()
+    bad[h[0] // 64, 64 + h[0] % 64], bad[h[1] // 64, 64 + h[1] % 64] = c[h[1]], c[h[0]]
+    ok = sp.device_split_sums(s, meta, vis)[:c.size]
+    assert not np.array_equal(_bits(ok), _bits(sp.device_split_sums(s, bad, vis)[:c.size]))
+
+
+def test_device_plan_layout_small():
+    c = np.zeros(128, np.int64)
+    c[[3, 70, 71, 5]] = [20, 100, 17, 2]
+    meta, vis, _ = _dev_inputs(c)
+    p = sp.device_plan(meta, vis, kcap=16, hl=2, ovh=2, n_cores=2)
+    assert p["heavy"].tolist() == [70, 3, 71]
+    assert p["htab"][:, 64:66].tolist() == [[100, 20], [17, 0]]
+    assert p["htab"][0, :2].tolist() == [int(meta[1, 6]), int(meta[0, 3])]
+    assert int(p["metab"][1, 64 + 6]) == sp.HFLAG | 0 and int(p["metab"][0, 64 + 3]) == sp.HFLAG | 1
+    assert p["core_h"] == [[0], [1]] and p["a_max_planes"] == 100
+    assert p["bounds"].tolist() == [0, 1, 2]  # weights 2+2, 1+2: one group per core
+
+
+def test_device_plan_hero_counts():
+    """Hero view counts (all groups active): phase A is bounded by the 1014-slot row, phase B
+    by about planes/110."""
+    c = np.load(HERO_COUNTS)["counts"].astype(np.int64)
+    meta, vis, _ = _dev_inputs(c)
+    p = sp.device_plan(meta, vis, kcap=16, hl=16, ovh=2, n_cores=110)
+    assert p["heavy"].size == 2975 and p["a_max_planes"] == 1014
+    ng = meta.shape[0]
+    assert p["b_max_weight"] <= (p["light_planes"] + 2 * ng) / 110 + 18
+    assert (np.diff(p["bounds"]) >= 0).all() and p["bounds"][-1] == ng

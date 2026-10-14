@@ -184,6 +184,110 @@ def segment_reduce_split(slots: np.ndarray, P: np.ndarray, counts: np.ndarray,
     return acc
 
 
+HFLAG = 0x80000000
+
+
+def device_plan(meta: np.ndarray, vis: np.ndarray, kcap: int = KCAP, hl: int = 16, ovh: int = 2,
+                n_cores: int = CORES) -> dict:
+    """#784: the device split plan exactly as render/train/train_step.cpp builds it (T2_SPLIT=1)
+    from the T2 prep's meta.u32 (per group: P[64], counts[64]) and vis.u32 (16 groups x 2 words per
+    128 B page).
+
+    Phase A (program 1): heavy rows (active group, count > kcap), sorted by count descending then
+    row ascending, packed hl per heavy group; htab holds one meta-layout page per heavy group; the
+    groups go largest first onto the least-loaded core (ties: lowest core). Phase B (program 2):
+    metab = meta with a heavy lane's count word set to HFLAG | h (its hsum record), and one
+    contiguous group range per core with the smallest capacity that fits, weight = planes + ovh
+    per active group (planes = max(light counts, 1))."""
+    meta = np.asarray(meta, np.uint32).reshape(-1, 128)
+    ng = meta.shape[0]
+    vis = np.asarray(vis, np.uint32).reshape(-1, 32)
+    g = np.arange(ng)
+    active = (vis[g // 16, 2 * (g % 16)] | vis[g // 16, 2 * (g % 16) + 1]) != 0
+    cnt = meta[:, 64:].astype(np.int64)
+    cand = np.flatnonzero((active[:, None] & (cnt > kcap)).ravel())
+    heavy = cand[np.argsort(-cnt.ravel()[cand], kind="stable")]
+    nhg = -(-heavy.size // hl)
+    htab = np.zeros((max(nhg, 1), 128), np.uint32)
+    metab = meta.copy()
+    h = np.arange(heavy.size)
+    htab[h // hl, h % hl] = meta[heavy // 64, heavy % 64]
+    htab[h // hl, 64 + h % hl] = cnt.ravel()[heavy]
+    metab[heavy // 64, 64 + heavy % 64] = HFLAG | h.astype(np.uint32)
+    core_h = [[] for _ in range(n_cores)]
+    load = np.zeros(n_cores, np.int64)
+    for j in range(nhg):
+        c = int(np.argmin(load))
+        core_h[c].append(j)
+        load[c] += int(htab[j, 64])
+    lc = np.where(metab[:, 64:] & HFLAG, 0, metab[:, 64:]).astype(np.int64)
+    planes = np.maximum(lc.max(1), 1)
+    w = np.where(active, planes + ovh, 0)
+
+    def fill(cap):
+        b, c, acc = [0], 0, 0
+        for q in range(ng):
+            if acc + w[q] > cap:
+                c += 1
+                if c >= n_cores:
+                    return None
+                b.append(q)
+                acc = 0
+            acc += int(w[q])
+        return b + [ng] * (n_cores + 1 - len(b))
+
+    lo = max(int(w.max(initial=0)), -(-int(w.sum()) // n_cores))
+    hi = max(int(w.sum()), lo)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if fill(mid) is None:
+            lo = mid + 1
+        else:
+            hi = mid
+    bounds = np.array(fill(lo), np.int64)
+    return dict(heavy=heavy, htab=htab, metab=metab, core_h=core_h, bounds=bounds, active=active,
+                a_max_planes=int(load.max(initial=0)), heavy_planes=int(htab[:nhg, 64].sum()),
+                light_planes=int(planes[active].sum()), hl=hl,
+                b_max_weight=int(max(w[bounds[i]:bounds[i + 1]].sum() for i in range(n_cores))))
+
+
+def _lanes_sum(slots: np.ndarray, P: np.ndarray, cnt: np.ndarray, nk: int,
+               first: np.ndarray | None = None) -> np.ndarray:
+    """Device lane sums: plane 0 is copied (or `first`, a heavy lane's hsum record), planes
+    1..nk-1 added in order; a lane past its count adds +0.0."""
+    zero = np.zeros(slots.shape[1], f32)
+    acc = np.where((cnt > 0)[:, None], slots[np.where(cnt > 0, P, 0)], zero).astype(f32)
+    if first is not None:
+        acc = np.where(first[0][:, None], first[1], acc).astype(f32)
+    for k in range(1, nk):
+        live = cnt > k
+        acc += np.where(live[:, None], slots[np.where(live, P + k, 0)], zero)
+    return acc
+
+
+def device_split_sums(slots: np.ndarray, meta: np.ndarray, vis: np.ndarray, **kw) -> np.ndarray:
+    """(ng*64, 9) fp32 g2d as the T2_SPLIT=1 device programs compute it (phase A into hsum, then
+    phase B per active group); rows of inactive groups stay 0. Used by the unit tests and the
+    box-side check of the T2_G2D=1 dump."""
+    p = device_plan(meta, vis, **kw)
+    slots = np.asarray(slots, f32)
+    meta = np.asarray(meta, np.uint32).reshape(-1, 128)
+    hl = p["hl"]
+    hs = np.zeros((p["htab"].shape[0] * hl, slots.shape[1]), f32)
+    for j in range(p["heavy"].size and p["htab"].shape[0]):
+        t = p["htab"][j].astype(np.int64)
+        hs[j * hl:(j + 1) * hl] = _lanes_sum(slots, t[:hl], t[64:64 + hl], int(t[64]))
+    out = np.zeros((meta.shape[0] * 64, slots.shape[1]), f32)
+    for g in np.flatnonzero(p["active"]):
+        m = p["metab"][g].astype(np.int64)
+        hv = (m[64:] & HFLAG) != 0
+        lc = np.where(hv, 0, m[64:])
+        nk = max(int(lc.max()), 1)
+        first = (hv, hs[np.where(hv, m[64:] & ~HFLAG, 0)])
+        out[g * 64:(g + 1) * 64] = _lanes_sum(slots, m[:64], np.where(hv, 1, lc), nk, first)
+    return out
+
+
 def contiguous_baseline(counts: np.ndarray, visible: np.ndarray | None = None,
                         n_cores: int = CORES, group: int = G) -> dict:
     """Today's T2 (no split): planes = max(kmax, 1) per active group, blocks of 16 groups
