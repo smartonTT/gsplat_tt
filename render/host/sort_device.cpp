@@ -67,6 +67,7 @@
 #include "tt-metalium/kernel_types.hpp"
 
 #include "gsplat_cpu/thread_pool.h"
+#include "subtile_split.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
@@ -317,6 +318,12 @@ struct SortDeviceContext {
     std::size_t cap_ol_totals_bytes = 0;
     // Task #198: the tile grid of the one-launch sort enqueued behind the K2
     // (sort_onelaunch_enqueue_early); sort_resident_pairs checks it.
+    // Task #744: B1 route plan (from the previous view's per-tile totals), its
+    // device plan words, and the per-screen-tile totals of the last view.
+    gsplat_tt::subtile::Plan b1_plan;
+    std::shared_ptr<distributed::MeshBuffer> buf_b1_plan;
+    std::size_t cap_b1_plan_bytes = 0;
+    std::vector<double> b1_prev_tot;
     uint32_t ol_early_tiles = 0;
     uint32_t ol_early_tiles_x = 0;
     // Task #285 (GSPLAT_TT_MATBLEND_FUSE): mat -> blend ready flags, one 64 B
@@ -376,6 +383,19 @@ static bool sort_onelaunch_enabled() {
 // Task #284: kTileCap until a frame overflows it, then kTileCapBig for the
 // rest of the process (sort_grow_tile_capacity; the DRAM buckets grow once).
 static uint32_t g_ol_tile_cap = sort_onelaunch::kTileCap;
+// Task #744 (B1 full, GSPLAT_TT_B1_ROUTE=1, default off): the one-launch sort
+// bin fans each record of a split tile out to its sub-tile buckets (ids
+// [num_tiles, num_ids), docs/training-plan/t719-b1-subtile/PLAN.md §7). Fold,
+// rings, the TRISC town path and the early launch are off in this mode.
+// WIP: materialize, cull and the blend reader do not read sub-tile ids yet.
+static bool b1_route_on() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_B1_ROUTE");
+        return e != nullptr && e[0] == '1';
+    }();
+    return on;
+}
+constexpr uint32_t kB1PlanCb = 15u;  // free in both movers' CB sets (town's 14 is off)
 // Tiles with an emit record ring (== OL_RING_TILES); more tiles: rings off.
 constexpr uint32_t kOneLaunchRingTiles = 1024;
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
@@ -1010,7 +1030,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // GSPLAT_TT_OL_EMIT_TOWN=0 is the kill switch; sort_ol_town_compute.cpp):
     // sort_ol_town::SLOTS blendrec slots instead of 2 halves and a mailbox CB
     // (14) per mover. Same output.
-    const bool town = gsplat_tt::env_config::ol_emit_town() && pb * 16u <= sort_ol_town::LIST_MAX;
+    const bool town = gsplat_tt::env_config::ol_emit_town() && pb * 16u <= sort_ol_town::LIST_MAX &&
+                      !b1_route_on();
     const uint32_t brec_slots = town ? sort_ol_town::SLOTS : 2u;
     // Task #467: 32 B blend records, two per page (the TOWN emit and the bulk reads).
     const bool rec32 = gsplat_tt::env_config::pfwc_rec32();
@@ -1035,6 +1056,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         mcb(12, win * 3u * PAGE_BYTES);       // gid/tid/keep window
         if (ring != 0u) mcb(13, ring_bytes);  // per-tile record runs
         if (town) mcb(sort_ol_town::CB_TWN, sort_ol_town::BYTES);  // TRISC mailbox, lists, queues
+        if (b1_route_on()) mcb(kB1PlanCb, BIN_ROW_BYTES);  // #744 plan words, one per screen tile
     }
     cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
     cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
@@ -1062,6 +1084,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
     defines["OL_BREC_HALF"] = std::to_string(brec_half) + "u";
     if (rec32) defines["PFWC_REC32"] = "1";
+    if (b1_route_on()) {
+        defines["SORT_B1_ROUTE"] = "1";
+        defines["SORT_B1_PLAN_CB"] = std::to_string(kB1PlanCb) + "u";
+    }
     // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
     // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
     // kernel binary as before.
@@ -2233,6 +2259,26 @@ static std::vector<uint32_t> core_noc_xy(const SortDeviceContext* ctx, uint32_t 
 // Bins the resident full-P (gid,tid) pairs + keep mask into the page-aligned
 // per-tile (key,id) layout on-device, runs the radix kernel, compacts, and
 // publishes. Returns a SortResult identical in shape to the host path.
+// Task #744: plan the view's sub-tiles from the previous view's per-tile totals
+// (none yet or another grid: nothing splits) and upload the plan words.
+static const gsplat_tt::subtile::Plan& b1_route_plan(SortDeviceContext* ctx, uint32_t num_tiles,
+                                                     uint32_t num_cores) {
+    std::vector<double> cost = ctx->b1_prev_tot;
+    if (cost.size() != num_tiles) cost.assign(num_tiles, 0.0);
+    ctx->b1_plan = gsplat_tt::subtile::plan_units(cost, num_cores, MAX_BIN_TILES,
+                                                  static_cast<double>(g_ol_tile_cap));
+    std::vector<uint32_t> w = gsplat_tt::subtile::plan_words(ctx->b1_plan);
+    w.resize(round_up(num_tiles, ELEMS_PER_PAGE), 0u);
+    const std::size_t bytes = w.size() * 4u;
+    if (!ctx->buf_b1_plan || ctx->cap_b1_plan_bytes < bytes) {
+        ctx->buf_b1_plan = make_dram_paged(ctx->mesh_device.get(), bytes, PAGE_BYTES);
+        ctx->cap_b1_plan_bytes = bytes;
+    }
+    w.resize(ctx->cap_b1_plan_bytes / 4u, 0u);  // the write covers the whole buffer
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b1_plan, w, false);
+    return ctx->b1_plan;
+}
+
 static gsplat_cpu::SortResult sort_resident_pairs(
     SortDeviceContext* ctx,
     uint32_t num_tiles,
@@ -2322,7 +2368,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
 
         const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
         const uint32_t dump_tile = 0;
-        const uint32_t stride = round_up(num_tiles, ELEMS_PER_PAGE);
+        // Task #744: bucket ids = screen tiles + the plan's sub-tiles.
+        const gsplat_tt::subtile::Plan* b1 = b1_route_on() ? &b1_route_plan(ctx, num_tiles, num_cores) : nullptr;
+        const uint32_t ol_ids = b1 != nullptr ? b1->num_ids() : num_tiles;
+        const uint32_t stride = round_up(ol_ids, ELEMS_PER_PAGE);
         const uint32_t total_p_pages = P_pad / ELEMS_PER_PAGE;
         const PageSplit ws = split_pages(total_p_pages, num_cores);
 
@@ -2435,7 +2484,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
             const uint32_t cap = g_ol_tile_cap;
             const uint32_t row_pages = stride / ELEMS_PER_PAGE;
-            ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
+            ensure_onelaunch_buffers(ctx, ol_ids, num_cores, stride);
             bool fold = true;
             const auto t_e0 = clk::now();
             T.pre_ms = ms_t(t_e0 - t_pre0).count();
@@ -2484,7 +2533,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     k2rows.bounds[2u * c + 2u] != r_hi[c])
                     why = 7;
             }
-            fold = why == 0;
+            fold = why == 0 && b1 == nullptr;  // #744: K2 rows count screen tiles
             {
                 static int logged = -1;
                 if (logged != why) {
@@ -2503,6 +2552,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 : static_cast<uint32_t>(ctx->buf_ol_counts->address());
 
             Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+            // #744: the cull floor the route bound assumes (as the fused cull's).
+            float b1_floor = 1.0f / 16384.0f;
+            bool b1_cull_off = false;
+            if (sort_blend != nullptr) b1_floor = sort_blend->mb_contrib_floor;
+            else device_state::get_bucket_cull_params(&b1_floor, &b1_cull_off);
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 const uint32_t lo = r_lo[c], mid = r_mid[c], hi = r_hi[c];
@@ -2516,17 +2570,27 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     cnt_rows_addr,
                     static_cast<uint32_t>(ctx->buf_ol_bases->address()),
                     static_cast<uint32_t>(ctx->buf_ol_totals->address()),
-                    mid, hi, P_full, num_tiles, row_pages, c, num_cores, cap,
+                    mid, hi, P_full, ol_ids, row_pages, c, num_cores, cap,
                     gsplat_tt::split_window::origin_arg(static_cast<uint32_t>(tiles_x)), 1u,
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
                     noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u, 0u, 0u,
                 };
+                // #744: route args at 30 + num_cores on both movers of every core
+                // (core 0's BRISC holds the coordinator list there, others a pad).
+                const std::vector<uint32_t> b1a = {
+                    b1 != nullptr ? static_cast<uint32_t>(ctx->buf_b1_plan->address()) : 0u, num_tiles,
+                    subtile_route::bits_of(1.0f / b1_floor)};
+                if (b1 != nullptr) {
+                    a.resize(30u + num_cores, 0u);
+                    a.insert(a.end(), b1a.begin(), b1a.end());
+                }
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
                 a[10] = mid;
                 a[18] = 0u;
-                if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
+                if (c == 0 && b1 != nullptr) std::copy(noc_xy.begin(), noc_xy.end(), a.begin() + 30);
+                else if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
                 SetRuntimeArgs(oprog, ctx->kol0, core, a);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
@@ -2617,7 +2681,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // sort_last_tile_overflow() and re-renders at a coarser floor.
             const uint32_t check_cap = std::min(cap, test_tile_cap());
             uint32_t over_n = 0, over_t = 0;
-            for (uint32_t t = 0; t < num_tiles; t++) {
+            if (b1 != nullptr) {  // #744: next view's plan, per screen tile (sub totals summed)
+                ctx->b1_prev_tot.assign(num_tiles, 0.0);
+                for (uint32_t id = 0; id < ol_ids; id++) ctx->b1_prev_tot[b1->parent_of(id)] += tot[id];
+            }
+            for (uint32_t t = 0; t < ol_ids; t++) {
                 // The padded count is the legacy layout's status 2 bound.
                 const uint32_t need = std::max(tot[t], tot[stride + t]);
                 if (need > check_cap && need > over_n) {
@@ -3529,7 +3597,7 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
                                   uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
                                   uint32_t keep_addr, uint32_t pairs_P_addr,
                                   const std::vector<uint64_t>& acc, bool drain_before_grow) {
-    if (!env_config::sort_ol_early()) return false;
+    if (!env_config::sort_ol_early() || b1_route_on()) return false;
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->ol_early_tiles = 0;
