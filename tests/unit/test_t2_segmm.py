@@ -117,3 +117,13 @@ def test_slot_split_precision():
     for q in p:
         assert (bf16_trunc(q) == q).all() and (srca(q) == q).all()
     assert (sum(q.astype(np.float64) for q in p) == ref).all()
+
+
+def test_dest_transpose_uses_fp32_src_formats():
+    # #726: transpose_wh_dest<true> moves each value's low 16 bits through SrcB in the current SrcB
+    # format; left at the bf16 matmul format it flips mantissa bits 7-14 (~2^-10 relative error).
+    import pathlib, re
+    src = (pathlib.Path(__file__).resolve().parents[2] / "render/train/kernels/t2_compute.cpp").read_text()
+    i = src.index("transpose_wh_dest_init_short<true>")
+    j = src.rindex("matmul_tiles", 0, i)
+    assert re.search(r"reconfig_data_format\(CB_K, CB_P, CB_A, CB_P\)", src[j:i])
