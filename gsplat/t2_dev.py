@@ -113,11 +113,13 @@ def write_inputs(out: Path, params: dict, m: dict, v: dict, slots, P, counts, vi
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
 
 
-def prep_dump(dump: str, out: Path) -> dict:
+def prep_dump(dump: str, out: Path, bw: dict | None = None) -> dict:
+    """bw: slots / P / counts to use instead of t2.oracle_slots (the oracle's frozen-live tile
+    rectangles); #748's T1 -> T2 chain passes T1's own (3-sigma rectangle) slot numbering."""
     d = np.load(dump)
     H, W = int(d["H"]), int(d["W"])
     params = {k: np.asarray(d[f"param_{k}"], f32) for k in t2.PARAM_NAMES}
-    bw = t2.oracle_slots(d)
+    bw = t2.oracle_slots(d) if bw is None else bw
     lr = json.loads(str(d["adam_lr_json"]))
     betas = tuple(float(b) for b in d["adam_betas"])
     eps, step = float(d["adam_eps"]), int(d["adam_step_in"])
