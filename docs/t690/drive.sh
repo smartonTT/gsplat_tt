@@ -19,6 +19,9 @@ SSH=(ssh -o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostK
 sha=$(git rev-parse "$rev^{commit}")
 echo "=== t690 $rev=$sha to $H:$T mesh=$MESH $(TZ=America/Los_Angeles date)"
 opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1; rc=$?
+# rc 3 = render_clean stale-build heuristic; another task's sync of $T in between moves its
+# source-hash baseline. A second sync of the same rev then compares like with like.
+if [ $rc = 3 ]; then echo "sync rc=3 (stale-build heuristic), resync"; opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1; rc=$?; fi
 echo "sync rc=$rc"; grep '^\[sync_remote\]' "$O/sync.log"
 [ $rc = 0 ] || { tail -30 "$O/sync.log"; exit 3; }
 rsha=$(timeout 60 "${SSH[@]}" "sed -n 's/^sha=//p' $T/SYNC_STAMP")
