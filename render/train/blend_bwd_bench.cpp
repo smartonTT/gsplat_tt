@@ -97,6 +97,8 @@ int main(int argc, char** argv) {
     constexpr uint32_t ST_PAGE = 128, ST_N = 11;
     const char* ps_env = std::getenv("BWD_PRESTAGE");
     const int prestage = ps_env ? std::atoi(ps_env) : 2;
+    const char* sp_env = std::getenv("BWD_SPROBE");  // #780 reader-side probe (prestage only)
+    const bool sprobe = prestage && sp_env && std::string(sp_env) == "1";
 
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
@@ -129,7 +131,7 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_HDR, SMALL, 2);
     add_cb(prog, cores, CB_PLANE, TILE_B, N_PLANES);
     add_cb(prog, cores, CB_RAMP, TILE_B, 2);
-    add_cb(prog, cores, CB_REC, prestage ? 2 * SMALL : SMALL, 4);
+    add_cb(prog, cores, CB_REC, prestage ? 2 * SMALL + (sprobe ? 2048 : 0) : SMALL, 4);
     add_cb(prog, cores, CB_OUT, TILE_B, 2);
     add_cb(prog, cores, CB_WS, TILE_B, 1);  // writer scratch: header, 16 recs, 16 staging pages
 
@@ -140,6 +142,7 @@ int main(int argc, char** argv) {
     if (stats) sdef["BWD_STATS"] = "1";
     std::map<std::string, std::string> rdef;
     if (prestage) rdef["BWD_PRESTAGE"] = "1";
+    if (sprobe) rdef["BWD_SPROBE"] = "1";
     const std::string kd = BWD_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "bwd_reader.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,

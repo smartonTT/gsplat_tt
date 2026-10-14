@@ -8,6 +8,9 @@
 // half, then UPPER high half: what the compiler builds per value), word 24 its vector mask. The
 // MATH thread then only copies words into its instruction buffer (blend_bwd_compute.cpp
 // bwd_stage_record), the same instructions as before, so the results are bit-identical.
+// BWD_SPROBE (#780 feasibility probe): the page grows by 2 KB (two fp32 faces) and the reader also
+// writes each of the 12 floats replicated over 32 words (one SFPU vector) there, the L1 writes an
+// unpack-to-Dst staging of the pair scalars needs; the compute kernel ignores them.
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
@@ -81,6 +84,14 @@ void kernel_main() {
                 w[2 * k + 1] = K_LOAD_HI + (v[k] >> 16);
             }
             w[2 * N_VALS] = mask;
+#ifdef BWD_SPROBE
+            volatile uint32_t* r = w + 2 * SMALL / 4;
+            for (uint32_t k = 0; k < N_VALS; k++) {
+                const uint32_t x = v[k];
+#pragma GCC unroll 32
+                for (uint32_t j = 0; j < 32; j++) r[32 * k + j] = x;
+            }
+#endif
 #else
             noc_async_read(get_noc_addr(r, recs), get_write_ptr(CB_REC), SMALL);
             noc_async_read_barrier();
