@@ -77,3 +77,26 @@ Next (not done in this task):
    (c) judge the 2.8e-4 filter error by its effect on the D-SSIM loss and dL/dimage against the
    T0 oracle, not on the filtered maps alone.
 3. Then the fused L1 + D-SSIM fwd + bwd kernel (not started).
+
+## Box diagnostic t706box (06b690e5, bh-49 p150, 2026-10-14 01:15 PDT)
+
+LOSS_RDIAG=-c: R is an 11-tap box with weight c (short mantissa), so every product is exact and
+only the in-matmul accumulation can err. Hi 9 bits.
+
+| case | c | l2rel vs exact | mean rel bias | verdict |
+|---|---|---|---|---|
+| dump64 | 1/16 | 1.09e-5 | +7.6e-6 | FAIL (tol 1e-6) |
+| dump64 | 3/32 | 1.10e-5 | +1.0e-5 | FAIL |
+| dump64 | R = 1·I (control) | 5.7e-7 | -4.1e-7 | PASS |
+| syn | 1/16 | 6.1e-7 | -3.8e-7 | PASS |
+
+Filter timing unchanged: 0.209 ms/view b2b at 1237x822 (launch median 0.224 ms).
+
+What this shows:
+- Multi-term accumulation inside one matmul does cost precision (~1e-5, small positive bias on
+  real image data; exact on the smooth synthetic image), but that is ~25x below the 2.8e-4 floor
+  of the Gaussian band. So accumulation is not the main cause.
+- The rest must come from the full-precision Gaussian weights in R (products not exact). Next fix
+  is (a): split R into 9-bit hi + 9-bit lo (or quantise the 11 weights to 18 bits) and do the
+  extra R_lo pass; expected to bring the filter to ~1e-5. If ~1e-5 is still too much for the
+  T0 oracle on loss and dL/dimage, use (b) from the list above for the remaining accumulation part.
