@@ -22,6 +22,7 @@
 
 #include "subtile_route.h"
 #include "subtile_split.h"
+#include "subtile_unit.h"
 
 static int fails = 0;
 #define CHECK(c)                                                             \
@@ -180,9 +181,53 @@ void test_routing_lossless() {
     std::printf("longest sub list %zu of %zu parent records (%u subs)\n", longest, recs.size(), p.n_sub[0]);
 }
 
+// The sort's count step: global mean + parent origin, B1' unit codes as sub-tiles.
+void test_global_and_unit_routing() {
+    const auto recs = random_recs(5000, 31);
+    const float inv = static_cast<float>(1.0 / kFloor);
+    for (uint32_t n : {4u, 16u}) {
+        std::vector<std::vector<uint32_t>> lists(n);
+        for (uint32_t i = 0; i < recs.size(); ++i) {
+            const Rec& r = recs[i];
+            const uint32_t ox = 32u * (7u + i % 31u), oy = 32u * (3u + i % 17u);
+            const float gx = r.mx + static_cast<float>(ox), gy = r.my + static_cast<float>(oy);
+            // pack_rec's tile-local mean, as the emit writes it
+            Rec loc = r;
+            loc.mx = gx - static_cast<float>(ox);
+            loc.my = gy - static_cast<float>(oy);
+            const uint32_t b = subtile_route::box_mask_global(bits(r.A), bits(r.B), bits(r.C), bits(gx), bits(gy),
+                                                              ox, oy, r.q, inv);
+            CHECK((exact_keep(loc) & ~b) == 0u);
+            const uint32_t t = subtile_route::targets(
+                b, n, [&](uint32_t k) { return subtile_unit::mask(subtile_unit::split_code(n, k)); });
+            for (uint32_t k = 0; k < n; ++k)
+                if (t & (1u << k)) lists[k].push_back(i);
+        }
+        uint32_t all = 0;
+        for (uint32_t k = 0; k < n; ++k) {
+            const uint32_t um = subtile_unit::mask(subtile_unit::split_code(n, k));
+            CHECK((all & um) == 0u);  // units partition the tile
+            all |= um;
+            for (uint32_t m = 0; m < 32; ++m) {
+                if (!(um & (1u << m))) continue;
+                std::vector<uint32_t> want, got;
+                for (uint32_t i = 0; i < recs.size(); ++i)
+                    if (exact_keep(recs[i]) & (1u << m)) want.push_back(i);
+                for (uint32_t i : lists[k])
+                    if (exact_keep(recs[i]) & (1u << m)) got.push_back(i);
+                CHECK(want == got);
+            }
+        }
+        CHECK(all == 0xFFFFFFFFu);
+    }
+    CHECK(subtile_route::plan_first(subtile_route::plan_word(70000u, 16u)) == 70000u);
+    CHECK(subtile_route::plan_n(subtile_route::plan_word(70000u, 16u)) == 16u);
+}
+
 }  // namespace
 
 int main() {
+    test_global_and_unit_routing();
     test_ln_upper();
     test_box_covers_cull();
     test_degenerate();

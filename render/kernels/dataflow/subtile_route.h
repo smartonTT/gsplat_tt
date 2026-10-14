@@ -40,6 +40,10 @@ constexpr uint32_t kFullMask = 0xFFFFFFFFu;
 constexpr float kThrMargin = 0.05f;
 constexpr float kThrSlack = 0.02f;
 constexpr float kRelSlack = 1.0e-3f;
+// Pixel slack on the microblock spans: the sort's count step recomputes the
+// tile-local mean in fp32 (box_mask_global) where pack_rec may round it
+// differently by an ulp.
+constexpr float kPxSlack = 1.0f / 64.0f;
 
 inline uint32_t bits_of(float f) {
     uint32_t u;
@@ -90,14 +94,30 @@ inline uint32_t box_mask(uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, uint
     if (!(rx2 < 3.0e38f) || !(ry2 < 3.0e38f)) return kFullMask;
     uint32_t cols = 0, rows = 0;
     for (uint32_t c = 0; c < 4u; ++c)
-        if (dist2(mx, 8.0f * c + 0.5f, 8.0f * c + 7.5f) <= rx2) cols |= 1u << c;
+        if (dist2(mx, 8.0f * c + (0.5f - kPxSlack), 8.0f * c + (7.5f + kPxSlack)) <= rx2) cols |= 1u << c;
     for (uint32_t r = 0; r < 8u; ++r)
-        if (dist2(my, 4.0f * r + 0.5f, 4.0f * r + 3.5f) <= ry2) rows |= 1u << r;
+        if (dist2(my, 4.0f * r + (0.5f - kPxSlack), 4.0f * r + (3.5f + kPxSlack)) <= ry2) rows |= 1u << r;
     uint32_t m = 0;
     for (uint32_t r = 0; r < 8u; ++r)
         if (rows & (1u << r)) m |= cols << (r << 2);
     return m;
 }
+
+// The same from the blendrec words: global mean (gx, gy) and the parent
+// tile's pixel origin (ox, oy).
+inline uint32_t box_mask_global(uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, uint32_t gx_bits,
+                                uint32_t gy_bits, uint32_t ox, uint32_t oy, uint32_t q16, float inv_floor) {
+    const float mx = float_of(gx_bits) - static_cast<float>(ox);
+    const float my = float_of(gy_bits) - static_cast<float>(oy);
+    return box_mask(a_bits, b_bits, c_bits, bits_of(mx), bits_of(my), q16, inv_floor);
+}
+
+// Plan word of a tile (DRAM / L1 table, one u32 per tile): 0 = not split, else
+// first sub id | n_sub << 24 (n_sub 4 or 16; sub k is B1' unit
+// subtile_unit::split_code(n_sub, k), so its mask is subtile_unit::mask(...)).
+inline constexpr uint32_t plan_word(uint32_t first_id, uint32_t n_sub) { return first_id | (n_sub << 24); }
+inline constexpr uint32_t plan_first(uint32_t w) { return w & 0x00FFFFFFu; }
+inline constexpr uint32_t plan_n(uint32_t w) { return w >> 24; }
 
 // Sub-tile k of a split tile is a target iff its mask meets the record's box
 // mask. Returns a bit per sub-tile (n_sub <= 16).
