@@ -1,0 +1,42 @@
+[ttw 2026-10-14T03:22:25-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T03:22:25-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-14T03:22:25-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T03:22:25-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T03:22:25-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T03:22:25-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T03:22:25-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T03:22:25-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T03:22:25-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T03:22:25-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T03:22:25-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T03:22:25-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=094635e8 bin=e34a61be3031c271 t721 094635e8 BLEND_DWALK default on, iter 231 (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t721-r3n  timeout=500s  worry=600s  ts=2026-10-14T03:22:26-0700
+cmd: T=/localdev/smarton/gstt2-sync T2=/localdev/smarton/gstt2-b230 MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t721-remote.sh 3 nbase nb230 nnew
+-----------------------------------------
+=== r3-nbase 094635e8 cams=benchmarks/cameras_train_nn.json GSPLAT_TT_BLEND_DWALK=0 --back-to-back --b2b-passes 6 10:22:28 load=2.25
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/.cache/ttmc-t721-base
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.023 fps=124.64 ms_frame_median=8.024 pass_ms_frame=8.027,8.024,8.024,8.021,8.024,8.018 check_pass_ms_frame=8.077 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=8.023 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t721-r3-nbase
+TTW_TIMING b2b_ms_frame=8.023
+TTW_TIMING b2b_ms_frame_median=8.024
+LEVER r3-nbase cache_defines=[define BLEND_DWALK 0 ]
+=== r3-nb230 3702fbb5 cams=benchmarks/cameras_train_nn.json  --back-to-back --b2b-passes 6 10:22:57 load=2.22
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-b230/tmp/ttm-eth12, JIT cache /localdev/smarton/.cache/ttmc-t721-b230
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.917 fps=126.31 ms_frame_median=7.918 pass_ms_frame=7.918,7.916,7.920,7.919,7.918,7.912 check_pass_ms_frame=7.969 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.917 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-b230/tmp/t721-r3-nb230
+TTW_TIMING b2b_ms_frame=7.917
+TTW_TIMING b2b_ms_frame_median=7.918
+LEVER r3-nb230 cache_defines=[]
+=== r3-nnew 094635e8 cams=benchmarks/cameras_train_nn.json  --back-to-back --b2b-passes 6 10:23:25 load=2.06
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/.cache/ttmc-t721-new
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.934 fps=126.05 ms_frame_median=7.934 pass_ms_frame=7.938,7.934,7.937,7.933,7.935,7.925 check_pass_ms_frame=7.984 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=7.934 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t721-r3-nnew
+TTW_TIMING b2b_ms_frame=7.934
+TTW_TIMING b2b_ms_frame_median=7.934
+LEVER r3-nnew cache_defines=[define BLEND_DWALK 1 ]
+=== done 3 10:23:54
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t721/tmp/ttw-state/logs/t721-r3n-20261014-032225.log

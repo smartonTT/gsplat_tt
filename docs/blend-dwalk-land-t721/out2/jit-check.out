@@ -1,0 +1,6 @@
+--- ab_jit_check b230 vs new
+OK matblend_compute: b230=['12592893120918196374'] new=['14241689452767715864']
+JIT-HASH OK
+--- ab_jit_check base vs new
+OK matblend_compute: base=['13562579463327890374'] new=['14241689452767715864']
+JIT-HASH OK
