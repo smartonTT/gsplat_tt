@@ -8,6 +8,10 @@
 // 32-63 of the left / right page column halves, rows = lanes, columns = streams); the right
 // halves fold into the left on the SFPU, tiles 4 and 5 are transposed in Dst, and SFPTRANSP
 // regroups the four 16-lane chunks into the stream layout of tile 3.
+// Slot split (#749, was host code in t2_bench.cpp): per window the fp32 page from CB_S goes to Dst
+// tile 3, the SFPU writes its block-float pieces to tiles 0-2 (t2_split), and the packer moves them
+// to CB_K inside the group's Dst section (math/pack semaphore handshake, no Dst clear); params, m
+// and v load into tiles 0-2 only after the last window.
 // The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
 // Runtime args: group count, then NCONST fp32 constants (bits, t2_dev.consts order).
 #include <cstdint>
@@ -25,7 +29,7 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 
 namespace {
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_A = 7;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_A = 7, CB_S = 8;
 constexpr uint32_t CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_FO = 19, CB_GO = 20;
 constexpr uint32_t NCONST = 31;
 }  // namespace
@@ -397,6 +401,57 @@ inline void t2_zero_acc() {
     for (uint32_t v = TK; v < TK + 128; v++) dst_reg[v] = 0.0f;
 }
 
+// Tile 3 (slot page scratch during the windows) to zero before the regroup writes g2d.
+inline void t2_zero_g2d() {
+#pragma GCC unroll 8
+    for (uint32_t v = TG; v < TG + 32; v++) dst_reg[v] = 0.0f;
+}
+
+// Block-float split of the fp32 slot page in tile 3 into bf16-exact pieces hi, mid, lo in tiles 0-2
+// (model: tests/unit/test_t2_segmm.py sfpu_split; reference: bfp_pieces). Stream c is column c of
+// every face row, so column half h (vectors h, h+2, ..) holds 8 streams in 4 sub-rows: the max |x|
+// of the 16 vectors, then of the 4 sub-rows (SFPTRANSP of four copies puts sub-row i in register i),
+// gives each lane its column max and biased exponent EB. Piece k keeps the bits of the rest r above
+// 2^(EB-7-8k): ex(r) - (EB-7-8k) explicit mantissa bits (at most 7), none when negative.
+inline void t2_split() {
+#pragma GCC unroll 1
+    for (uint32_t h = 0; h < 2; h++) {
+        vFloat m = 0.0f;
+#pragma GCC unroll 4
+        for (uint32_t v = h; v < 32; v += 2) {
+            vFloat a = sfpi::abs(vFloat(dst_reg[TG + v]));
+            v_if(a > m) { m = a; }
+            v_endif;
+        }
+        vFloat b = m, c = m, d = m;
+        subvec_transp(m, b, c, d);
+        v_if(b > m) { m = b; }
+        v_endif;
+        v_if(c > m) { m = c; }
+        v_endif;
+        v_if(d > m) { m = d; }
+        v_endif;
+        const vInt eb = exexp(m, ExponentMode::NoDebias);
+#pragma GCC unroll 1
+        for (uint32_t v = h; v < 32; v += 2) {
+            vFloat r = dst_reg[TG + v];
+#pragma GCC unroll 3
+            for (uint32_t k = 0; k < 3; k++) {
+                const vInt keep = exexp(r, ExponentMode::NoDebias) - (eb - int32_t(7 + 8 * k));
+                vFloat p = 0.0f;
+                v_if(keep >= 0) {
+                    const vInt ones = -1;
+                    const vInt mask = ones << reinterpret<vUInt>(23 - keep);
+                    p = reinterpret<vFloat>(reinterpret<vInt>(r) & mask);
+                }
+                v_endif;
+                dst_reg[32 * k + v] = p;
+                if (k < 2) r = r - p;
+            }
+        }
+    }
+}
+
 // Fold the right column halves of tiles 6, 7 (faces 1, 3) into the left halves of 4, 5 (faces 0, 2).
 inline void t2_fold() {
 #pragma GCC unroll 8
@@ -445,24 +500,35 @@ void kernel_main() {
         cb_pop_front(CB_HDR, 1);
 
         tile_regs_acquire();
-        cb_wait_front(CB_P, 1);
-        copy_tile_to_dst_init_short_with_dt(CB_K, CB_P);
-        copy_tile(CB_P, 0, 0);
-        cb_pop_front(CB_P, 1);
-        cb_wait_front(CB_M, 1);
-        copy_tile_to_dst_init_short_with_dt(CB_P, CB_M);
-        copy_tile(CB_M, 0, 1);
-        cb_pop_front(CB_M, 1);
-        cb_wait_front(CB_V, 1);
-        copy_tile_to_dst_init_short_with_dt(CB_M, CB_V);
-        copy_tile(CB_V, 0, 2);
-        cb_pop_front(CB_V, 1);
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_zero_acc()));
         MATH((_llk_math_eltwise_unary_sfpu_done_()));
-        reconfig_data_format(CB_K, CB_A);
-        mm_init_short(CB_A, CB_K);
         for (uint32_t w = 0; w < nw; w++) {
+            // Split: fp32 page -> tile 3 -> SFPU pieces in tiles 0-2 -> packer -> CB_K. The math
+            // waits until the packer has read the previous window's pieces (MATH_PACK at max),
+            // posts once the SFPU is done; the packer takes the post back without the Dst clear
+            // of tile_regs_release, so the accumulators in tiles 4-7 survive.
+            cb_wait_front(CB_S, 1);
+            copy_tile_to_dst_init_short_with_dt(CB_K, CB_S);
+            copy_tile(CB_S, 0, 3);
+            cb_pop_front(CB_S, 1);
+            MATH((ckernel::math::math_dest_wait()));
+            MATH((_llk_math_eltwise_unary_sfpu_init_<SfpuType::unused>()));
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((t2_split()));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            MATH((ckernel::math::set_math_semaphores()));
+            PACK((llk_packer_wait_for_math_done()));
+            cb_reserve_back(CB_K, 3);
+            pack_reconfig_data_format(CB_K);
+            pack_tile(0, CB_K);
+            pack_tile(1, CB_K);
+            pack_tile(2, CB_K);
+            PACK((_llk_packer_set_math_semaphore_<ckernel::p_stall::PACK>()));
+            cb_push_back(CB_K, 3);
+
+            reconfig_data_format(CB_K, CB_A);
+            mm_init_short(CB_A, CB_K);
             cb_wait_front(CB_A, 4);
             cb_wait_front(CB_K, 3);
 #pragma GCC unroll 3
@@ -475,6 +541,23 @@ void kernel_main() {
             cb_pop_front(CB_K, 3);
             cb_pop_front(CB_A, 4);
         }
+        MATH((ckernel::math::math_dest_wait()));
+        cb_wait_front(CB_P, 1);
+        copy_tile_to_dst_init_short_with_dt(CB_K, CB_P);
+        copy_tile(CB_P, 0, 0);
+        cb_pop_front(CB_P, 1);
+        cb_wait_front(CB_M, 1);
+        copy_tile_to_dst_init_short_with_dt(CB_P, CB_M);
+        copy_tile(CB_M, 0, 1);
+        cb_pop_front(CB_M, 1);
+        cb_wait_front(CB_V, 1);
+        copy_tile_to_dst_init_short_with_dt(CB_M, CB_V);
+        copy_tile(CB_V, 0, 2);
+        cb_pop_front(CB_V, 1);
+        MATH((_llk_math_eltwise_unary_sfpu_init_<SfpuType::unused>()));
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((t2_zero_g2d()));
+        MATH((_llk_math_eltwise_unary_sfpu_done_()));
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_fold()));
         MATH((_llk_math_eltwise_unary_sfpu_done_()));

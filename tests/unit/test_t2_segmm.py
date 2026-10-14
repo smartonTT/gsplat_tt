@@ -160,3 +160,60 @@ def test_slot_split_shared_grid():
     new = sum(fpu_sum([q.reshape(-1, 16)[a, 3], q.reshape(-1, 16)[b, 3]]) for q in bfp_pieces(page)[0])
     assert abs(old - xs.sum()) > 2.0 ** -16 * abs(xs.sum())
     assert abs(new - xs.sum()) <= 2.0 ** -23 * np.abs(page.reshape(-1, 16)[:, 3]).max()
+
+
+def subvec_transp(a, b, c, d):  # SFPTRANSP: register i sub-row j <- register j sub-row i
+    s = np.stack([a, b, c, d])
+    return tuple(s.transpose(1, 0, 2))
+
+
+def sfpu_split(page):  # t2_compute.cpp t2_split (#749): the SFPU's bit-level block-float split
+    t = np.asarray(page, np.float32).copy()
+    out = [np.zeros(1024, np.float32) for _ in range(3)]
+    for h in range(2):
+        m = np.zeros((4, 8), np.float32)
+        for v in range(h, 32, 2):
+            m = np.maximum(m, np.abs(vec(t, v)))
+        m = np.maximum.reduce(subvec_transp(m, m, m, m))
+        eb = (m.view(np.uint32) >> 23).astype(np.int64)
+        for v in range(h, 32, 2):
+            r = vec(t, v)
+            for k in range(3):
+                keep = ((r.view(np.uint32) >> 23) & 0xFF).astype(np.int64) - (eb - 7 - 8 * k)
+                sh = np.clip(23 - keep, 0, 31).astype(np.uint32)
+                mask = (np.uint32(0xFFFFFFFF) << sh).astype(np.uint32)
+                p = np.where(keep >= 0, (r.view(np.uint32) & mask).view(np.float32), np.float32(0))
+                set_vec(out[k], v, p)
+                r = (r - p).astype(np.float32)
+    return out
+
+
+def test_sfpu_split_matches_host_split():
+    # #749: the device split (column max over vectors + SFPTRANSP sub-rows, exponent compare,
+    # mantissa mask) gives the #726 host pieces bit for bit
+    rng = np.random.default_rng(749)
+    for case in range(6):
+        page = (rng.standard_normal(1024) * np.exp(rng.uniform(-30, 5, 1024))).astype(np.float32)
+        page[rng.random(1024) < 0.2] = 0.0
+        if case == 1:
+            page.reshape(-1, 16)[:, 5] = 0.0  # empty stream column
+        if case == 2:
+            page.reshape(-1, 16)[:, 9] = 2.0 ** -3  # equal values, max is a power of two
+        want, _ = bfp_pieces(page)
+        got = sfpu_split(page)
+        for k in range(3):
+            assert (got[k] == want[k].reshape(-1)).all(), (case, k)  # +-0 differ in sign only
+
+
+def test_split_runs_on_device():
+    # #749: t2_bench uploads the raw fp32 page; the reader streams it to CB_S and the compute splits
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "render" / "train"
+    bench = (root / "t2_bench.cpp").read_text()
+    comp = (root / "kernels" / "t2_compute.cpp").read_text()
+    rd = (root / "kernels" / "t2_reader.cpp").read_text()
+    assert "slots3" not in bench and "ilogb" not in bench
+    assert "EnqueueWriteMeshBuffer(*cq, b_s, slots, true)" in bench
+    assert "u2d[CB_S] = UnpackToDestMode::UnpackToDestFp32" in bench
+    assert "get_write_ptr(CB_S), SLOT_PAGE" in rd and "SLOT_PAGE = 4096" in rd
+    assert "t2_split()" in comp and "copy_tile(CB_S, 0, 3)" in comp

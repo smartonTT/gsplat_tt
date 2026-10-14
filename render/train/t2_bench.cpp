@@ -27,8 +27,8 @@ using namespace tt::tt_metal;
 
 namespace {
 constexpr uint32_t P_PAGE = 4096, MV_PAGE = 2048, META_PAGE = 512, VIS_PAGE = 128, F_PAGE = 256,
-                   SLOT_PAGE = 2048, GPB = 16, NCONST = 31, A_ENTRIES = 2, A_TILE = 2048;
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_A = 7;
+                   SLOT_PAGE = 4096, GPB = 16, NCONST = 31, A_ENTRIES = 2, A_TILE = 2048;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_A = 7, CB_S = 8;
 constexpr uint32_t CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_FO = 19, CB_GO = 20;
 
 template <class T>
@@ -100,38 +100,14 @@ int main(int argc, char** argv) {
         return 2;
     }
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
-    // Slot page q -> DRAM pages 3q..3q+2: bf16 pieces hi, mid, lo of each slot on a block-float
-    // grid shared by the page's stream column: E = exponent of the column's largest |x|, piece k =
-    // truncation of what the earlier ones left to a multiple of 2^(E-7-8k) (< 256 steps, so bf16
-    // exact; the rest is < 2^(E-23)). The FPU sums a matmul's products with limited alignment, so
-    // per-slot pieces of different exponents summed in one matmul lost ~2^-11 (#726: back-solved
-    // device g2d wrong only for lanes with 2+ slots); on a shared grid the sums are exact. SrcA
-    // keeps only 8 explicit mantissa bits even at HiFi4 (tech_reports/matrix_engine), so a fp32 or
-    // tf32 page loses ~2^-9 (#713 runs 1-2). The T1 producer emits the pieces; here the host splits.
-    std::vector<uint32_t> slots3(slots.size() * 3 / 2);
-    auto* s3 = reinterpret_cast<uint16_t*>(slots3.data());
-    for (size_t q = 0; q < nsp; q++)
-        for (size_t c = 0; c < 16; c++) {
-            float mx = 0.0f;
-            for (size_t i = c; i < 1024; i += 16) {
-                float x;
-                std::memcpy(&x, &slots[q * 1024 + i], 4);
-                mx = std::max(mx, std::fabs(x));
-            }
-            const int e = mx > 0.0f ? std::ilogb(mx) : 0;
-            for (size_t i = c; i < 1024; i += 16) {
-                float r;
-                std::memcpy(&r, &slots[q * 1024 + i], 4);
-                for (int k = 0; k < 3; k++) {
-                    const float g = std::ldexp(1.0f, e - 7 - 8 * k);
-                    const float h = std::trunc(r / g) * g;
-                    uint32_t b;
-                    std::memcpy(&b, &h, 4);
-                    s3[(q * 3 + k) * 1024 + i] = uint16_t(b >> 16);
-                    r -= h;
-                }
-            }
-        }
+    // Slot page q -> DRAM page q, raw fp32. The compute splits it into bf16 pieces hi, mid, lo on a
+    // block-float grid shared by the page's stream column (#726 design, on device since #749): E =
+    // exponent of the column's largest |x|, piece k = truncation of what the earlier ones left to a
+    // multiple of 2^(E-7-8k) (< 256 steps, so bf16 exact; the rest is < 2^(E-23)). The FPU sums a
+    // matmul's products with limited alignment, so per-slot pieces of different exponents summed in
+    // one matmul lost ~2^-11 (#726); on a shared grid the sums are exact. SrcA keeps only 8 explicit
+    // mantissa bits even at HiFi4 (tech_reports/matrix_engine), so a fp32 or tf32 page loses ~2^-9
+    // (#713 runs 1-2).
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
     const CoreCoord grid = dev->compute_with_storage_grid_size();
@@ -143,7 +119,7 @@ int main(int argc, char** argv) {
     auto b_m = make_dram(dev.get(), uint64_t(ng) * MV_PAGE, MV_PAGE);
     auto b_v = make_dram(dev.get(), uint64_t(ng) * MV_PAGE, MV_PAGE);
     auto b_meta = make_dram(dev.get(), uint64_t(ng) * META_PAGE, META_PAGE);
-    auto b_s = make_dram(dev.get(), 3ull * nsp * SLOT_PAGE, SLOT_PAGE);
+    auto b_s = make_dram(dev.get(), uint64_t(nsp) * SLOT_PAGE, SLOT_PAGE);
     auto b_vis = make_dram(dev.get(), uint64_t(nb) * VIS_PAGE, VIS_PAGE);
     auto b_f = make_dram(dev.get(), 13ull * ng * F_PAGE, F_PAGE);
     auto b_g = make_dram(dev.get(), uint64_t(ng) * P_PAGE, P_PAGE);
@@ -151,7 +127,7 @@ int main(int argc, char** argv) {
     distributed::EnqueueWriteMeshBuffer(*cq, b_m, m, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_v, v, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_meta, meta, true);
-    distributed::EnqueueWriteMeshBuffer(*cq, b_s, slots3, true);
+    distributed::EnqueueWriteMeshBuffer(*cq, b_s, slots, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_vis, vis, true);
     std::vector<uint32_t> zf(size_t(13) * ng * 64, 0u);
     distributed::EnqueueWriteMeshBuffer(*cq, b_f, zf, true);
@@ -162,7 +138,8 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_P, P_PAGE, 2);
     add_cb(prog, cores, CB_M, MV_PAGE, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_V, MV_PAGE, 2, DataFormat::Float16_b);
-    add_cb(prog, cores, CB_K, SLOT_PAGE, 6, DataFormat::Float16_b);
+    add_cb(prog, cores, CB_S, SLOT_PAGE, 2);
+    add_cb(prog, cores, CB_K, SLOT_PAGE / 2, 6, DataFormat::Float16_b);
     add_cb(prog, cores, CB_WH, 64, 2);
     add_cb(prog, cores, CB_WS, VIS_PAGE + META_PAGE + A_ENTRIES * 64 * 2, 1);
     add_cb(prog, cores, CB_A, A_TILE, 4 * A_ENTRIES, DataFormat::Float16_b);
@@ -186,6 +163,7 @@ int main(int argc, char** argv) {
                                               .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = wdef});
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_P] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_S] = UnpackToDestMode::UnpackToDestFp32;
     auto kc = CreateKernel(prog, kd + "t2_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
