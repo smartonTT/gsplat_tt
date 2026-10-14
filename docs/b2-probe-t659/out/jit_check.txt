@@ -1,0 +1,19 @@
+## off vs probe
+OK matblend_brisc: off=['2188857505155710578'] probe=['16766008525535820453']
+OK k2_trisc_compute: off=['2626819302302083170'] probe=['16454854147436987712']
+OK tile_assign_scatter_seg: off=['13980983941993714917', '14141360705853148509'] probe=['11106337500426443122', '11495189501790190311']
+JIT-HASH OK
+exit 0
+## aa vs probe
+OK matblend_brisc: aa=['2188857505155710578'] probe=['16766008525535820453']
+OK k2_trisc_compute: aa=['2626819302302083170'] probe=['16454854147436987712']
+OK tile_assign_scatter_seg: aa=['13980983941993714917', '14141360705853148509'] probe=['11106337500426443122', '11495189501790190311']
+JIT-HASH OK
+exit 0
+## off vs aa
+A/A matblend_brisc: same hashes ['2188857505155710578'] in off and aa
+A/A k2_trisc_compute: same hashes ['2626819302302083170'] in off and aa
+A/A tile_assign_scatter_seg: same hashes ['13980983941993714917', '14141360705853148509'] in off and aa
+A/A all 15 kernels identical between off and aa
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+exit 1

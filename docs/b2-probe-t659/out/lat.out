@@ -1,0 +1,31 @@
+[ttw 2026-10-13T17:12:01-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=450s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-13T17:12:01-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 450s.
+[ttw 2026-10-13T17:12:01-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-13T17:12:01-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-13T17:12:01-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-13T17:12:01-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-13T17:12:01-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-13T17:12:02-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-13T17:12:02-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-13T17:12:02-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-13T17:12:02-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-13T17:12:02-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=a285bb36 bin=8f30e4300858b77d t659 a285bb36 B2 ellipse probe A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t659-lat  timeout=450s  worry=600s  ts=2026-10-13T17:12:03-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/b2-probe-t659/remote.sh 5 lat-off lat-probe
+-----------------------------------------
+=== r5-lat-off a285bb36   00:12:04 load=2.55
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.4 max_ms=11.2 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t659-r5-lat-off
+TTW_TIMING ms_view=7.982
+LEVER r5-lat-off probe_define_files=0
+=== r5-lat-probe a285bb36 GSPLAT_TT_ELLIPSE_PROBE=1  00:12:09 load=2.50
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.4 max_ms=11.3 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t659-r5-lat-probe
+TTW_TIMING ms_view=8.001
+LEVER r5-lat-probe probe_define_files=1
+=== done 5 00:12:15
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t659/tmp/ttw-state/logs/t659-lat-20261013-171202.log
