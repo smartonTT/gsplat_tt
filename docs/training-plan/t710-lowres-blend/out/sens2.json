@@ -1,0 +1,122 @@
+{
+ "6131954_s2": {
+  "max_list_32": 73138,
+  "max_list_16": 32536,
+  "max_list_8": 12478,
+  "B1 walk-parent r=0ns": 3.5,
+  "B1 own sub-tile lists": 3.526,
+  "B1 own lists max_list": 25254,
+  "B1 lists": 336.8,
+  "B1 walk-parent r=1ns": 3.513,
+  "B1 walk-parent r=2ns": 3.528,
+  "B1 walk-parent r=4ns": 3.556
+ },
+ "3000000_s2": {
+  "max_list_32": 48799,
+  "max_list_16": 24044,
+  "max_list_8": 9636,
+  "B1 walk-parent r=0ns": 2.874,
+  "B1 own sub-tile lists": 2.9,
+  "B1 own lists max_list": 17545,
+  "B1 lists": 337.52,
+  "B1 walk-parent r=1ns": 2.883,
+  "B1 walk-parent r=2ns": 2.894,
+  "B1 walk-parent r=4ns": 2.916
+ },
+ "1500000_s2": {
+  "max_list_32": 31341,
+  "max_list_16": 13448,
+  "max_list_8": 5626,
+  "B1 walk-parent r=0ns": 2.145,
+  "B1 own sub-tile lists": 2.172,
+  "B1 own lists max_list": 11662,
+  "B1 lists": 339.44,
+  "B1 walk-parent r=1ns": 2.151,
+  "B1 walk-parent r=2ns": 2.157,
+  "B1 walk-parent r=4ns": 2.17
+ },
+ "1000000_s2": {
+  "max_list_32": 25088,
+  "max_list_16": 10688,
+  "max_list_8": 4436,
+  "B1 walk-parent r=0ns": 1.823,
+  "B1 own sub-tile lists": 1.851,
+  "B1 own lists max_list": 8631,
+  "B1 lists": 342.56,
+  "B1 walk-parent r=1ns": 1.827,
+  "B1 walk-parent r=2ns": 1.831,
+  "B1 walk-parent r=4ns": 1.841
+ },
+ "500000_s2": {
+  "max_list_32": 17722,
+  "max_list_16": 7731,
+  "max_list_8": 3351,
+  "B1 walk-parent r=0ns": 1.414,
+  "B1 own sub-tile lists": 1.444,
+  "B1 own lists max_list": 4914,
+  "B1 lists": 348.08,
+  "B1 walk-parent r=1ns": 1.417,
+  "B1 walk-parent r=2ns": 1.42,
+  "B1 walk-parent r=4ns": 1.427
+ },
+ "6131954_s4": {
+  "max_list_32": 180667,
+  "max_list_16": 70074,
+  "max_list_8": 34808,
+  "B1 walk-parent r=0ns": 2.957,
+  "B1 own sub-tile lists": 3.022,
+  "B1 own lists max_list": 34808,
+  "B1 lists": 261.32,
+  "B1 walk-parent r=1ns": 3.045,
+  "B1 walk-parent r=2ns": 3.136,
+  "B1 walk-parent r=4ns": 3.315
+ },
+ "3000000_s4": {
+  "max_list_32": 120106,
+  "max_list_16": 49304,
+  "max_list_8": 26107,
+  "B1 walk-parent r=0ns": 2.331,
+  "B1 own sub-tile lists": 2.395,
+  "B1 own lists max_list": 26107,
+  "B1 lists": 258.2,
+  "B1 walk-parent r=1ns": 2.396,
+  "B1 walk-parent r=2ns": 2.454,
+  "B1 walk-parent r=4ns": 2.579
+ },
+ "1500000_s4": {
+  "max_list_32": 76260,
+  "max_list_16": 31868,
+  "max_list_8": 15188,
+  "B1 walk-parent r=0ns": 1.659,
+  "B1 own sub-tile lists": 1.722,
+  "B1 own lists max_list": 15188,
+  "B1 lists": 257.2,
+  "B1 walk-parent r=1ns": 1.698,
+  "B1 walk-parent r=2ns": 1.738,
+  "B1 walk-parent r=4ns": 1.815
+ },
+ "1000000_s4": {
+  "max_list_32": 60430,
+  "max_list_16": 25557,
+  "max_list_8": 12352,
+  "B1 walk-parent r=0ns": 1.371,
+  "B1 own sub-tile lists": 1.434,
+  "B1 own lists max_list": 12352,
+  "B1 lists": 255.2,
+  "B1 walk-parent r=1ns": 1.402,
+  "B1 walk-parent r=2ns": 1.431,
+  "B1 walk-parent r=4ns": 1.49
+ },
+ "500000_s4": {
+  "max_list_32": 41909,
+  "max_list_16": 18078,
+  "max_list_8": 8888,
+  "B1 walk-parent r=0ns": 1.03,
+  "B1 own sub-tile lists": 1.091,
+  "B1 own lists max_list": 8888,
+  "B1 lists": 249.8,
+  "B1 walk-parent r=1ns": 1.048,
+  "B1 walk-parent r=2ns": 1.066,
+  "B1 walk-parent r=4ns": 1.1
+ }
+}
