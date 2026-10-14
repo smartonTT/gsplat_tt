@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=4eb12765 bin=279052c1e5f7c2f1 t684 b895b386 training-view bench (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t684-r1  timeout=400s  worry=600s  ts=2026-10-13T22:16:57-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-t513/docs/bucket-grow-t684/remote.sh 1 base grow
+-----------------------------------------
+=== r1-base b895b386  05:16:58 load=1.67
+run rc=0
+[gsplat_tt::sort] bucket tile stride 512 pages, 7 DRAM banks
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.052 fps=124.19 ms_frame_median=8.054 pass_ms_frame=8.051,8.055,8.052,8.051,8.058,8.060,8.057,8.052,8.052,8.059,8.059,8.053,8.064,8.055,8.060,8.053,8.056,8.053,8.042,7.997 check_pass_ms_frame=9.532 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.052 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.052
+TTW_TIMING b2b_ms_frame_median=8.054
+=== r1-grow b895b386 GSPLAT_TT_TEST_PREGROW_TILE_CAP=1 05:17:11 load=1.75
+run rc=0
+[gsplat_tt::sort] bucket pre-grown to 65472 records (GSPLAT_TT_TEST_PREGROW_TILE_CAP)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.031 fps=124.51 ms_frame_median=8.034 pass_ms_frame=8.034,8.028,8.034,8.026,8.035,8.040,8.031,8.041,8.031,8.027,8.043,8.038,8.035,8.040,8.025,8.033,8.032,8.036,8.035,7.982 check_pass_ms_frame=9.485 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=8.031 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2
+TTW_TIMING b2b_ms_frame=8.031
+TTW_TIMING b2b_ms_frame_median=8.034
+=== done 1 05:17:25
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t684/tmp/ttw-state/logs/t684-r1-20261013-221657.log

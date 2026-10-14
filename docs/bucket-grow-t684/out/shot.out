@@ -1,0 +1,12 @@
+================ BUILD ID ================
+=========================================
+=== shot t684-grow-hero sha=b895b38 env: GSPLAT_TT_TEST_PREGROW_TILE_CAP=1 05:15:18
+run rc=0
+      1 TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.007 tile_assign=0.008 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=5.7 max_ms=11.0 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t513/tmp/shot-t684-grow-hero
+      1 STAGES n=30 head=0.006 project=0.137 tile_assign=0.008 sort=0.928 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.519 d2h=0.011 assemble=0.000 tail=0.005 xview=0.373 | sum=7.986 view_total=7.988 resid_in_view=+0.002 avg_frame_ms=8.058 resid_vs_frame=+0.072 xview_hits=29 xview_misses=0
+      1 SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.475 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.321 publish_wait=0.000 mat=0.105 pre=0.002 log=0.009 cont_prep=0.045 cont_rtargs=0.101 cont_other=-0.217 | sum=0.924 sort=0.928 resid=+0.003
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.085 pfwc_chunkcull=0.000 pfwc_enqueue=0.048 pfwc_finish=0.000 gather_setup=0.003 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.127 gather_result=0.000 | sum=0.269 project=0.137 resid=-0.132
+VIEWS=30 SWEEP_MD5=077caaba
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/t684-grow/hero.png diff=opt/metal-screenshots/t684-grow/hero_diff10.png commit=b895b386 env='GSPLAT_TT_TEST_PREGROW_TILE_CAP=1' size=1024x1024 sweep_md5=077caaba ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.85 golden_match=true max_lsb_vs_golden=0
