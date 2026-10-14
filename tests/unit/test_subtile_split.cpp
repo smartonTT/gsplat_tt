@@ -157,6 +157,60 @@ static void check_lossless(uint32_t seed) {
     for (uint32_t k = 0; k < p.n_sub[0]; ++k) CHECK(lists[p.first_id[0] + k].size() < n);
 }
 
+// #744: B1 route plan in B1' unit codes (4 quarters or 16 bands), the device
+// plan words, the id budget and the over-capacity rule.
+static void check_plan_units(uint32_t num_tiles, uint32_t num_cores, uint32_t seed) {
+    std::vector<double> cost(num_tiles);
+    uint32_t r = seed * 2654435761u;
+    for (auto& c : cost) {
+        r = r * 1664525u + 1013904223u;
+        c = static_cast<double>(r >> 20);
+    }
+    cost[seed % num_tiles] = 200000.0;  // over the bucket cap
+    const double cap = 65472.0;
+    for (const uint32_t max_ids : {num_tiles + 4u, num_tiles + 40u, num_tiles + 4096u}) {
+        const subtile::Plan p = subtile::plan_units(cost, num_cores, max_ids, cap);
+        CHECK(p.num_ids() <= max_ids);
+        CHECK(p.code.size() == p.parent.size());
+        const std::vector<uint32_t> words = subtile::plan_words(p);
+        CHECK(words.size() == num_tiles);
+        double total = 0.0;
+        for (double c : cost) total += c;
+        const double thr = total / num_cores;
+        uint32_t nsplit = 0;
+        for (uint32_t t = 0; t < num_tiles; ++t) {
+            const bool split = p.first_id[t] != subtile::kNone;
+            if (!split) {
+                CHECK(words[t] == 0u);
+                continue;
+            }
+            ++nsplit;
+            CHECK(cost[t] > thr || cost[t] > cap);
+            CHECK(p.n_sub[t] == 4u || p.n_sub[t] == 16u);
+            if (cost[t] > cap && max_ids == num_tiles + 4096u) CHECK(p.n_sub[t] == 16u);
+            CHECK(subtile_route::plan_first(words[t]) == p.first_id[t]);
+            CHECK(subtile_route::plan_n(words[t]) == p.n_sub[t]);
+            uint32_t u = 0;
+            for (uint32_t k = 0; k < p.n_sub[t]; ++k) {
+                const uint32_t id = p.first_id[t] + k;
+                CHECK(p.parent_of(id) == t);
+                CHECK(p.code[id - num_tiles] == subtile_unit::split_code(p.n_sub[t], k));
+                CHECK(p.mask_of(id) == subtile_unit::mask(p.code[id - num_tiles]));
+                CHECK((u & p.mask_of(id)) == 0u);
+                u |= p.mask_of(id);
+            }
+            CHECK(u == subtile::kFullMask);
+        }
+        // the heaviest tile always fits the smallest budget (4 extra ids: quarters)
+        CHECK(p.first_id[seed % num_tiles] != subtile::kNone);
+        if (max_ids == num_tiles + 4096u) {
+            uint32_t want = 0;
+            for (uint32_t t = 0; t < num_tiles; ++t) want += (cost[t] > thr || cost[t] > cap) ? 1u : 0u;
+            CHECK(nsplit == want);
+        }
+    }
+}
+
 int main() {
     check_masks();
     for (uint32_t s = 1; s <= 6; ++s) {
@@ -164,6 +218,9 @@ int main() {
         check_plan(260, 120, s, s % 2);   // 1/2 res
         check_plan(1014, 120, s, s % 2);  // full res
         check_lossless(s);
+        check_plan_units(70, 120, s);
+        check_plan_units(260, 120, s);
+        check_plan_units(1014, 120, s);
     }
     {  // all empty: nothing splits
         const subtile::Plan p = subtile::plan_split(std::vector<double>(16, 0.0), nullptr, 120);

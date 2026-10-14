@@ -231,7 +231,11 @@ void kernel_main() {
     const uint32_t sem_release2_id = get_arg_val<uint32_t>(24);
     const uint32_t coord_x = get_arg_val<uint32_t>(25);
     const uint32_t coord_y = get_arg_val<uint32_t>(26);
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+    const bool fold = false;  // the K2's rows count screen tiles, not sub-tile ids
+#else
     const bool fold = get_arg_val<uint32_t>(27) != 0u;
+#endif
 
     constexpr auto gids_args = TensorAccessorArgs<0>();
     constexpr auto tids_args = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -417,6 +421,13 @@ void kernel_main() {
         auto btidp = reinterpret_cast<volatile int32_t*>(btid_l1);
         auto bkeepp = reinterpret_cast<volatile int32_t*>(bkeep_l1);
         for (uint32_t t = 0; t < num_tiles; t++) hp[t] = 0;
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+        // Count-step scratch (the emit's record staging, unused until then):
+        // page 0 a gid page past the window, page 1 a blendrec page.
+        const uint32_t b1_scr = get_write_ptr(CB_SCRATCH + cbo);
+        uint32_t b1_gpage = 0xFFFFFFFFu;
+        int32_t b1_cnt_g = -1;
+#endif
         for (uint32_t pg0 = pg_lo; pg0 < pg_hi;) {
             const uint32_t nb = (pg_hi - pg0 < CNT_BATCH) ? (pg_hi - pg0) : CNT_BATCH;
             const bool in_win = (pg0 - pg_lo) + nb <= nwin;  // batches never straddle nwin
@@ -441,6 +452,40 @@ void kernel_main() {
                 for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
                     if ((pg0 + b) * ELEMS_PER_PAGE + j >= P) break;
                     if (kp[j] == 0) continue;
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+                    {
+                        const uint32_t t = static_cast<uint32_t>(tp[j]);
+                        const uint32_t pw = (t < b1_ntiles) ? b1_plan[t] : 0u;
+                        if (pw != 0u) {
+                            // gid: the window plane, else this page's gid page
+                            // (one read per page); then g's blendrec words.
+                            uint32_t g;
+                            if (in_win) {
+                                g = reinterpret_cast<volatile uint32_t*>(win_gid + w * PAGE_BYTES)[j];
+                            } else {
+                                if (b1_gpage != pg0 + b) {
+                                    noc_async_read(get_noc_addr(pg0 + b, gids_acc), b1_scr, PAGE_BYTES);
+                                    noc_async_read_barrier();
+                                    b1_gpage = pg0 + b;
+                                }
+                                g = reinterpret_cast<volatile uint32_t*>(b1_scr)[j];
+                            }
+                            if (static_cast<int32_t>(g) != b1_cnt_g) {
+                                noc_async_read(get_noc_addr(brec_pg(g), brec_acc), b1_scr + PAGE_BYTES, PAGE_BYTES);
+                                noc_async_read_barrier();
+                                b1_cnt_g = static_cast<int32_t>(g);
+                            }
+                            auto wp = reinterpret_cast<volatile uint32_t*>(b1_scr + PAGE_BYTES + brec_ho(g));
+                            uint32_t bits = b1_targets(wp, t, pw);
+                            const uint32_t first = subtile_route::plan_first(pw);
+                            while (bits != 0u) {
+                                hp[first + static_cast<uint32_t>(__builtin_ctz(bits))]++;
+                                bits &= bits - 1u;
+                            }
+                            continue;
+                        }
+                    }
+#endif
                     hp[static_cast<uint32_t>(tp[j])]++;
                 }
             }
@@ -620,7 +665,11 @@ void kernel_main() {
                   "OL_RING: power of two dividing the record page");
     static_assert(R == 0u ? D == 0u : ((D & (D - 1u)) == 0u && D >= R && D <= 16u),
                   "OL_RING_DEPTH: power of two >= OL_RING");
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+    const bool ring_on = false;  // B1 route: one record per routed sub-tile, the plain emit
+#else
     const bool ring_on = (R != 0u) && num_tiles <= OL_RING_TILES && (tile_cap % REC_PAGE_RECS) == 0u;
+#endif
 
     const bool tx_is_pow2 = (tiles_x != 0u) && ((tiles_x & (tiles_x - 1u)) == 0u);
     uint32_t tx_shift = 0u;
@@ -879,6 +928,29 @@ void kernel_main() {
                 }
                 pack_invariants(key);
             }
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+            // Split tile: one record per routed sub-tile, packed at the
+            // parent's origin (same words as the count step's targets).
+            if (const uint32_t pw = (t < b1_ntiles) ? b1_plan[t] : 0u; pw != 0u) {
+                uint32_t bits = b1_targets(cachep, t, pw);
+                const uint32_t first = subtile_route::plan_first(pw);
+                while (bits != 0u) {
+                    const uint32_t id = first + static_cast<uint32_t>(__builtin_ctz(bits));
+                    bits &= bits - 1u;
+                    const uint32_t c = curp[id];
+                    curp[id] = c + 1u;
+                    EP_CNT(ep_nrec, 1u);
+                    const uint32_t slot = (c < tile_cap) ? id * tile_cap + c : 0xFFFFFFFFu;
+                    brec_slot[nbrec] = slot;
+                    if (slot != 0xFFFFFFFFu) {
+                        pack_rec(reinterpret_cast<volatile uint32_t*>(l1_scratch + nbrec * REC_BYTES), t);
+                    }
+                    nbrec++;
+                    if (nbrec == REC_BATCH) flush_recs();
+                }
+                continue;
+            }
+#endif
             const uint32_t c = curp[t];
             curp[t] = c + 1u;
             EP_CNT(ep_nrec, 1u);
