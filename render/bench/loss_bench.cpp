@@ -139,9 +139,13 @@ int main(int argc, char** argv) {
     auto kw = CreateKernel(prog, kd + "writer_loss_l1.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                               .noc = NOC::RISCV_0_default, .compile_args = ct_w});
+    // fp32 operands must reach DEST unrounded (the default unpack path rounds to TF32).
+    std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+    for (uint32_t cb : {0u, 1u, 3u}) u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
     auto kc = CreateKernel(prog, kd + "loss_l1_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
-                                         .dst_full_sync_en = true, .math_approx_mode = false});
+                                         .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
+                                         .math_approx_mode = false});
     const float w = 0.8f / float(npx);
     uint32_t wb;
     std::memcpy(&wb, &w, 4);

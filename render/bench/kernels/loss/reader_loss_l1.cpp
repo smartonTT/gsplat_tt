@@ -4,7 +4,7 @@
 #include <cstdint>
 #include "api/dataflow/dataflow_api.h"
 
-constexpr uint32_t CB_X = 0, CB_Y = 1, CB_ACC = 3;
+constexpr uint32_t CB_X = 0, CB_Y = 1;
 
 void kernel_main() {
     const uint32_t x_addr = get_arg_val<uint32_t>(0);
@@ -16,11 +16,6 @@ void kernel_main() {
     const uint32_t tb = get_tile_size(CB_X);
     const auto acc_x = TensorAccessor(ax, x_addr, tb);
     const auto acc_y = TensorAccessor(ay, y_addr, tb);
-
-    cb_reserve_back(CB_ACC, 1);
-    volatile tt_l1_ptr uint32_t* z = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_write_ptr(CB_ACC));
-    for (uint32_t i = 0; i < tb / 4; i++) z[i] = 0u;
-    cb_push_back(CB_ACC, 1);
 
     for (uint32_t t = t0; t < t1; t++) {
         cb_reserve_back(CB_X, 1);
