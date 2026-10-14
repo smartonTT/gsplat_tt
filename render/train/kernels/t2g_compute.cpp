@@ -7,6 +7,8 @@
 // Per group: Dst tile 0 params, 1 m, 2 v, 3 g2d (then pfwc out), 4 rank plane (then grads),
 // 5-7 scratch. The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
 // Runtime args: group count, then NCONST fp32 constants (bits, t2_dev.consts order).
+// #784: T2_PHASE_A sums a heavy group's planes only and packs the sums (tile 3) to CB_FO
+// (t2h_writer). T2_G2D_ONLY (check runs) skips the body, so the pfwc pages carry g2d.
 #include <cstdint>
 
 #include "api/compute/common.h"
@@ -403,6 +405,36 @@ void kernel_main() {
         for (uint32_t i = 0; i < NCONST; i++) g_c[i] = ckernel::sfpu::Converter::as_float(get_arg_val<uint32_t>(1 + i));
     }));
     if (n_groups == 0) return;
+#ifdef T2_PHASE_A
+    init_sfpu(CB_K, CB_FO);
+    for (uint32_t g = 0; g < n_groups; g++) {
+        cb_wait_front(CB_HDR, 1);
+        const uint32_t ha = get_tile_address(CB_HDR, 0);  // all threads (mailbox sync)
+        asm volatile("fence" ::: "memory");
+        const uint32_t nk = reinterpret_cast<const volatile uint32_t*>(ha)[0];
+        cb_pop_front(CB_HDR, 1);
+        tile_regs_acquire();
+        copy_tile_to_dst_init_short(CB_K);
+        cb_wait_front(CB_K, 1);
+        copy_tile(CB_K, 0, 3);
+        cb_pop_front(CB_K, 1);
+        for (uint32_t k = 1; k < nk; k++) {
+            cb_wait_front(CB_K, 1);
+            copy_tile(CB_K, 0, 4);
+            cb_pop_front(CB_K, 1);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((t2_add_plane()));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+        }
+        tile_regs_commit();
+        tile_regs_wait();
+        cb_reserve_back(CB_FO, 1);
+        pack_tile(3, CB_FO);
+        cb_push_back(CB_FO, 1);
+        tile_regs_release();
+    }
+    return;
+#endif
     init_sfpu(CB_P, CB_PO);
     for (uint32_t g = 0; g < n_groups; g++) {
         cb_wait_front(CB_HDR, 1);
@@ -436,11 +468,13 @@ void kernel_main() {
             MATH((t2_add_plane()));
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
         }
+#ifndef T2_G2D_ONLY
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_body()));
         MATH((sfpi::dst_reg++));
         MATH((t2_body()));
         MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#endif
         tile_regs_commit();
 
         tile_regs_wait();

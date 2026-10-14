@@ -9,6 +9,11 @@
 // <dir>/t1: blend_backward_dev prep files; <dir>/t2: t2_dev prep-dump files (slots.f32 unused).
 // Writes slots.f32 (16 floats per slot), params_out.f32, m_out.u16, v_out.u16, pfwc.f32,
 // [grads.f32] from the first step, and timing.json (per stage and chained, over reps steps).
+// #784 env knobs: T2_SPLIT=1 runs T2 as the heavy-row split (gsplat/t2_split.py, docs/t784):
+// program A sums rows with k > T2_KCAP (default 16) in heavy groups of T2_HL (16) lanes, LPT over
+// the cores, into the hsum buffer; program B runs the light groups, one contiguous range per core
+// balanced by planes + T2_OVH (2) per active group, heavy lanes taking hsum as plane 0.
+// T2_G2D=1 skips the projection backward + Adam, so pfwc.f32 holds the per-row slot sums (g2d).
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -137,6 +142,10 @@ int main(int argc, char** argv) {
     }
     const auto cst = meta_consts(j2);
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
+    auto envu = [](const char* k, uint32_t d) { const char* e = std::getenv(k); return e && *e ? uint32_t(std::atoi(e)) : d; };
+    const bool split = envu("T2_SPLIT", 0) != 0, g2d_only = envu("T2_G2D", 0) != 0;
+    const uint32_t kcap = envu("T2_KCAP", 16), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
+    if (split && (HL == 0 || HL > 64 || 64 % HL != 0)) { std::fprintf(stderr, "T2_HL must divide 64\n"); return 2; }
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
@@ -235,6 +244,106 @@ int main(int argc, char** argv) {
             }
     }
 
+    // ---- #784 split plan (host, from this view's counts; nothing kept between views)
+    const auto tp0 = std::chrono::steady_clock::now();
+    constexpr uint32_t HFLAG = 0x80000000u;
+    std::vector<uint32_t> heavy, hplanes, metab, htab;
+    std::vector<std::vector<uint32_t>> core_h(want);
+    std::vector<uint32_t> core_g(want + 1, ng), core_n(want, 0);
+    uint64_t light_planes = 0, heavy_planes = 0, a_max = 0, b_max = 0;
+    if (split) {
+        auto active = [&](uint32_t g) { return (vis[(g / GPB) * 32 + 2 * (g % GPB)] | vis[(g / GPB) * 32 + 2 * (g % GPB) + 1]) != 0; };
+        for (uint32_t g = 0; g < ng; g++)
+            if (active(g))
+                for (uint32_t i = 0; i < 64; i++)
+                    if (meta[g * 128 + 64 + i] > kcap) heavy.push_back(g * 64 + i);
+        auto cnt = [&](uint32_t r) { return meta[(r / 64) * 128 + 64 + r % 64]; };
+        std::stable_sort(heavy.begin(), heavy.end(), [&](uint32_t a, uint32_t b) { return cnt(a) > cnt(b); });
+        const uint32_t nhg = (uint32_t(heavy.size()) + HL - 1) / HL;
+        metab = meta;
+        htab.assign(size_t(std::max<uint32_t>(nhg, 1)) * 128, 0u);
+        for (uint32_t h = 0; h < heavy.size(); h++) {
+            const uint32_t r = heavy[h], j = h / HL, i = h % HL;
+            htab[j * 128 + i] = meta[(r / 64) * 128 + r % 64];
+            htab[j * 128 + 64 + i] = cnt(r);
+            metab[(r / 64) * 128 + 64 + r % 64] = HFLAG | h;
+            heavy_planes += i == 0 ? cnt(r) : 0;
+        }
+        // Phase A: LPT, largest group first (groups are already in descending order), ties to
+        // the lower core.
+        std::vector<uint64_t> load(want, 0);
+        for (uint32_t j = 0; j < nhg; j++) {
+            const uint32_t c = uint32_t(std::min_element(load.begin(), load.end()) - load.begin());
+            core_h[c].push_back(j);
+            load[c] += htab[j * 128 + 64];
+            if (core_h[c].size() > 300) { std::fprintf(stderr, "too many heavy groups on core %u\n", c); return 2; }
+        }
+        a_max = *std::max_element(load.begin(), load.end());
+        // Phase B: light planes per active group (a heavy lane feeds plane 0 only), one contiguous
+        // range per core, smallest capacity that fits (binary search on the greedy fill).
+        std::vector<uint64_t> w(ng, 0);
+        uint64_t wsum = 0, wmax = 0;
+        for (uint32_t g = 0; g < ng; g++) {
+            if (!active(g)) continue;
+            uint32_t k = 1;
+            for (uint32_t i = 0; i < 64; i++) {
+                const uint32_t c = metab[g * 128 + 64 + i];
+                if (!(c & HFLAG)) k = std::max(k, c);
+            }
+            light_planes += k;
+            w[g] = k + ovh;
+            wsum += w[g];
+            wmax = std::max(wmax, w[g]);
+        }
+        auto fill = [&](uint64_t cap, std::vector<uint32_t>* b) {
+            uint32_t c = 0;
+            uint64_t acc = 0;
+            if (b) (*b)[0] = 0;
+            for (uint32_t g = 0; g < ng; g++) {
+                if (acc + w[g] > cap) {
+                    if (++c >= want) return false;
+                    if (b) (*b)[c] = g;
+                    acc = 0;
+                }
+                acc += w[g];
+            }
+            if (b)
+                for (uint32_t q = c + 1; q <= want; q++) (*b)[q] = ng;
+            return true;
+        };
+        uint64_t lo = std::max<uint64_t>(wmax, (wsum + want - 1) / want), hi = wsum;
+        while (lo < hi) {
+            const uint64_t mid = (lo + hi) / 2;
+            if (fill(mid, nullptr)) hi = mid; else lo = mid + 1;
+        }
+        fill(lo, &core_g);
+        for (uint32_t c = 0; c < want; c++) {
+            uint64_t acc = 0;
+            for (uint32_t g = core_g[c]; g < core_g[c + 1]; g++) {
+                acc += w[g];
+                core_n[c] += w[g] != 0;
+            }
+            b_max = std::max(b_max, acc);
+        }
+    }
+    const double plan_ms = ms_since(tp0);
+    const uint32_t nhrec = split ? std::max<uint32_t>(1, (uint32_t(heavy.size()) + HL - 1) / HL * HL) : 1;
+    auto b_metab = make_dram(dev.get(), uint64_t(split ? ng : 1) * META_PAGE, META_PAGE);
+    auto b_htab = make_dram(dev.get(), uint64_t(split ? htab.size() / 128 : 1) * META_PAGE, META_PAGE);
+    auto b_hs = make_dram(dev.get(), uint64_t((nhrec + 63) / 64) * SLOT_PAGE, SLOT_PAGE);
+    const auto tu0 = std::chrono::steady_clock::now();
+    if (split) {
+        distributed::EnqueueWriteMeshBuffer(*cq, b_metab, metab, true);
+        distributed::EnqueueWriteMeshBuffer(*cq, b_htab, htab, true);
+    }
+    const double split_upload_ms = ms_since(tu0);
+    if (split)
+        std::printf("[SPLIT] kcap %u hl %u ovh %u heavy_rows %zu heavy_groups %zu heavy_planes %llu light_planes %llu "
+                    "a_max_planes %llu b_max_weight %llu plan_ms %.3f upload_ms %.3f\n",
+                    kcap, HL, ovh, heavy.size(), htab.size() / 128, (unsigned long long)heavy_planes,
+                    (unsigned long long)light_planes, (unsigned long long)a_max, (unsigned long long)b_max, plan_ms,
+                    split_upload_ms);
+
     // ---- T2 program (t697 gather reduce + SFPU fwd/bwd + sparse Adam)
     Program p2 = CreateProgram();
     uint32_t tot_groups = 0;
@@ -247,17 +356,19 @@ int main(int argc, char** argv) {
         add_cb(p2, cores, CB_V, MV_PAGE, 2, DataFormat::Float16_b);
         add_cb(p2, cores, CB_K, P_PAGE, 2);
         add_cb(p2, cores, CB_WH, 64, 2);
-        add_cb(p2, cores, CB_WS, VIS_PAGE + META_PAGE + STAGE_PAGES * SLOT_PAGE, 1);
+        add_cb(p2, cores, CB_WS, VIS_PAGE + META_PAGE + STAGE_PAGES * SLOT_PAGE + (split ? 64 * 64 : 0), 1);
         add_cb(p2, cores, CB_PO, P_PAGE, 2);
         add_cb(p2, cores, CB_MO, MV_PAGE, 2, DataFormat::Float16_b);
         add_cb(p2, cores, CB_VO, MV_PAGE, 2, DataFormat::Float16_b);
         add_cb(p2, cores, CB_FO, P_PAGE, 2);
         add_cb(p2, cores, CB_GO, P_PAGE, 2);
         std::vector<uint32_t> rct, wct;
-        for (int i = 0; i < 6; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+        for (int i = 0; i < (split ? 7 : 6); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
         for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
         std::map<std::string, std::string> rdef = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"}}, wdef;
         if (grads) wdef["T2_GRADS_OUT"] = "1";
+        if (split) rdef["T2_SPLIT"] = "1";
+        if (g2d_only) wdef["T2_G2D_ONLY"] = "1";
         const std::string kd = TRAIN_KERNEL_DIR;
         auto kr = CreateKernel(p2, kd + "t2g_reader.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
@@ -276,14 +387,23 @@ int main(int argc, char** argv) {
             for (uint32_t x = 0; x < grid.x; x++) {
                 const uint32_t lin = y * grid.x + x;
                 uint32_t n = 0;
+                if (split) {
+                    n = lin < want ? core_n[lin] : 0;
+                    SetRuntimeArgs(p2, kr, CoreCoord{x, y},
+                                   {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
+                                    uint32_t(b_s->address()), uint32_t(b_metab->address()), uint32_t(b_vis->address()),
+                                    uint32_t(b_hs->address()), lin < want ? core_g[lin] : ng,
+                                    lin < want ? core_g[lin + 1] : ng});
+                } else {
                 if (lin < want)
                     for (uint32_t b = lin; b < nb; b += want)
                         for (uint32_t gi = 0; gi < GPB; gi++) n += (vis[b * 32 + 2 * gi] | vis[b * 32 + 2 * gi + 1]) != 0;
-                tot_groups += n;
                 SetRuntimeArgs(p2, kr, CoreCoord{x, y},
                                {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
                                 uint32_t(b_s->address()), uint32_t(b_meta->address()), uint32_t(b_vis->address()),
                                 lin < want ? lin : nb, want, nb});
+                }
+                tot_groups += n;
                 SetRuntimeArgs(p2, kw, CoreCoord{x, y},
                                {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
                                 uint32_t(b_f->address()), uint32_t(b_g->address()), n, ng});
@@ -293,9 +413,53 @@ int main(int argc, char** argv) {
             }
     }
 
-    distributed::MeshWorkload w1, w2;
+    // ---- #784 phase A program: heavy groups -> hsum records
+    Program pa = CreateProgram();
+    if (split) {
+        enum : uint32_t { CB_HDR = 0, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_HR = 7, CB_FO = 19 };
+        add_cb(pa, cores, CB_HDR, 64, 2);
+        add_cb(pa, cores, CB_K, P_PAGE, 2);
+        add_cb(pa, cores, CB_WH, 64, 2);
+        add_cb(pa, cores, CB_WS, VIS_PAGE + META_PAGE + STAGE_PAGES * SLOT_PAGE, 1);
+        add_cb(pa, cores, CB_HR, P_PAGE, 1);
+        add_cb(pa, cores, CB_FO, P_PAGE, 2);
+        std::vector<uint32_t> rct, wct;
+        for (int i = 0; i < 2; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+        TensorAccessorArgs::create_dram_interleaved().append_to(wct);
+        const std::map<std::string, std::string> def = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"},
+                                                        {"T2_HL", std::to_string(HL) + "u"},
+                                                        {"T2_PHASE_A", "1"}};
+        const std::string kd = TRAIN_KERNEL_DIR;
+        auto kr = CreateKernel(pa, kd + "t2g_reader.cpp", cores,
+                               DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
+                                                  .noc = NOC::RISCV_1_default, .compile_args = rct, .defines = def});
+        auto kw = CreateKernel(pa, kd + "t2h_writer.cpp", cores,
+                               DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                                                  .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = def});
+        std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+        u2d[CB_K] = UnpackToDestMode::UnpackToDestFp32;
+        auto kc = CreateKernel(pa, kd + "t2g_compute.cpp", cores,
+                               ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
+                                             .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
+                                             .math_approx_mode = false, .defines = def});
+        for (uint32_t y = 0; y < grid.y; y++)
+            for (uint32_t x = 0; x < grid.x; x++) {
+                const uint32_t lin = y * grid.x + x;
+                const uint32_t n = lin < want ? uint32_t(core_h[lin].size()) : 0;
+                std::vector<uint32_t> ra = {uint32_t(b_s->address()), uint32_t(b_htab->address()), n};
+                for (uint32_t q = 0; q < n; q++) ra.push_back(core_h[lin][q]);
+                SetRuntimeArgs(pa, kr, CoreCoord{x, y}, ra);
+                SetRuntimeArgs(pa, kw, CoreCoord{x, y}, {uint32_t(b_hs->address()), n});
+                std::vector<uint32_t> ca = {n};
+                for (float f : cst) { uint32_t u; std::memcpy(&u, &f, 4); ca.push_back(u); }
+                SetRuntimeArgs(pa, kc, CoreCoord{x, y}, ca);
+            }
+    }
+
+    distributed::MeshWorkload w1, w2, wa;
     w1.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p1));
     w2.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p2));
+    if (split) wa.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(pa));
 
     // Step 0 (the checked one): T1 -> T2 with a Finish between, so each stage is timed alone.
     std::vector<double> t1ms, t2ms, chain;
@@ -305,6 +469,7 @@ int main(int argc, char** argv) {
         distributed::Finish(*cq);
         t1ms.push_back(ms_since(t0));
         t0 = std::chrono::steady_clock::now();
+        if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
         t2ms.push_back(ms_since(t0));
@@ -332,20 +497,42 @@ int main(int argc, char** argv) {
     for (int i = 0; i < reps; i++) {
         const auto t0 = std::chrono::steady_clock::now();
         distributed::EnqueueMeshWorkload(*cq, w1, false);
+        if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
         chain.push_back(ms_since(t0));
     }
-    const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain);
-    char buf[1024];
+    // #784: each split phase alone (A only re-sums the same slots; B is a normal T2 step).
+    std::vector<double> tams, tbms;
+    for (int i = 0; split && i < reps; i++) {
+        auto t0 = std::chrono::steady_clock::now();
+        distributed::EnqueueMeshWorkload(*cq, wa, false);
+        distributed::Finish(*cq);
+        tams.push_back(ms_since(t0));
+        t0 = std::chrono::steady_clock::now();
+        distributed::EnqueueMeshWorkload(*cq, w2, false);
+        distributed::Finish(*cq);
+        tbms.push_back(ms_since(t0));
+    }
+    const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain), sa = stat(tams), sb = stat(tbms);
+    char sbuf[640];
+    std::snprintf(sbuf, sizeof sbuf,
+                  ", \"split\": %s, \"g2d_only\": %s, \"kcap\": %u, \"hl\": %u, \"ovh\": %u, \"heavy_rows\": %zu, "
+                  "\"heavy_planes\": %llu, \"light_planes\": %llu, \"a_max_planes\": %llu, \"b_max_weight\": %llu, "
+                  "\"plan_ms\": %.3f, \"split_upload_ms\": %.3f, \"ta_ms_min\": %.4f, \"ta_ms_med\": %.4f, "
+                  "\"tb_ms_min\": %.4f, \"tb_ms_med\": %.4f",
+                  split ? "true" : "false", g2d_only ? "true" : "false", kcap, HL, ovh, heavy.size(),
+                  (unsigned long long)heavy_planes, (unsigned long long)light_planes, (unsigned long long)a_max,
+                  (unsigned long long)b_max, plan_ms, split_upload_ms, sa.min, sa.med, sb.min, sb.med);
+    char buf[1700];
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"n_groups\": %u, \"groups_processed\": %u, "
                   "\"cores\": %u, \"t1_cores\": %u, \"reps\": %d, \"grads_out\": %s, "
                   "\"t1_ms_first\": %.4f, \"t1_ms_min\": %.4f, \"t1_ms_med\": %.4f, "
                   "\"t2_ms_first\": %.4f, \"t2_ms_min\": %.4f, \"t2_ms_med\": %.4f, "
-                  "\"chain_ms_min\": %.4f, \"chain_ms_med\": %.4f, \"host_repack_ms\": 0}",
+                  "\"chain_ms_min\": %.4f, \"chain_ms_med\": %.4f, \"host_repack_ms\": 0%s}",
                   n_tiles, n_recs, n_slots, ng, tot_groups, want, want1, reps, grads ? "true" : "false",
-                  s1.first, s1.min, s1.med, s2.first, s2.min, s2.med, sc.min, sc.med);
+                  s1.first, s1.min, s1.med, s2.first, s2.min, s2.med, sc.min, sc.med, sbuf);
     std::ofstream(odir + "/timing.json") << buf << "\n";
     std::printf("[STEP] %s\n", buf);
     dev->close();
