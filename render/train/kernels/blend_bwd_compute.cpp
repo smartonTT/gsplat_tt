@@ -12,6 +12,10 @@
 //          24-29 out: pair i of a pack -> column i % 8 of vectors 24 + 3 (i / 8) + {0, 1, 2}
 //          (group 0 rows: dop dr dg db; group 1: dA dB dC dmx; group 2 row 0: dmy).
 // Compile defines: BWD_AMAX_BITS, BWD_AMIN_BITS, BWD_TMIN_BITS (fp32 bits of the blend cfg).
+// BWD_STATS (#707): MATH-thread wall-clock counters per stage (tile setup, record wait, pair
+// setup, bodies, finish, pack sync) plus counts; after the last tile they are written as
+// exact floats (0x4B000000 | 16-bit half, two vectors per counter) into ACC and packed as
+// one extra CB_OUT tile, which the writer sends to the stats buffer (bwd_writer.cpp).
 #include <cstdint>
 
 #include "api/compute/common.h"
@@ -241,7 +245,7 @@ inline uint32_t bwd_read_record(uint32_t ra, uint32_t* s) {
     return mask;
 }
 
-inline void bwd_pair(const uint32_t* s, uint32_t mask) {
+inline void bwd_pair_setup(const uint32_t* s) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
     dst_reg[DR_S + 0] = Converter::as_float(s[0]);
@@ -262,11 +266,39 @@ inline void bwd_pair(const uint32_t* s, uint32_t mask) {
     dst_reg[DR_ACC + 6] = vConst0;
     dst_reg[DR_ACC + 7] = vConst0;
     dst_reg[DR_ACC + 8] = vConst0;
+}
+
+inline void bwd_bodies(uint32_t mask) {
     while (mask != 0u) {
         g_bwd_bodies[__builtin_ctz(mask)]();
         mask &= mask - 1u;
     }
 }
+#endif
+
+#if defined(BWD_STATS) && defined(TRISC_MATH)
+enum : uint32_t { ST_TOT, ST_TILE, ST_REC, ST_SETUP, ST_BODY, ST_FIN, ST_PACK, ST_NT, ST_NP, ST_NV, ST_MARK, ST_N };
+uint32_t g_st[ST_N];
+inline uint32_t st_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+#define ST_T0(v) uint32_t v = st_now()
+#define ST_LAP(i, v) do { const uint32_t n_ = st_now(); g_st[i] += n_ - (v); (v) = n_; } while (0)
+#define ST_CNT(i, n) g_st[i] += (n)
+inline uint32_t bwd_popcount(uint32_t m) {
+    uint32_t n = 0;
+    for (; m != 0u; m &= m - 1u) n++;
+    return n;
+}
+inline void bwd_emit_stats() {
+    g_st[ST_MARK] = 707u;
+    for (uint32_t k = 0; k < ST_N; k++) {
+        sfpi::dst_reg[DR_ACC + 2 * k] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] & 0xFFFFu));
+        sfpi::dst_reg[DR_ACC + 2 * k + 1] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] >> 16));
+    }
+}
+#else
+#define ST_T0(v)
+#define ST_LAP(i, v)
+#define ST_CNT(i, n)
 #endif
 
 void kernel_main() {
@@ -275,7 +307,12 @@ void kernel_main() {
     MATH((bwd_bodies_init<0>()));
     if (n_tiles == 0) return;
     cb_wait_front(CB_RAMP, 2);
+#if defined(BWD_STATS) && defined(TRISC_MATH)
+    for (uint32_t k = 0; k < ST_N; k++) g_st[k] = 0;
+#endif
+    ST_T0(st_k0);
     for (uint32_t t = 0; t < n_tiles; t++) {
+        ST_T0(st_c);
         cb_wait_front(CB_HDR, 1);
         const uint32_t ha = get_tile_address(CB_HDR, 0);  // all threads (mailbox sync)
         asm volatile("fence" ::: "memory");
@@ -291,20 +328,29 @@ void kernel_main() {
         copy_tile(CB_RAMP, 0, 5);
         copy_tile(CB_RAMP, 1, 6);
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        ST_LAP(ST_TILE, st_c);
+        ST_CNT(ST_NT, 1);
 
         for (uint32_t p = 0; p < cnt; p++) {
             cb_wait_front(CB_REC, 1);
             const uint32_t ra = get_tile_address(CB_REC, 0);  // all threads (mailbox sync)
 #ifdef TRISC_MATH
+            ST_LAP(ST_REC, st_c);
             uint32_t s[9];
             const uint32_t mask = bwd_read_record(ra, s);
-            bwd_pair(s, mask);
+            bwd_pair_setup(s);
+            ST_LAP(ST_SETUP, st_c);
+            ST_CNT(ST_NP, 1);
+            ST_CNT(ST_NV, bwd_popcount(mask));
+            bwd_bodies(mask);
+            ST_LAP(ST_BODY, st_c);
             sfpi::dst_reg[DR_U] = ckernel::sfpu::Converter::as_float(kColX[p & 7u]);
             if ((p & 8u) == 0u) {
                 bwd_finish<0>();
             } else {
                 bwd_finish<1>();
             }
+            ST_LAP(ST_FIN, st_c);
 #else
             (void)ra;
 #endif
@@ -325,7 +371,21 @@ void kernel_main() {
                 tile_regs_acquire();
                 MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             }
+            ST_LAP(ST_PACK, st_c);
         }
     }
     cb_pop_front(CB_RAMP, 2);
+#ifdef BWD_STATS
+    ST_LAP(ST_TOT, st_k0);
+    tile_regs_acquire();
+    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+    MATH((bwd_emit_stats()));
+    MATH((_llk_math_eltwise_unary_sfpu_done_()));
+    tile_regs_commit();
+    tile_regs_wait();
+    cb_reserve_back(CB_OUT, 1);
+    pack_tile(ACC_TILE, CB_OUT);
+    cb_push_back(CB_OUT, 1);
+    tile_regs_release();
+#endif
 }
