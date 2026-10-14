@@ -166,7 +166,7 @@ refresh() {
 }
 refresh
 MACH=$(jump "ird list-machines --noheader" | awk 'NF >= 10 && $4 == "blackhole" {
-  t = $8; f = $8; sub(/\(.*/, "", t); sub(/^[^(]*\(/, "", f); sub(/\|.*/, "", f); print $1, $2, $5, t, f + 0, $10 }')
+  t = $8; f = $8; sub(/\(.*/, "", t); sub(/^[^(]*\(/, "", f); sub(/\|.*/, "", f); print $1, $2, $5, t, f + 0, $10, $3 }')
 [ -n "$MACH" ] || { STATUS=ird_unavailable; NOTE="ird list-machines returned nothing"; emit 13; }
 log "our reservations: $(tr '\n' ';' <<<"$LIST")"
 row_m() { awk -v m="$1" '$3 == m' <<<"$LIST" | head -1; }
@@ -176,7 +176,7 @@ type_of() { awk -v m="$1" '$1 == m {print $4}' <<<"$MACH"; }
 free_of() {
   local ty=$1 ex m c s t f ids; shift
   ex=" $* $(awk '{printf "%s ", $3}' <<<"$LIST")"   # nor a machine we already hold
-  while read -r m c s t f ids; do
+  while read -r m c s t f ids _; do
     # shellcheck disable=SC2053  # $ty is a glob on purpose
     [[ $t == $ty ]] || continue
     [[ $ex == *" $m "* ]] && continue
@@ -233,8 +233,14 @@ cands() {
 
 # Reserve machine $1 on cluster $2. Sets ROW/HOST on success; returns 4 when queued.
 reserve() {
-  local m=$1 c=$2 out job before
-  local cmd="ird reserve --cluster $c --ssh-port $PORT --timeout $TIMEOUT --no-shell blackhole --machine $m"
+  local m=$1 c=$2 out job before team model sub=
+  # The machine's partition names its team (bgd_interactive -> --team bgd). Without it ird
+  # reserve crashes in get_nodes_with_gres on hosts outside sw_interactive (bh-49, #687).
+  team=$(awk -v m="$m" '$1 == m {sub(/_interactive$/, "", $7); print $7}' <<<"$MACH")
+  model=$(type_of "$m")
+  [ -n "$team" ] && [ "$team" != sw ] && sub="--team $team "
+  case $model in p100|p150) model="--model $model " ;; *) model= ;; esac
+  local cmd="ird reserve --cluster $c ${sub}--ssh-port $PORT --timeout $TIMEOUT --no-shell blackhole ${model}--machine $m"
   if [ "$DRY" = 1 ]; then act "${JUMP_SSH[@]}" "$JUMP" "$cmd"; HOST=$m; CLUSTER=$c; JOB=planned; ROW=; LEFT_S=$(secs_of "$TIMEOUT"); return 0; fi
   log "reserving $m ($c)"
   before=" $(awk '{printf "%s ", $2}' <<<"$SLURM")"
