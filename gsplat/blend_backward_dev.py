@@ -92,10 +92,64 @@ def tile_rects_vec(means2d, valid, conic, H: int, W: int, tile: int = TILE) -> n
     return out
 
 
-def pair_lists(rects: np.ndarray, order, tiles_x: int) -> dict:
+PAIR_CULL_ENV = "GSPLAT_TT_TRAIN_PAIR_CULL"   # #803: =1 drops dead training pairs (default off)
+CULL_MARGIN_ABS, CULL_MARGIN_REL = 1e-4, 4e-6  # power margin: >10x the fp32 evaluation error
+
+
+def pair_cull_on(cull=None) -> bool:
+    """cull None: the GSPLAT_TT_TRAIN_PAIR_CULL env flag (=1 on, default off)."""
+    return os.environ.get(PAIR_CULL_ENV, "0") == "1" if cull is None else bool(cull)
+
+
+def _edge_min(A, B, C, d, lo, hi):
+    """min over t in [lo, hi] of A d^2 + 2 B d t + C t^2 (C > 0)."""
+    t = np.clip(-B * d / C, lo, hi)
+    return A * d * d + 2.0 * B * d * t + C * t * t
+
+
+def pair_alive(means2d, conic, opacity, cfg: BlendCfg, H: int, W: int, tile: int = TILE):
+    """#803: live(g, tid) -> bool per pair: False only when the pair's largest alpha over the
+    pixel centres of its tile is below alpha_min, so the blend (forward and backward) skips it at
+    every pixel and it contributes nothing. The largest alpha is min(op, alpha_max) times
+    exp(-q/2) at the exact minimum q of the conic over the tile's pixel-centre rectangle (zero
+    when the mean is inside, else the smallest of the four edge minima; as
+    docs/training-plan/t799/pair_model.py). A pair is dropped only when it misses alpha_min by
+    more than a power margin of CULL_MARGIN_ABS + CULL_MARGIN_REL * S, S the magnitude sum of
+    the tile-centred fp32 power polynomial (centred_power_coeffs), so no fp32 evaluation of the
+    blend can find it live. Conics that are not positive definite are always kept."""
+    m2 = np.asarray(means2d, f32).astype(np.float64)
+    con = np.asarray(conic, f32).astype(np.float64)
+    op = np.minimum(np.asarray(opacity, f32).astype(np.float64), float(f32(cfg.alpha_max)))
+    tiles_x = (W + tile - 1) // tile
+    amin = float(f32(cfg.alpha_min))
+
+    def live(g, tid):
+        A, B, C = con[g, 0], con[g, 1], con[g, 2]
+        ox, oy = (tid % tiles_x) * tile, (tid // tiles_x) * tile
+        dx, dy = ox - m2[g, 0], oy - m2[g, 1]
+        lx, hx = dx + 0.5, dx + np.minimum(tile, W - ox) - 0.5
+        ly, hy = dy + 0.5, dy + np.minimum(tile, H - oy) - 0.5
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            q = np.minimum.reduce([_edge_min(A, B, C, lx, ly, hy), _edge_min(A, B, C, hx, ly, hy),
+                                   _edge_min(C, B, A, ly, lx, hx), _edge_min(C, B, A, hy, lx, hx)])
+            q = np.where((lx <= 0) & (hx >= 0) & (ly <= 0) & (hy >= 0), 0.0, q)
+            U0, V0 = dx + 16.0, dy + 16.0   # tile centre minus the mean, as centred_power_coeffs
+            P0 = 0.5 * (A * U0 * U0 + C * V0 * V0) + B * U0 * V0
+            S = (np.abs(P0) + 16.0 * (np.abs(A * U0 + B * V0) + np.abs(B * U0 + C * V0))
+                 + 256.0 * (0.5 * np.abs(A) + np.abs(B) + 0.5 * np.abs(C)))
+            pmax = -0.5 * q + CULL_MARGIN_ABS + CULL_MARGIN_REL * S   # power bound at any pixel
+            dead = op[g] * np.exp(np.minimum(pmax, 0.0)) < amin
+        pd = (A > 0) & (C > 0) & (A * C - B * B > 0)
+        return ~(dead & pd & np.isfinite(S))
+    return live
+
+
+def pair_lists(rects: np.ndarray, order, tiles_x: int, live=None) -> dict:
     """All (tile, Gaussian) pairs of the tile rectangles, sorted by tile id and then by the
     Gaussian's position in `order` (Gaussians missing from `order` get counts but no pairs).
-    Returns per-pair g, j (index in g's rectangle), tile id, the slot base P and counts."""
+    Returns per-pair g, j (index in g's rectangle), tile id, the slot base P and counts.
+    live (#803, pair_alive): drops the pairs it marks False; counts, P and j then number only
+    the kept pairs (in rectangle order), so the slot of every kept pair is P[g] + j as before."""
     x0, x1, y0, y1 = (rects[:, i] for i in range(4))
     w = x1 - x0 + 1
     counts = np.where(x1 >= x0, w * (y1 - y0 + 1), 0).astype(np.int64)
@@ -106,10 +160,19 @@ def pair_lists(rects: np.ndarray, order, tiles_x: int) -> dict:
     g = np.repeat(np.arange(rects.shape[0]), counts)
     j = np.arange(g.size, dtype=np.int64) - np.repeat(P, counts)
     tid = (y0[g] + j // w[g]) * tiles_x + x0[g] + j % w[g]
+    if live is not None:
+        lv = np.asarray(live(g, tid), bool)
+        g, tid = g[lv], tid[lv]
+        counts = np.bincount(g, minlength=rects.shape[0]).astype(np.int64)
+        P = np.concatenate([[0], np.cumsum(counts)[:-1]]).astype(np.int64)
+        j = np.arange(g.size, dtype=np.int64) - P[g]   # g ascending: rank among g's kept pairs
     keep = rank[g] >= 0
     g, j, tid = g[keep], j[keep], tid[keep]
     s = np.lexsort((rank[g], tid))
-    return {"g": g[s], "j": j[s], "tid": tid[s], "P": P, "counts": counts}
+    out = {"g": g[s], "j": j[s], "tid": tid[s], "P": P, "counts": counts}
+    if live is not None:
+        out["kept"] = lv   # per slot of the uncut numbering: kept slot k is the k-th True
+    return out
 
 
 def tile_planes(img, H: int, W: int, tiles_x: int, tiles_y: int) -> np.ndarray:
@@ -121,9 +184,10 @@ def tile_planes(img, H: int, W: int, tiles_x: int, tiles_y: int) -> np.ndarray:
 
 
 def prep(means2d, conic, opacity, colors, order, valid, image, dL_dimage, cfg: BlendCfg,
-         chunk: int = 8192) -> dict:
+         chunk: int = 8192, cull=None) -> dict:
     """Device input files (module docstring); numpy-vectorised over pairs (#707), equal to
-    prep_loop()."""
+    prep_loop() with the pair cull off. cull (#803): drop dead pairs (pair_alive); None reads
+    GSPLAT_TT_TRAIN_PAIR_CULL."""
     H, W = image.shape[:2]
     m2 = np.asarray(means2d, f32)
     con = np.asarray(conic, f32)
@@ -131,7 +195,8 @@ def prep(means2d, conic, opacity, colors, order, valid, image, dL_dimage, cfg: B
     col = np.asarray(colors, f32)
     tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
     rects = tile_rects_vec(means2d, valid, conic, H, W, TILE)
-    pl = pair_lists(rects, order, tiles_x)
+    live = pair_alive(m2, con, op, cfg, H, W) if pair_cull_on(cull) else None
+    pl = pair_lists(rects, order, tiles_x, live)
     g, tid = pl["g"], pl["tid"]
     utid, start, cnt = np.unique(tid, return_index=True, return_counts=True)
     img = np.asarray(image, f32)
@@ -386,11 +451,11 @@ def ref_slots(d, cfg) -> np.ndarray:
                           d["valid"], d["image"], d["dL_dimage"], cfg)["slots"]
 
 
-def _sweep_tiles(m2, con, rects, order, H, W):
+def _sweep_tiles(m2, con, rects, order, H, W, live=None):
     """Shared setup of the rank-k sweeps: pairs of every tile, tiles sorted by pair count
     (descending) so the tiles still active at pair rank k are a prefix."""
     tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
-    pl = pair_lists(rects, order, tiles_x)
+    pl = pair_lists(rects, order, tiles_x, live)
     utid, start, cnt = np.unique(pl["tid"], return_index=True, return_counts=True)
     s = np.argsort(-cnt, kind="stable")
     utid, start, cnt = utid[s], start[s], cnt[s]
@@ -401,13 +466,15 @@ def _sweep_tiles(m2, con, rects, order, H, W):
     return pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y
 
 
-def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: BlendCfg):
+def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: BlendCfg, cull=None):
     """fp32 front-to-back forward with the device rules (tile rectangles, tile-local alpha in
     blend_backward_ref's form, clamp, alpha_min skip, T_min stop), vectorised across tiles:
-    step k blends pair k of every tile that has one. Returns (image (H, W, 3), stats)."""
+    step k blends pair k of every tile that has one. Returns (image (H, W, 3), stats).
+    cull: as prep (#803)."""
     m2, con, op, col = (np.asarray(x, f32) for x in (means2d, conic, opacity, colors))
     rects = tile_rects_vec(means2d, valid, conic, H, W, TILE)
-    pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, order, H, W)
+    live = pair_alive(m2, con, op, cfg, H, W) if pair_cull_on(cull) else None
+    pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, order, H, W, live)
     nt = utid.size
     done = ~tile_planes(np.ones((H, W), bool), H, W, tiles_x, tiles_y)[utid]
     T = np.ones((nt, TILE, TILE), f32)
@@ -441,7 +508,7 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
 TIE_RTOL = 4e-6   # ~32 fp32 ulp: a forward decision this close to its threshold may go either way
 
 
-def ref_slots_fast(d, cfg, dt=f32, ties=False):
+def ref_slots_fast(d, cfg, dt=f32, ties=False, cull=None):
     """blend_backward_ref.blend_backward's slots (same fp32 expressions, microblock and
     lane sum orders), vectorised across tiles for hero-size dumps (tested against it).
     dt=np.float64 (#728): the same math in float64 on the fp32 inputs (plain power polynomial
@@ -450,12 +517,14 @@ def ref_slots_fast(d, cfg, dt=f32, ties=False):
     pixels, made a forward decision (alpha >= alpha_min, clamp at alpha_max, T (1 - alpha) <
     t_min) within TIE_RTOL of its threshold. Those decisions are discontinuities of the forward:
     any fp32 evaluation order may take the other side (the hero's one failing slot is a T_min
-    stop 9.7e-8 above t_min), so the slot has two valid values and the check skips it."""
+    stop 9.7e-8 above t_min), so the slot has two valid values and the check skips it.
+    cull (#803): the slot numbering of prep with the same cull (dead pairs dropped)."""
     img, gimg = np.asarray(d["image"], dt), np.asarray(d["dL_dimage"], dt)
     H, W = img.shape[:2]
     m2, con, op, col = (np.asarray(d[k], dt) for k in ("means2d", "conic", "opacity", "colors"))
     rects = tile_rects_vec(d["means2d"], d["valid"], d["conic"], H, W, TILE)
-    pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, d["order"], H, W)
+    live = pair_alive(d["means2d"], d["conic"], d["opacity"], cfg, H, W) if pair_cull_on(cull) else None
+    pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, d["order"], H, W, live)
     nt = utid.size
     slots = np.zeros((int(pl["counts"].sum()), 9), dt)
     alive = tile_planes(np.ones((H, W), bool), H, W, tiles_x, tiles_y)[utid]
@@ -559,6 +628,8 @@ def main(argv=None) -> int:
         if args.emulate:
             print(json.dumps({"emulate_vs_ref": compare_slots(emulate(p), ref_slots(d, cfg))}))
         return 0
+    if pair_cull_on() and not args.fast:
+        raise SystemExit(f"{PAIR_CULL_ENV}=1 numbers only the kept pairs: check it with --fast")
     dev = np.fromfile(args.slots, f32).reshape(-1, 16)[:, :9]
     rep = compare_slots(dev, *ref_slots_fast(d, cfg, ties=True)) if args.fast else compare_slots(dev, ref_slots(d, cfg))
     rep["pass"] = bool(rep["rel_err"] <= args.bar)
