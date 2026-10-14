@@ -283,3 +283,30 @@ Next toward the 1-2 ms/view training target:
    share loaded rows across the 5 maps of one channel, fewer Dst round trips per tap.
 3. Fuse the loss into the end of the device rasterizer backward so the rendered image never
    goes through DRAM.
+
+## t742: caching the target's filtered maps — already in t736 (no change)
+
+The t736 section above says the fused arm filters 24 planes per step and refilters mu_y and
+E[y^2] of the target. That is wrong; the t736 code already caches them:
+
+- `loss_bench.cpp` `run_ssim` reads `consts.f32` (6 planes: mu_y and vy = E[y^2] - mu_y^2 per
+  channel), written once per GT image by `opt/t736/ssim_check.py prep` (`consts()`, the bit model of
+  the device filter), and uploads them to DRAM once, outside the timed loop.
+- `ssim_fwd_compute.cpp` `h_sfpu()` forms only x*y and x^2 and filters 3 maps per channel
+  (G*x, G*x^2, G*(x y)); `v_pass()` filters the same 3. mu_y and vy come from DRAM via CB 2
+  (`reader_ssim.cpp`, const planes ch and 3 + ch). Forward: 9 planes.
+- `ssim_bwd_compute.cpp` filters the 9 d-map planes. Total: **18 planes per step**, the same
+  count as the sfilt syn6 arm. `gsplat/train_loss.py` documents the same design.
+
+So the 1.310 vs 0.954 ms/view gap (0.356 ms) is not 6 extra filtered planes. It is overhead the
+fused programs carry beyond filtering. From the t736 numbers (measured, bh-49): forward program
+0.666 ms and backward 1.310 - 0.666 = 0.644 ms, each for 9 planes, vs 9 x 0.053 = 0.477 ms of
+filter-only work per half. About 0.19 ms (forward) and 0.17 ms (backward) per view are spent on
+other work: the extra transposes and product passes in the H step, the 4 fp32 reciprocals per
+pixel in `ssim_pt`, the pointwise reads (consts, wm, x, y), the 9 d-map planes written to and
+read back from DRAM, and the second program launch. Which of these dominates needs a profile.
+
+The one-off target pre-filter is 6 planes per GT image. On the device it would cost about
+6 x 0.053 = 0.32 ms per image (derived from the measured sfilt per-plane cost, not measured),
+once per training image, so it does not affect the per-step time. No device run was made for
+t742: the change it asked for is already in the measured t736 arm.
