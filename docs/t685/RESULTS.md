@@ -101,6 +101,55 @@ count from the forward has to be measured first. If it is several million, T1 at
 per-pair cost is far above the plan's 8.7-10.2 ms. The cost per pair then has to fall by
 several times (see the T1 v3 levers below).
 
+## Hero (#707, 2026-10-14): bicycle _DSC8679, 1237x822, p150 (bh-49 board 0, p150a)
+
+Dump: `docs/t685/hero.py` (scenes/bicycle.ply, camera _DSC8679 from benchmarks/cameras_test.json,
+fp32 forward with the device rules, L1 dL/dimage against images_4/_DSC8679.JPG); metadata in
+`hero_meta.json`. **4,478,225 pairs**, 1,014 tiles, busiest tile 25,069 pairs, 1.81M visible
+Gaussians. Commit 65326d1e, v2 kernels with `BWD_STATS=1`.
+
+**Oracle: FAIL on the hero** (`results/check-hero-v2-p150-FAIL.json`): max rel err 49.4 (bar
+1e-2); dr/dg/db about 1.0, geometry terms 35-113. On the same p150 build sh0 (1.4e-4) and sh3
+(1.0e-5) pass (`results/check-sh{0,3}-v2-p150.json`). So the v2 kernel, or the vectorised prep,
+breaks on something only the hero has (long tiles, many pairs per core); the timing below is
+the cost of the work but not yet of a correct result. Breakdown by tile pair count and pair rank:
+`hero_err.py` -> `results/err-hero-v2-p150.json`.
+
+Timing (`results/timing-hero-v2-p150.json`, `runs-hero-v2-p150.json`): 6 runs, first 109.0 ms,
+warm runs 86.33 / 86.67 / 86.32 / 86.32 / 86.32 ms, **median of 5 warm 86.32 ms**. Host reduce 0.
+
+Per-stage split (MATH wall clock at 1.35 GHz, `results/stats-hero-v2-p150.json`, 110 cores):
+
+| stage | busiest core ms | mean core ms |
+|---|---|---|
+| total | 86.28 | 51.31 |
+| tile setup | 0.04 | 0.02 |
+| record wait | 0.67 | 0.63 |
+| pair setup | 4.35 | 4.23 |
+| bodies | 77.65 | 42.98 |
+| finish | 3.50 | 3.38 |
+| pack sync | 0.08 | 0.07 |
+
+- The bodies are 90% of the busiest core; record wait and pack sync are under 1%, so the
+  reader/writer and DRAM are not the limit.
+- Busiest core (107): 28 tiles, 41,398 pairs, 492,267 live microblock bodies: 2.08 us per pair
+  total, 1.88 us per pair in the bodies, 213 cycles per body. (The core with the most records,
+  52,187, is not the slowest: bodies per pair vary.)
+- Load balance: busiest 86.3 ms vs mean 51.3 ms (1.68x). Balancing by body count instead of
+  pair count alone has an ideal bound of about 51 ms (the mean; not measured).
+- Against v1/v2 on the small dumps (1.55 us/pair on the p100), the hero per-pair cost is
+  similar, so the time scales with pairs as sized.
+- 86 ms per view is 40-80x off the 1-2 ms/view training target: v3 needs both fewer bodies per
+  pair (skip dead microblocks) and much cheaper bodies, plus the balance fix.
+
+Screenshot (`opt/metal-screenshots/t707-hero/`, same lock, commit 65326d1e, defaults): device
+hero.png PSNR 42.85 dB against benchmarks/reference_v2/hero.png; looked at hero.png and the
+x10 diff: no tile seams or blocky artifacts, the diff is thin edges (spokes, leaves) only.
+
+Note: the hero forward's PSNR against the JPG is 13.1 dB (`hero_meta.json`), far below a
+trained model's ~25 dB on this view. The camera or colour path of the dump may not match the
+dataset image; the oracle check does not depend on it, but a training step would.
+
 ## Footprint (v2, analytic from the code)
 
 L1 per core (CBs): HDR 2x64 B, PLANE 5x4 KB, RAMP 2x4 KB, REC 4x64 B, OUT 2x4 KB, writer
@@ -151,10 +200,7 @@ The training quality bar is published 3DGS/gsplat or LiteGS bicycle test PSNR/SS
 
 ## Not done (moved to the follow-up)
 
-- Hero dump: a vectorised prep and a bicycle hero forward state (1237x822, L1 dL/dimage against
-  _DSC8679), then v2 timing on it with a per-stage split (in-kernel counters).
-- p150 timing: #687 (the measurement box moving to a p150, bh-49) has not landed yet, so the
-  p100 numbers stay provisional.
+- Hero oracle failure (#707): find and fix the cause, then re-time (see the hero section).
 - Forward training flag (fp32 image, accurate exp, slab kept alive), with the flag-off b2b
   raw_md5 1d372b94 check and the on/off A/B (opt/ab_jit_check.py on both arms, plus a device
   hero.png, a diff and PSNR against benchmarks/reference_v2/hero.png).
