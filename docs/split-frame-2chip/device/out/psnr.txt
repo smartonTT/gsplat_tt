@@ -1,0 +1,4 @@
+PSNR hero-1chip missing
+PSNR hero-1chip-b2b missing
+PSNR hero-chip1 psnr_vs_ref=42.85 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-split missing

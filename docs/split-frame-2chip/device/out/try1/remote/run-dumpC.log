@@ -1,0 +1,87 @@
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [eth] GSPLAT_TT_DISPATCH=worker: worker dispatch (override)
+[afr0] [run] AFR worker 0/2: sweep positions [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29], split window (0, 16, 0, 32)
+[afr0] [run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=32
+[afr0] [run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[afr0] 2026-10-14 01:17:50.530 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-14 01:17:50.530 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-14 01:17:50.533 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-14 01:17:50.534 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+[afr0] 2026-10-14 01:17:50.534 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-14 01:17:50.536 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+[afr0] 2026-10-14 01:17:50.536 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+[afr0] 2026-10-14 01:17:50.536 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-14 01:17:50.536 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-14 01:17:50.540 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-14 01:17:50.540 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+[afr0] 2026-10-14 01:17:50.541 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-14 01:17:50.541 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0x0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+[afr0] 2026-10-14 01:17:50.541 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+[afr0] 2026-10-14 01:17:50.541 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+[afr0] 2026-10-14 01:17:50.575 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+[afr0] 2026-10-14 01:17:50.575 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+[afr0] 2026-10-14 01:17:50.575 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+[afr0] 2026-10-14 01:17:50.575 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+[afr0] 2026-10-14 01:17:50.576 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+[afr0] 2026-10-14 01:17:50.576 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+[afr0] 2026-10-14 01:17:50.579 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+[afr0] 2026-10-14 01:17:50.741 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+[afr0] 2026-10-14 01:17:50.741 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+[afr0] 2026-10-14 01:17:50.742 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+[afr0] 2026-10-14 01:17:50.742 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+[afr0] 2026-10-14 01:17:50.744 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+[afr0] 2026-10-14 01:17:50.745 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+[afr0] 2026-10-14 01:17:50.745 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | 
+[afr0] === Logical Mesh-Level Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | 
+[afr0] === Logical Mesh 0 Internal Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | 
+[afr0] === Physical Mesh-Level Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | 
+[afr0] === Physical Mesh 0 Internal Graph Adjacency Map ===
+[afr0] Total nodes: 1
+[afr0] Degree histogram: {0:1}
+[afr0]  (topology_solver.tpp:94)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+[afr0] 2026-10-14 01:17:50.746 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+[afr0] 2026-10-14 01:17:50.751 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/nosync/t582/tt-metal/tt_metal/pre-compiled/9376773986615204283/ (build_env_manager.cpp:257)
+[afr0] 2026-10-14 01:17:50.845 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_5572_3185888906_0' (shm_resource_tracker.cpp:265)
+[afr0] 2026-10-14 01:17:50.845 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_5572' (shm_resource_tracker.cpp:275)
+[afr0] 2026-10-14 01:17:50.845 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_6194883463560686977_memory' (shm_resource_tracker.cpp:282)
+[afr0] 2026-10-14 01:17:51.427 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=0.799996 GHz, device_time_at_sync=30316568889112 cycles (realtime_profiler_manager.cpp:1075)
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10
+[afr0] [run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 130)
+[afr0] [gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[afr0] [JIT_WARMUP] ideal-path contexts compiled in 2.7 ms
+[afr0] [gsplat_tt::pfwc] GSPLAT_TT_PFWC_FUSE=1: 130 cores over the segment table; running the PFWC_VIS program
+[afr0] Traceback (most recent call last):
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 1039, in main
+[afr0]     _main()
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 788, in _main
+[afr0]     warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 303, in render_clean_view_timed
+[afr0]     res = pipeline.render(gauss, extr, K, H, W)
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/gsplat/pipeline.py", line 151, in render
+[afr0]     image, stats = self.backend.render_fused(
+[afr0]   File "/localdev/smarton/nosync/t582/gstt2/render/run.py", line 170, in render_fused
+[afr0]     image, stats = self._clean.render_view(
+[afr0] RuntimeError: [gsplat_tt::pfwc] GSPLAT_TT_SPLIT=1 needs the fused pfwc (GSPLAT_TT_PFWC_FUSE=1), which did not run
+[afr] worker 0 ended while waiting for 'ready'
+[run] AFR: no pass completed (rc 1, workers [1, None])

@@ -17,6 +17,9 @@ R=${R:-/localdev/smarton/nosync/t582}   # outside the user's mutagen sync (docs/
 export TT_METAL_HOME=$R/tt-metal TT_METAL_RUNTIME_ROOT=$R/tt-metal
 export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P150 TTW_DEVRUN=1 PYTHONDONTWRITEBYTECODE=1
 export GSPLAT_TT_DISPATCH=worker
+# Card 0 here opens as 13x10 and card 1 as 11x10 (first run: the fused pfwc did not run on 13x10).
+# Cap every arm at 11x10 so both chips use the same grid as the p100 golden (1d372b94 at 229).
+export GSPLAT_TT_GRID_X=${GSPLAT_TT_GRID_X:-11}
 unset GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_STAGES \
   GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_MAT_EARLY_CULL GSPLAT_TT_MATCULL_PROF \
   GSPLAT_TT_B4A_FOLD GSPLAT_TT_STACK_CHECK GSPLAT_TT_AFR GSPLAT_TT_AFR_DEVICES GSPLAT_TT_AFR_VISIBLE \
