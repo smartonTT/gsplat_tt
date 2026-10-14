@@ -66,6 +66,8 @@ do_start() {
   # the frames in flight (default one per chip). Unset: the single-chip viewer.
   # VIEWER_VISIBLE_DEVICES=D sets TT_VISIBLE_DEVICES=D for the single-chip viewer: on a host whose
   # boards carry different firmware bundles (bh-50: 18.12.1 and 19.7.0) opening them all fails (#615).
+  # VIEWER_GRID_X=12 caps the grid (GSPLAT_TT_GRID_X): unharvested p150s (bh-50) give 14x10 under ETH
+  # dispatch, over the fused pfwc's segment table; bh-30's harvested p150s give 12x10.
   # The B4a fold is on in the viewer unless VIEWER_B4A_FOLD=0 (empty or unset = 1). It used to cost
   # page FPS (#577/#587): under the fold the device idles through the render thread's host work
   # before sort(N). #597 moved that work (pose matrices) into the camera-update callback; bh-30
@@ -77,6 +79,7 @@ do_start() {
       "${VIEWER_AFR_DEVICES:+GSPLAT_VIEWER_AFR_DEVICES=$VIEWER_AFR_DEVICES}" \
       "${VIEWER_AFR_INFLIGHT:+GSPLAT_VIEWER_AFR_INFLIGHT=$VIEWER_AFR_INFLIGHT}" \
       "${VIEWER_VISIBLE_DEVICES:+TT_VISIBLE_DEVICES=$VIEWER_VISIBLE_DEVICES}" \
+      "${VIEWER_GRID_X:+GSPLAT_TT_GRID_X=$VIEWER_GRID_X}" \
       "GSPLAT_TT_B4A_FOLD=${VIEWER_B4A_FOLD:-1} bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)

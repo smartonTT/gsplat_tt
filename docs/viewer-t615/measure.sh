@@ -3,10 +3,12 @@
 # Exit trap: close tunnel, stop viewer, release IRD job $JOB, confirm it is gone.
 # Run 2 (job 133865): bh-50's boards are /dev/tenstorrent/0 (fw 18.12.1) and /7 (fw 19.7.0);
 # one process opening both fails the firmware-bundle check, so 1 chip = TT_VISIBLE_DEVICES=0, AFR = 0,7.
+# The boards are unharvested (14x10 under ETH dispatch): both arms cap the grid at 12x10 as on bh-30.
+export VIEWER_GRID_X=12
 set -eo pipefail
 cd "$(dirname "$0")/../.."
 . docs/viewer-t615/env.sh
-O=tmp/t615/out; mkdir -p "$O"; JOB=${JOB:-133865}; LP=8095
+O=tmp/t615/out; mkdir -p "$O"; JOB=${JOB:?IRD job id}; LP=8095
 S=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 PY=/Users/smarton/dev/gsplat_tt/venv-macos/bin/python
 ts() { TZ=America/Los_Angeles date '+%F %T %Z'; }
