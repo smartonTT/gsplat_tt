@@ -79,7 +79,12 @@ def check_filt(out):
             tf = os.path.join(o, "taps.txt")
             if os.path.exists(tf):  # LOSS_RDIAG=t<preset> (#714): the device's own taps, fp64 reference
                 taps = np.loadtxt(tf, dtype=np.float64)
-                dref = sep_filter(x.astype(np.float64), taps)
+                xin = x.astype(np.float64)
+                qf = os.path.join(o, "quant.txt")
+                if os.path.exists(qf):  # the bench quantised its input to multiples of 2^-n
+                    n = int(open(qf).read())
+                    xin = np.floor(xin * 2.0 ** n) / 2.0 ** n
+                dref = sep_filter(xin, taps)
                 rel = float(np.linalg.norm(g - dref) / np.linalg.norm(dref))
                 nz = np.abs(dref) > 0
                 bias = float(np.mean((g - dref)[nz] / dref[nz]))

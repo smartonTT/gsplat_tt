@@ -111,7 +111,8 @@ inline float trunc_tf32(float v) {
 std::vector<double> TAPS_USED;
 std::vector<float> band_consts() {
     const char* rd = std::getenv("LOSS_RDIAG");
-    const std::string preset = (rd && rd[0] == 't') ? std::string(rd + 1) : std::string();
+    std::string preset = (rd && rd[0] == 't') ? std::string(rd + 1) : std::string();
+    preset = preset.substr(0, preset.find("_q"));
     if (!preset.empty()) rd = nullptr;
     const double diag = rd ? std::atof(rd) : 0.0;
     double g[11], sum = 0.0;
@@ -180,7 +181,17 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
     const uint32_t ncores = grid.x * grid.y, T = L.tiles(), S = 3 * L.nw, NT = S * L.nh;
     auto bx = make_dram(dev, uint64_t(T) * TILE_BYTES), bo = make_dram(dev, uint64_t(T) * TILE_BYTES);
     auto br = make_dram(dev, 12ull * TILE_BYTES);
-    distributed::EnqueueWriteMeshBuffer(cq, bx, x, true);
+    // LOSS_RDIAG=t<preset>_q<n> (#714): input quantised to multiples of 2^-n (fixed point), to test
+    // whether the FPU sums fixed-point products exactly. loss_check.py reads quant.txt.
+    const char* rq = std::getenv("LOSS_RDIAG");
+    const char* qp = rq ? std::strstr(rq, "_q") : nullptr;
+    std::vector<float> xq(x);
+    if (qp) {
+        const int qn = std::atoi(qp + 2);
+        for (auto& v : xq) v = float(std::floor(double(v) * std::ldexp(1.0, qn)) * std::ldexp(1.0, -qn));
+        std::ofstream(out + "/quant.txt") << qn << "\n";
+    }
+    distributed::EnqueueWriteMeshBuffer(cq, bx, xq, true);
     Program prog = CreateProgram();
     const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
     add_cb(prog, cores, 0, 6);   // X (u2d)
