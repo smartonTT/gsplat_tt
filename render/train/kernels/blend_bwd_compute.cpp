@@ -48,8 +48,10 @@ template <uint32_t V>
 __attribute__((noinline)) void bwd_body() {
     using namespace sfpi;
     {
-        vFloat u = dst_reg[DR_X + V] - dst_reg[DR_S + S_MX];
-        vFloat v = dst_reg[DR_Y + V] - dst_reg[DR_S + S_MY];
+        vFloat u = dst_reg[DR_X + V];
+        u = u - dst_reg[DR_S + S_MX];
+        vFloat v = dst_reg[DR_Y + V];
+        v = v - dst_reg[DR_S + S_MY];
         dst_reg[DR_U] = u;
         dst_reg[DR_V] = v;
         vFloat pw = dst_reg[DR_S + S_AF] * (u * u) + dst_reg[DR_S + S_BF] * (u * v);
