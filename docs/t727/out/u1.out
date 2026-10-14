@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=5df7e221 bin=c9932cf0f5e462f5 t727 5df7e221 train opc gather profile + A/B (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t727-u1  timeout=300s  worry=600s  ts=2026-10-14T03:49:59-0700
 cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t727-remote.sh 6 dump dumpsdb
