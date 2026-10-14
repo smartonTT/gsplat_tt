@@ -752,7 +752,7 @@ template <uint32_t IX>
 }
 // Pixel floor, R/G/B += alpha T colour, T *= 1 - alpha. AT/AR/AG/AB: addresses
 // of T/R/G/B (absolute in F, relative to RWC D in the A2 replay).
-template <uint32_t AT, uint32_t AR, uint32_t AG, uint32_t AB>
+template <uint32_t AT, uint32_t AR, uint32_t AG, uint32_t AB, uint32_t LAST_AM = 7u>
 [[gnu::always_inline]] inline void bs_tail() {
     BS_MAD(1, 7, 11, 0, 0);
     BS_LD(2, AT, 0, 7);
@@ -771,7 +771,7 @@ template <uint32_t AT, uint32_t AR, uint32_t AG, uint32_t AB>
     BS_ST(7, AG, 0, 7);
     BS_MAD(6, 1, 5, 6, 0);
     BS_ST(0, AT, 0, 7);
-    BS_ST(6, AB, 0, 7);
+    BS_ST(6, AB, 0, LAST_AM);
 }
 template <uint32_t IX>
 [[gnu::always_inline]] inline void sched_single() {
@@ -896,6 +896,65 @@ template <uint32_t IXA, uint32_t IXB>
     BS_ST(5, BS_V(DR_B, IXB), 0, 7);
 }
 #if BLEND_SCHED == 2
+#ifndef BLEND_DWALK
+#define BLEND_DWALK 0
+#endif
+#if BLEND_DWALK
+#if !BLEND_EXP1 || !BLEND_SWAP_FILL
+#error "BLEND_DWALK walks D in the EXP1 + SWAP_FILL middle"
+#endif
+// Task #664 (host env GSPLAT_TT_BLEND_DWALK): the 0-5 INCRWC steps before the
+// tail and the tail's SETRWC D=0 cost ~3.7 issue slots per Gaussian x microblock.
+// Instead the 7 middle loads move D to 2 IX with ADDR_MOD post-increments
+// (IX = 16 a + 4 b + c: a loads +32, b loads +8, c loads +2; each load's
+// address is pre-reduced by the D it sees), and the tail's last store clears D.
+// Same ops, same order, same LREGs: bit-identical.
+constexpr uint32_t BS_AM_CLR = 1u, BS_AM_2 = 4u, BS_AM_8 = 5u, BS_AM_32 = 6u;
+inline void blend_dwalk_addrmods() {
+    addr_mod_t{.srca = {.incr = 0}, .srcb = {.incr = 0}, .dest = {.incr = 0, .clr = 1}}.set(BS_AM_CLR);
+    addr_mod_t{.srca = {.incr = 0}, .srcb = {.incr = 0}, .dest = {.incr = 2}}.set(BS_AM_2);
+    addr_mod_t{.srca = {.incr = 0}, .srcb = {.incr = 0}, .dest = {.incr = 8}}.set(BS_AM_8);
+    addr_mod_t{.srca = {.incr = 0}, .srcb = {.incr = 0}, .dest = {.incr = 32}}.set(BS_AM_32);
+}
+template <uint32_t IX>
+struct BsDWalk {
+    static constexpr uint32_t A = IX / 16u, B = (IX % 16u) / 4u, C = IX % 4u;
+    static_assert(A + B + C <= 7u, "D walk needs at most 7 middle loads");
+    static constexpr uint32_t inc(uint32_t k) { return k < A ? 32u : k < A + B ? 8u : k < A + B + C ? 2u : 0u; }
+    static constexpr uint32_t am(uint32_t k) {
+        return k < A ? BS_AM_32 : k < A + B ? BS_AM_8 : k < A + B + C ? BS_AM_2 : 7u;
+    }
+    static constexpr uint32_t d(uint32_t k) { return k == 0u ? 0u : d(k - 1u) + inc(k - 1u); }  // D before load k
+    static_assert(d(7u) == 2u * IX, "D walk must end at the tail base 2 IX");
+};
+#define BS_LDW(l, s, k) BS_LD(l, BS_S(s) - W::d(k), 0, W::am(k))
+// bs_middle (EXP1 + SWAP_FILL order) with load k walking D.
+template <uint32_t IX>
+[[gnu::always_inline]] inline void bs_middle_dwalk() {
+    using W = BsDWalk<IX>;
+    BS_LDW(4, S_C0, 0u);
+    BS_SWAP(0, 9, 1);
+    BS_LDW(5, S_OP, 1u);
+    BS_MAD(0, 0, 12, 4, 0);
+    BS_LDW(6, S_K99, 2u);
+    BS_SWAP(9, 0, 1);
+    BS_LDW(7, S_FL, 3u);
+    BS_EXEXP(1, 0, 0);
+    BS_EXMAN(0, 0, 0);
+    BS_SHFT(0, 1, 0x000, 0);
+    BS_EXEXP(1, 0, 1);
+    BS_EXMAN(0, 0, 1);
+    BS_CAST(0, 0, 0);
+    BS_MAD(0, 0, 13, 14, 0);
+    BS_LDW(3, S_CR, 4u);
+    BS_SETEXP(1, 0, 0x000, 0);
+    BS_MUL(0, 5, 1, 9, 0);
+    BS_LDW(4, S_CG, 5u);
+    BS_SWAP(0, 6, 1);
+    BS_LDW(5, S_CB, 6u);
+}
+#undef BS_LDW
+#endif  // BLEND_DWALK
 // D += N in INCRWC steps (the field is 4 bits; even steps of <= 14).
 template <uint32_t N>
 [[gnu::always_inline]] inline void bs_incr_d() {
@@ -925,14 +984,27 @@ template <uint32_t IX>
     bs_xy<IX>();
     lltt::replay(0, 13);  // bs_front
 #endif
+#if BLEND_DWALK
+    bs_middle_dwalk<IX>();
+    lltt::replay(13, 18);  // bs_tail relative to D = 2 IX; its last store clears D
+#else
     bs_middle();
     bs_incr_d<BS_V(0u, IX)>();
     lltt::replay(13, 19);  // bs_tail relative to D, then D = 0
+#endif
 }
 // Replay slots 0-12: front; 13-31: tail at D + (T, R, G, B of microblock 0),
 // then SETRWC D=0. Called before each records loop: other TRISC1 code (the
 // fill_tile zero fill at tile start) records its own ops into slots 0-3.
 inline void blend_sched_record() {
+#if BLEND_DWALK
+    blend_dwalk_addrmods();  // per tile: tile init (copy_tile) sets ADDR_MOD 0/2/3
+    lltt::record<lltt::NoExec>(0, 13);
+    bs_front();
+    lltt::record<lltt::NoExec>(13, 18);
+    bs_tail<BS_V(DR_T, 0u), BS_V(DR_R, 0u), BS_V(DR_G, 0u), BS_V(DR_B, 0u), BS_AM_CLR>();
+    return;
+#endif
     lltt::record<lltt::NoExec>(0, 13);
     bs_front();
     lltt::record<lltt::NoExec>(13, 19);
