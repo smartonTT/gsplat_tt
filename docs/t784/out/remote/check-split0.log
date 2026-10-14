@@ -1,0 +1,8 @@
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:110: RuntimeWarning: divide by zero encountered in divide
+  idet = ft(1) / (a * c - b * b)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:133: RuntimeWarning: invalid value encountered in multiply
+  ga = -(A * A * gA + A * B * gB + B * B * gC)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:134: RuntimeWarning: invalid value encountered in multiply
+  gc = -(B * B * gA + B * C * gB + C * C * gC)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:135: RuntimeWarning: invalid value encountered in multiply
+  gb = -(ft(2) * A * B * gA + (A * C + B * B) * gB + ft(2) * B * C * gC)

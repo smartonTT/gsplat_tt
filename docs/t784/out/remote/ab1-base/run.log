@@ -1,0 +1,74 @@
+2026-10-14 21:12:40.562 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 21:12:40.562 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 21:12:40.564 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 21:12:40.565 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 21:12:40.565 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 21:12:40.565 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 21:12:40.566 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-14 21:12:40.566 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-14 21:12:40.566 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 21:12:40.566 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 21:12:40.568 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 21:12:40.568 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 21:12:40.568 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 21:12:40.568 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 21:12:40.568 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-14 21:12:40.569 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-14 21:12:40.569 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-14 21:12:40.607 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-14 21:12:40.607 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-14 21:12:40.607 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-14 21:12:40.607 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-14 21:12:40.608 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-14 21:12:40.609 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-14 21:12:40.675 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-14 21:12:41.696 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-14 21:12:41.696 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-14 21:12:41.697 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 21:12:41.697 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 21:12:41.697 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 21:12:41.698 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 21:12:41.698 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 21:12:41.698 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 21:12:41.699 | warning  |          Always | Unknown motherboard 'PRO X870-P WIFI (MS-7E47)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-14 21:12:41.699 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-14 21:12:41.699 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 21:12:41.699 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 21:12:41.699 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-14 21:12:41.699 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 21:12:41.699 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 21:12:41.699 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 21:12:41.699 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 21:12:41.699 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 21:12:41.699 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 21:12:41.699 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 21:12:41.699 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 21:12:41.703 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 21:12:42.337 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349988 GHz, device_time_at_sync=68502586814 cycles (realtime_profiler_manager.cpp:1075)
+[STEP] {"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 103.0942, "t1_ms_min": 81.3626, "t1_ms_med": 81.3668, "t2_ms_first": 105.9297, "t2_ms_min": 98.3975, "t2_ms_med": 98.4009, "chain_ms_min": 179.7119, "chain_ms_med": 179.7182, "host_repack_ms": 0, "split": false, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 0, "heavy_planes": 0, "light_planes": 0, "a_max_planes": 0, "b_max_weight": 0, "plan_ms": 0.001, "split_upload_ms": 0.000, "ta_ms_min": 0.0000, "ta_ms_med": 0.0000, "tb_ms_min": 0.0000, "tb_ms_med": 0.0000}
+2026-10-14 21:12:47.208 | info     |    BuildKernels | JIT cache stats: 18/18 hits (100.0%) [18 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 21:12:47.208 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 21:12:47.208 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=36, total=16.159ms, min=0.015ms, max=1.976ms, mean=0.449ms (build_cache_telemetry.cpp:238)
+2026-10-14 21:12:47.208 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=18, total=16.838ms, min=0.382ms, max=2.074ms, mean=0.935ms (build_cache_telemetry.cpp:238)
+2026-10-14 21:12:47.208 | info     |    BuildKernels | JIT telemetry [jit_build]: count=9, total=8.099ms, min=0.382ms, max=1.864ms, mean=0.900ms (build_cache_telemetry.cpp:238)
+2026-10-14 21:12:47.210 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 21:12:47.210 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 21:12:47.337 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 21:12:47.337 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:12:47.337 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
