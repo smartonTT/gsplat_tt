@@ -1,0 +1,6 @@
+base trisc0 da87cbb238ecb481232d2053611cd427  /localdev/smarton/.cache/ttmc-t747-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc0/trisc0.elf
+base trisc1 c84d273f92ebcbbe1f3d63e4a564a2be  /localdev/smarton/.cache/ttmc-t747-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc1/trisc1.elf
+base trisc2 64b8288e13f10232787a077b3b99b35a  /localdev/smarton/.cache/ttmc-t747-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc2/trisc2.elf
+cand trisc0 52d8f0f30a731814fbb4f821c224f976  /localdev/smarton/.cache/ttmc-t747-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc0/trisc0.elf
+cand trisc1 9ee956d5ed5777b1e582b68d76ed5961  /localdev/smarton/.cache/ttmc-t747-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc1/trisc1.elf
+cand trisc2 e732dd5103b5db38a7ed4375f60c9a74  /localdev/smarton/.cache/ttmc-t747-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc2/trisc2.elf
