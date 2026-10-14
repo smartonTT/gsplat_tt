@@ -1,0 +1,120 @@
+model (822, 1237, 3)
+ttp lock: waiting for p100 (held by task #785 (run 2213) since 14:17 PDT)
+ttp lock: waiting for p100 (held by task #785 (run 2213) since 14:17 PDT)
+ttp lock: waiting for p100 (held by task #785 (run 2213) since 14:17 PDT)
+ttp lock: got p100 after 5.8 min
+SSH_PREFLIGHT=ok
+=== t750 loop 11d4bf19=11d4bf19c64895e7197fd209621214bde1f5436c to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 14:26:59 PDT 2026
+sync rc=0
+[sync_remote] 11d4bf19c64895e7197fd209621214bde1f5436c from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t781: 1268 files, 65519944 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 25 of 1270 files, 713938 bytes (tar)
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 14:27:26
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/4] Building CXX object CMakeFiles/blend_fwd_bench.dir/blend_fwd_bench.cpp.o
+[2/4] Linking CXX executable blend_fwd_bench
+[3/4] Building CXX object CMakeFiles/train_step.dir/train_step.cpp.o
+[4/4] Linking CXX executable train_step
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/bench/build
+ninja: no work to do.
+build rc=0
+=== loop sh0 14:27:33
+STEP sh0 fwd_prep rc=0 wall_ms=65
+STEP sh0 fwd_dev rc=0 wall_ms=3766
+STEP sh0 fwd_check rc=0 wall_ms=70
+STEP sh0 loss_prep rc=0 wall_ms=74
+STEP sh0 loss_dev rc=0 wall_ms=2359
+STEP sh0 chain_dump rc=0 wall_ms=64
+STEP sh0 t1t2_prep rc=0 wall_ms=82
+STEP sh0 step_dev rc=0 wall_ms=6344
+STEP sh0 check rc=0 wall_ms=77
+--- sh0 fwd
+{"npz": "t0_sh0_64x64_n50.npz", "max_abs_image": 3.411214312687427e-07, "max_abs_image_rgb": [3.1400793926161796e-07, 3.411214312687427e-07, 2.816505823011184e-07], "max_abs_final_T": 4.967947803136141e-07, "bar": 0.0001, "final_T_gated": true, "pass": true, "stopped_px": 0, "max_abs_image_vs_model": 8.940696716308594e-08, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px_model": 0}
+{"n_tiles": 4, "n_rec_pages": 96, "device_ms_first": 1503.2077, "device_ms_min": 0.1578, "device_ms_med": 0.1582, "reps": 10}
+
+--- sh0 loss
+[LOSS] ssim reader SSIM_RD=1 cbd=2
+[LOSS] stage=ssim_programs H=64 W=64 tiles=12 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=ssim H=64 W=64 tiles=12 cores=110 loss=0.0499506445 b2b_ms=0.0693 fwd_b2b_ms=0.0357 launch_ms_med=0.0773 launch_ms_min=0.0766 iters=10
+{"H": 64, "W": 64, "image_max_abs_vs_oracle": 3.411214312687427e-07, "host_ms": 2.071, "consts_ms_per_dataset": 3.976}
+{"loss": 0.04995064451359782, "oracle_loss": 0.04995065020171513, "grad_l2rel_vs_oracle": 6.072144671834e-07, "grad_finite": true, "grad_max_rel_vs_oracle": 7.97725118997525e-07, "host_ms": 11.203}
+--- sh0 step
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "groups_processed": 1, "cores": 110, "t1_cores": 4, "reps": 10, "grads_out": true, "t1_ms_first": 2281.4495, "t1_ms_min": 0.0551, "t1_ms_med": 0.0559, "t2_ms_first": 1753.0214, "t2_ms_min": 0.0431, "t2_ms_med": 0.0439, "chain_ms_min": 0.0824, "chain_ms_med": 0.0828, "host_repack_ms": 0}
+
+CHAIN sh0 pass=True t1=True t2=True t0=True
+loop sh0 rc=0
+=== loop sh3 14:27:52
+STEP sh3 fwd_prep rc=0 wall_ms=65
+STEP sh3 fwd_dev rc=0 wall_ms=2331
+STEP sh3 fwd_check rc=0 wall_ms=70
+STEP sh3 loss_prep rc=0 wall_ms=57
+STEP sh3 loss_dev rc=0 wall_ms=2372
+STEP sh3 chain_dump rc=0 wall_ms=64
+STEP sh3 t1t2_prep rc=0 wall_ms=81
+STEP sh3 step_dev rc=0 wall_ms=2339
+STEP sh3 check rc=0 wall_ms=77
+--- sh3 fwd
+{"npz": "t0_sh3_64x64_n50.npz", "max_abs_image": 4.0734081951931955e-07, "max_abs_image_rgb": [3.227321633270108e-07, 2.0489869617668077e-07, 4.0734081951931955e-07], "max_abs_final_T": 4.967947803136141e-07, "bar": 0.0001, "final_T_gated": true, "pass": true, "stopped_px": 0, "max_abs_image_vs_model": 1.1920928955078125e-07, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px_model": 0}
+{"n_tiles": 4, "n_rec_pages": 96, "device_ms_first": 14.9571, "device_ms_min": 0.1574, "device_ms_med": 0.1602, "reps": 10}
+
+--- sh3 loss
+[LOSS] ssim reader SSIM_RD=1 cbd=2
+[LOSS] stage=ssim_programs H=64 W=64 tiles=12 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=ssim H=64 W=64 tiles=12 cores=110 loss=0.0573105033 b2b_ms=0.0693 fwd_b2b_ms=0.0363 launch_ms_med=0.0778 launch_ms_min=0.0768 iters=10
+{"H": 64, "W": 64, "image_max_abs_vs_oracle": 4.0734081951931955e-07, "host_ms": 2.077, "consts_ms_per_dataset": 3.867}
+{"loss": 0.05731050328251969, "oracle_loss": 0.057310507569511504, "grad_l2rel_vs_oracle": 5.705144524845482e-07, "grad_finite": true, "grad_max_rel_vs_oracle": 6.571424990135637e-07, "host_ms": 12.054}
+--- sh3 step
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "groups_processed": 1, "cores": 110, "t1_cores": 4, "reps": 10, "grads_out": true, "t1_ms_first": 24.7045, "t1_ms_min": 0.0549, "t1_ms_med": 0.0559, "t2_ms_first": 7.4099, "t2_ms_min": 0.0432, "t2_ms_med": 0.0439, "chain_ms_min": 0.0821, "chain_ms_med": 0.0824, "host_repack_ms": 0}
+
+CHAIN sh3 pass=True t1=True t2=True t0=False
+loop sh3 rc=0
+=== loop hero 14:28:03
+/dev/mapper/ubuntu--vg-ubuntu--lv  913G  517G  350G  60% /localdev/smarton
+push hero rc=0 161s
+start hero rc=124
+hero rc=0 549s
+STEP hero fwd_prep rc=0 wall_ms=1239
+STEP hero fwd_dev rc=0 wall_ms=4791
+STEP hero fwd_check rc=1 wall_ms=1243
+STEP hero loss_prep rc=0 wall_ms=370
+STEP hero loss_dev rc=0 wall_ms=11975
+STEP hero chain_dump rc=0 wall_ms=1040
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:110: RuntimeWarning: divide by zero encountered in divide
+  idet = ft(1) / (a * c - b * b)
+STEP hero t1t2_prep rc=0 wall_ms=319927
+STEP hero step_dev rc=0 wall_ms=5491
+STEP hero check rc=0 wall_ms=13950
+--- hero fwd
+{"npz": "hero_chain.npz", "max_abs_image": 0.016695082187652588, "max_abs_image_rgb": [0.016695082187652588, 0.0071160197257995605, 0.010800033807754517], "max_abs_final_T": 0.0, "bar": 0.0001, "final_T_gated": false, "pass": false, "max_abs_image_vs_dump": 0.016695082187652588, "gate": "fwd_model", "max_abs_image_vs_model": 0.013716191053390503, "max_abs_final_T_vs_model": 0.002208407189755235, "stopped_px": 1016814}
+{"n_tiles": 1014, "n_rec_pages": 2239363, "device_ms_first": 454.6175, "device_ms_min": 440.3687, "device_ms_med": 440.3829, "reps": 5}
+
+--- hero loss
+[LOSS] ssim reader SSIM_RD=1 cbd=2
+[LOSS] stage=ssim_programs H=822 W=1237 tiles=3042 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.295781901 b2b_ms=0.9576 fwd_b2b_ms=0.4387 launch_ms_med=0.9656 launch_ms_min=0.9569 iters=5
+{"H": 822, "W": 1237, "image_max_abs_vs_oracle": 0.016695082187652588, "host_ms": 27.25, "consts_ms_per_dataset": 277.786}
+{"loss": 0.2957819009535083, "oracle_loss": null, "grad_l2rel_vs_oracle": 3.6981566347815287, "grad_finite": true, "grad_max_rel_vs_oracle": 26.722801119593335, "host_ms": 983.636}
+--- hero step
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 5, "grads_out": true, "t1_ms_first": 115.4078, "t1_ms_min": 81.3593, "t1_ms_med": 81.3678, "t2_ms_first": 105.9262, "t2_ms_min": 98.4001, "t2_ms_med": 98.4018, "chain_ms_min": 179.7122, "chain_ms_med": 179.7208, "host_repack_ms": 0}
+
+CHAIN hero pass=True t1=True t2=True t0=None
+128K	tmp/t781/loop-hero
+140K	tmp/t781
+/dev/mapper/ubuntu--vg-ubuntu--lv  913G  517G  351G  60% /localdev/smarton
+loop hero rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t781 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t781/docs/train-step/out/loop-hero: 20 entries (tar)
+pull hero rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t750 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t781/docs/train-step/out/loop: 93 entries (tar)
+pull rc=0
+=== done Wed Oct 14 14:37:57 PDT 2026

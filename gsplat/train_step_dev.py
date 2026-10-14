@@ -13,7 +13,7 @@ Stages checked:
          plus the count of slots left NaN (the bench poisons the buffer before T1)
   t2     device grads / params / m / v / pfwc vs t2_step fed the ORACLE slots (t2_dev.check)
   t0     device grads vs the dump's autograd grad_* and device params vs adam_bf16_param_*
-         (the T0 oracle itself, SH band 0)
+         (the T0 oracle itself, all SH bands; gated for every sh_degree since #751)
 """
 from __future__ import annotations
 
@@ -75,9 +75,11 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     if "grad_means" not in d.files:   # the hero dump has no autograd oracle (T0 needs one)
         rep["pass"] = bool(s["pass"] and rep["t2"]["pass"])
         return rep
-    # Against the T0 oracle directly (autograd grads, bf16-moment Adam), SH band 0.
-    rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
-    band0 = lambda k, a: np.asarray(a)[:, :1, :] if k == "sh" else np.asarray(a)  # noqa: E731
+    # Against the T0 oracle directly (autograd grads, bf16-moment Adam): every SH band the device
+    # owns (band 0 from T2 alone; all bands and the view-direction term with the #751 t2sh passes).
+    o = t2_dev.outputs(indir / "t2", outdir)
+    kb = o["params"]["sh"].shape[1]
+    band0 = lambda k, a: np.asarray(a)[:, :kb, :] if k == "sh" else np.asarray(a)  # noqa: E731
     t0 = {}
     # #750 chain dumps (train_loop_dev chain-dump) carry the device fp32 dL/dimage in place of the
     # oracle's fp64 one (max error 3e-5 of its max on sh0). Fed the same inputs the host fp32
@@ -89,18 +91,25 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     if chain:
         t0["dl_dimage_max_rel"] = float(d["chain_dl_dimage_max_rel"])
         t0["floor_frac"] = floor
-    if (outdir / "grads.f32").exists():
-        g = t2_dev.from_cols(t2_dev.from_pages(rd("grads.f32", f32), N, t2_dev.STREAMS))
+    if "grads" in o:
+        g = o["grads"]
         t0["grads"] = {k: t2.rel_error(g[k], band0(k, d[f"grad_{k}"]), floor)
                        for k in t2.PARAM_NAMES}
         t0["grads_l2rel"] = {k: float(np.linalg.norm(np.asarray(g[k], np.float64) - band0(k, d[f"grad_{k}"]))
                                       / max(np.linalg.norm(band0(k, d[f"grad_{k}"])), 1e-30))
                              for k in t2.PARAM_NAMES}
-    p = t2_dev.from_cols(t2_dev.from_pages(rd("params_out.f32", f32), N, t2_dev.STREAMS))
+    p = o["params"]
     t0["params"] = {k: t2.rel_error(p[k], band0(k, d[f"adam_bf16_param_{k}"])) for k in t2.PARAM_NAMES}
     pin = {k: band0(k, d[f"param_{k}"]) for k in t2.PARAM_NAMES}
     t0["delta"] = {k: t2.rel_error(p[k] - pin[k], band0(k, d[f"adam_bf16_param_{k}"]) - pin[k])
                    for k in t2.PARAM_NAMES}
+    if p["sh"].shape[1] > 1:  # per band (0, 1-3, 4-8, 9-15) for the report
+        bands = {"sh0": (0, 1), "sh1": (1, 4), "sh2": (4, 9), "sh3": (9, 16)}
+        t0["sh_bands"] = {f"{w}_{b}": t2.rel_error(a[:, i:j], ref[:, i:j])
+                          for b, (i, j) in bands.items() if j <= p["sh"].shape[1]
+                          for w, a, ref in (("grad", o.get("grads", {}).get("sh"), d["grad_sh"]),
+                                            ("param", p["sh"], d["adam_bf16_param_sh"]))
+                          if a is not None}
     t0["worst_grad"] = max(t0.get("grads", {"-": 0.0}).values())
     t0["worst_param"] = max(max(t0["params"].values()), max(t0["delta"].values()))
     # Chain: a 1e-2 grad change on autograd's smallest grads can flip one bf16 ulp (2^-8) of
@@ -110,9 +119,10 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     if chain:
         t0["pass"] = bool(t0["pass"] and t0["dl_dimage_max_rel"] <= 1e-4
                           and max(t0.get("grads_l2rel", {"-": 0.0}).values()) <= 1e-3)
-    # T2 owns SH band 0 only: with sh_degree > 0 the oracle's dL/dmeans has the view-direction
-    # term of bands 1-3 and its dL/dsh0 uses the full-colour clamp mask, so T0 is reported, not gated.
-    t0["gated"] = int(d.get("sh_degree", 0)) == 0
+    # Without the t2sh passes the device owns SH band 0 only: with sh_degree > 0 the oracle's
+    # dL/dmeans has the view-direction term of bands 1-3 (the #781 sh3 dL/dmeans miss, max rel
+    # 0.57), so T0 is then reported, not gated.
+    t0["gated"] = kb == np.asarray(d["grad_sh"]).shape[1]
     rep["t0"] = t0
     rep["pass"] = bool(s["pass"] and rep["t2"]["pass"] and (t0["pass"] or not t0["gated"]))
     return rep

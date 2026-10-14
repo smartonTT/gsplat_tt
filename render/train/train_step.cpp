@@ -15,6 +15,10 @@
 // the cores, into the hsum buffer; program B runs the light groups, one contiguous range per core
 // balanced by planes + T2_OVH (2) per active group, heavy lanes taking hsum as plane 0.
 // T2_G2D=1 skips the projection backward + Adam, so pfwc.f32 holds the per-row slot sums (g2d).
+// SH mode (#751/#756, when <dir>/t2/sh_rest.f32 exists): T1 -> t2sh pre (aux page per group:
+// view dir, clamp keep, colour Jacobian) -> T2 (T2_SH: dir term in dL/dmeans, full-colour mask
+// on dL/dsh0, grads always out) -> t2sh post (bands 1-15 grads + sparse Adam, rest pages in
+// place). Also writes sh_rest_out.f32, sh_m_out.u16, sh_v_out.u16, [sh_grads.f32].
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -41,7 +45,8 @@ using namespace tt::tt_metal;
 namespace {
 constexpr uint32_t SMALL = 64, TILE_B = 4096, N_PLANES = 5, REC_WORDS = 16;
 constexpr uint32_t P_PAGE = 4096, MV_PAGE = 2048, META_PAGE = 512, VIS_PAGE = 128, F_PAGE = 256,
-                   SLOT_PAGE = 4096, SLOTS_PER_PAGE = 64, GPB = 16, NCONST = 31, STAGE_PAGES = 64;
+                   SLOT_PAGE = 4096, SLOTS_PER_PAGE = 64, GPB = 16, NCONST = 31, STAGE_PAGES = 64,
+                   NSH = 10;
 
 template <class T>
 std::vector<T> load(const std::string& p) {
@@ -68,10 +73,12 @@ uint64_t meta_int(const std::string& js, const std::string& key) {
     return std::strtoull(js.c_str() + js.find(':', p) + 1, nullptr, 10);
 }
 
-std::vector<float> meta_consts(const std::string& js) {
+std::vector<float> meta_consts(const std::string& js, const std::string& key = "consts", uint32_t n = NCONST) {
     std::vector<float> c;
-    const char* p = js.c_str() + js.find('[', js.find("\"consts\"")) + 1;
-    while (c.size() < NCONST) {
+    const auto k = js.find("\"" + key + "\"");
+    if (k == std::string::npos) { std::fprintf(stderr, "meta.json: no %s\n", key.c_str()); std::exit(2); }
+    const char* p = js.c_str() + js.find('[', k) + 1;
+    while (c.size() < n) {
         char* e;
         c.push_back(std::strtof(p, &e));
         p = e;
@@ -143,8 +150,23 @@ int main(int argc, char** argv) {
     }
     const auto cst = meta_consts(j2);
     const bool grads = argc > 5 && std::string(argv[5]) == "grads";
+    const bool sh = std::ifstream(d2 + "/sh_rest.f32").good();
+    std::vector<uint32_t> sh_rest, sh_m, sh_v;
+    std::vector<float> shc;
+    if (sh) {
+        sh_rest = load<uint32_t>(d2 + "/sh_rest.f32");
+        sh_m = load<uint32_t>(d2 + "/sh_m.u16");
+        sh_v = load<uint32_t>(d2 + "/sh_v.u16");
+        shc = meta_consts(j2, "sh_consts", NSH);
+        if (sh_rest.size() != size_t(ng) * 3 * 1024 || sh_m.size() != size_t(ng) * 3 * 512 ||
+            sh_v.size() != size_t(ng) * 3 * 512) {
+            std::fprintf(stderr, "SH rest file sizes do not match meta.json\n");
+            return 2;
+        }
+    }
     auto envu = [](const char* k, uint32_t d) { const char* e = std::getenv(k); return e && *e ? uint32_t(std::atoi(e)) : d; };
-    const bool split = envu("T2_SPLIT", 1) != 0, g2d_only = envu("T2_G2D", 0) != 0;
+    // SH mode runs the one-program T2: the split reader (#784) has no T2_SH aux path yet.
+    const bool split = !sh && envu("T2_SPLIT", 1) != 0, g2d_only = !sh && envu("T2_G2D", 0) != 0;
     const uint32_t kcap = envu("T2_KCAP", 8), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
     if (split && (HL == 0 || HL > 64 || 64 % HL != 0)) { std::fprintf(stderr, "T2_HL must divide 64\n"); return 2; }
 
@@ -171,6 +193,18 @@ int main(int argc, char** argv) {
     auto b_vis = make_dram(dev.get(), uint64_t(nb) * VIS_PAGE, VIS_PAGE);
     auto b_f = make_dram(dev.get(), 13ull * ng * F_PAGE, F_PAGE);
     auto b_g = make_dram(dev.get(), uint64_t(ng) * P_PAGE, P_PAGE);
+    // SH mode: rest bands (3 pages per group), their Adam state, pre-pass aux page, rest grads.
+    const uint64_t nsh = sh ? 3ull * ng : 1;
+    auto b_r = make_dram(dev.get(), nsh * P_PAGE, P_PAGE);
+    auto b_rm = make_dram(dev.get(), nsh * MV_PAGE, MV_PAGE);
+    auto b_rv = make_dram(dev.get(), nsh * MV_PAGE, MV_PAGE);
+    auto b_x = make_dram(dev.get(), (sh ? uint64_t(ng) : 1) * P_PAGE, P_PAGE);
+    auto b_rg = make_dram(dev.get(), nsh * P_PAGE, P_PAGE);
+    if (sh) {
+        distributed::EnqueueWriteMeshBuffer(*cq, b_r, sh_rest, true);
+        distributed::EnqueueWriteMeshBuffer(*cq, b_rm, sh_m, true);
+        distributed::EnqueueWriteMeshBuffer(*cq, b_rv, sh_v, true);
+    }
     distributed::EnqueueWriteMeshBuffer(*cq, b_tiles, tiles, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_recs, recs, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_planes, planes, true);
@@ -364,12 +398,19 @@ int main(int argc, char** argv) {
         add_cb(p2, cores, CB_FO, P_PAGE, 2);
         add_cb(p2, cores, CB_GO, P_PAGE, 2);
         std::vector<uint32_t> rct, wct;
-        for (int i = 0; i < (split ? 7 : 6); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+        for (int i = 0; i < (split || sh ? 7 : 6); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
         for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
         std::map<std::string, std::string> rdef = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"}}, wdef;
-        if (grads) wdef["T2_GRADS_OUT"] = "1";
+        // SH mode: the post pass reads T2's grads page, so they always go out.
+        if (grads || sh) wdef["T2_GRADS_OUT"] = "1";
         if (split) rdef["T2_SPLIT"] = "1";
         if (g2d_only) wdef["T2_G2D_ONLY"] = "1";
+        auto cdef = wdef;
+        if (sh) {
+            rdef["T2_SH"] = "1";
+            cdef["T2_SH"] = "1";
+            add_cb(p2, cores, 7, P_PAGE, 2);  // CB_AUX
+        }
         const std::string kd = TRAIN_KERNEL_DIR;
         auto kr = CreateKernel(p2, kd + "t2g_reader.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
@@ -380,10 +421,11 @@ int main(int argc, char** argv) {
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[CB_P] = UnpackToDestMode::UnpackToDestFp32;
         u2d[CB_K] = UnpackToDestMode::UnpackToDestFp32;
+        if (sh) u2d[7] = UnpackToDestMode::UnpackToDestFp32;
         auto kc = CreateKernel(p2, kd + "t2g_compute.cpp", cores,
                                ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                              .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
-                                             .math_approx_mode = false, .defines = wdef});
+                                             .math_approx_mode = false, .defines = cdef});
         for (uint32_t y = 0; y < grid.y; y++)
             for (uint32_t x = 0; x < grid.x; x++) {
                 const uint32_t lin = y * grid.x + x;
@@ -399,10 +441,11 @@ int main(int argc, char** argv) {
                 if (lin < want)
                     for (uint32_t b = lin; b < nb; b += want)
                         for (uint32_t gi = 0; gi < GPB; gi++) n += (vis[b * 32 + 2 * gi] | vis[b * 32 + 2 * gi + 1]) != 0;
-                SetRuntimeArgs(p2, kr, CoreCoord{x, y},
-                               {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
-                                uint32_t(b_s->address()), uint32_t(b_meta->address()), uint32_t(b_vis->address()),
-                                lin < want ? lin : nb, want, nb});
+                std::vector<uint32_t> ra = {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
+                                            uint32_t(b_s->address()), uint32_t(b_meta->address()), uint32_t(b_vis->address()),
+                                            lin < want ? lin : nb, want, nb};
+                if (sh) ra.push_back(uint32_t(b_x->address()));
+                SetRuntimeArgs(p2, kr, CoreCoord{x, y}, ra);
                 }
                 tot_groups += n;
                 SetRuntimeArgs(p2, kw, CoreCoord{x, y},
@@ -457,23 +500,102 @@ int main(int argc, char** argv) {
             }
     }
 
-    distributed::MeshWorkload w1, w2, wa;
+
+    // ---- t2sh pre / post programs (SH mode only): same groups and block walk as T2.
+    Program p3 = CreateProgram(), p4 = CreateProgram();
+    if (sh) {
+        enum : uint32_t { CB_A = 1, CB_B = 2, CB_M = 3, CB_V = 4, CB_WH = 5, CB_WS = 6, CB_G = 7 };
+        enum : uint32_t { CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_GO = 20 };
+        const std::string kd = TRAIN_KERNEL_DIR;
+        auto build = [&](Program& pr, bool post) {
+            add_cb(pr, cores, CB_A, P_PAGE, 2);
+            add_cb(pr, cores, CB_B, P_PAGE, post ? 2 : 6);
+            add_cb(pr, cores, CB_WH, 64, 2);
+            add_cb(pr, cores, CB_WS, VIS_PAGE, 1);
+            add_cb(pr, cores, CB_PO, P_PAGE, 2);
+            std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+            u2d[CB_A] = UnpackToDestMode::UnpackToDestFp32;
+            u2d[CB_B] = UnpackToDestMode::UnpackToDestFp32;
+            std::map<std::string, std::string> def;
+            if (post) {
+                add_cb(pr, cores, CB_G, P_PAGE, 2);
+                add_cb(pr, cores, CB_M, MV_PAGE, 2, DataFormat::Float16_b);
+                add_cb(pr, cores, CB_V, MV_PAGE, 2, DataFormat::Float16_b);
+                add_cb(pr, cores, CB_MO, MV_PAGE, 2, DataFormat::Float16_b);
+                add_cb(pr, cores, CB_VO, MV_PAGE, 2, DataFormat::Float16_b);
+                add_cb(pr, cores, CB_GO, P_PAGE, 2);
+                u2d[CB_G] = UnpackToDestMode::UnpackToDestFp32;
+                def["T2SH_POST"] = "1";
+            }
+            std::vector<uint32_t> rct, wct;
+            for (int i = 0; i < (post ? 6 : 3); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+            for (int i = 0; i < (post ? 4 : 1); i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
+            auto kr = CreateKernel(pr, kd + "t2sh_reader.cpp", cores,
+                                   DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
+                                                      .noc = NOC::RISCV_1_default, .compile_args = rct, .defines = def});
+            auto kw = CreateKernel(pr, kd + "t2sh_writer.cpp", cores,
+                                   DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                                                      .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = def});
+            auto kc = CreateKernel(pr, kd + "t2sh_compute.cpp", cores,
+                                   ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
+                                                 .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
+                                                 .math_approx_mode = false, .defines = def});
+            for (uint32_t y = 0; y < grid.y; y++)
+                for (uint32_t x = 0; x < grid.x; x++) {
+                    const uint32_t lin = y * grid.x + x;
+                    uint32_t n = 0;
+                    if (lin < want)
+                        for (uint32_t b = lin; b < nb; b += want)
+                            for (uint32_t gi = 0; gi < GPB; gi++) n += (vis[b * 32 + 2 * gi] | vis[b * 32 + 2 * gi + 1]) != 0;
+                    const uint32_t b0 = lin < want ? lin : nb;
+                    std::vector<uint32_t> ra, wa;
+                    if (post) {
+                        ra = {uint32_t(b_x->address()), uint32_t(b_g->address()), uint32_t(b_r->address()),
+                              uint32_t(b_rm->address()), uint32_t(b_rv->address()), uint32_t(b_vis->address()), b0, want, nb};
+                        wa = {uint32_t(b_r->address()), uint32_t(b_rm->address()), uint32_t(b_rv->address()),
+                              uint32_t(b_rg->address()), n};
+                    } else {
+                        ra = {uint32_t(b_p->address()), uint32_t(b_r->address()), uint32_t(b_vis->address()), b0, want, nb};
+                        wa = {uint32_t(b_x->address()), n};
+                    }
+                    SetRuntimeArgs(pr, kr, CoreCoord{x, y}, ra);
+                    SetRuntimeArgs(pr, kw, CoreCoord{x, y}, wa);
+                    std::vector<uint32_t> ca = {n};
+                    for (float f : shc) { uint32_t u; std::memcpy(&u, &f, 4); ca.push_back(u); }
+                    SetRuntimeArgs(pr, kc, CoreCoord{x, y}, ca);
+                }
+        };
+        build(p3, false);
+        build(p4, true);
+    }
+
+    distributed::MeshWorkload w1, w2, wa, w3, w4;
     w1.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p1));
     w2.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p2));
     if (split) wa.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(pa));
+    if (sh) {
+        w3.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p3));
+        w4.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p4));
+    }
 
-    // Step 0 (the checked one): T1 -> T2 with a Finish between, so each stage is timed alone.
-    std::vector<double> t1ms, t2ms, chain;
-    auto staged = [&]() {
-        auto t0 = std::chrono::steady_clock::now();
-        distributed::EnqueueMeshWorkload(*cq, w1, false);
+    // Step 0 (the checked one): T1 -> [pre] -> T2 -> [post] with a Finish between, so each stage
+    // is timed alone.
+    std::vector<double> t1ms, t2ms, prems, postms, chain;
+    auto timed = [&](distributed::MeshWorkload& w, std::vector<double>& acc) {
+        const auto t0 = std::chrono::steady_clock::now();
+        distributed::EnqueueMeshWorkload(*cq, w, false);
         distributed::Finish(*cq);
-        t1ms.push_back(ms_since(t0));
-        t0 = std::chrono::steady_clock::now();
+        acc.push_back(ms_since(t0));
+    };
+    auto staged = [&]() {
+        timed(w1, t1ms);
+        if (sh) timed(w3, prems);
+        const auto t0 = std::chrono::steady_clock::now();
         if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
         t2ms.push_back(ms_since(t0));
+        if (sh) timed(w4, postms);
     };
     staged();
     {
@@ -498,14 +620,28 @@ int main(int argc, char** argv) {
             distributed::EnqueueReadMeshBuffer(*cq, o, b_hs, true);
             save(odir + "/hsum.f32", o);
         }
+        if (sh) {
+            distributed::EnqueueReadMeshBuffer(*cq, o, b_r, true);
+            save(odir + "/sh_rest_out.f32", o);
+            distributed::EnqueueReadMeshBuffer(*cq, o, b_rm, true);
+            save(odir + "/sh_m_out.u16", o);
+            distributed::EnqueueReadMeshBuffer(*cq, o, b_rv, true);
+            save(odir + "/sh_v_out.u16", o);
+            if (grads) {
+                distributed::EnqueueReadMeshBuffer(*cq, o, b_rg, true);
+                save(odir + "/sh_grads.f32", o);
+            }
+        }
     }
     // Sustained steps on the same buffers (params / m / v keep updating; same view inputs).
     for (int i = 0; i < reps; i++) staged();
     for (int i = 0; i < reps; i++) {
         const auto t0 = std::chrono::steady_clock::now();
         distributed::EnqueueMeshWorkload(*cq, w1, false);
+        if (sh) distributed::EnqueueMeshWorkload(*cq, w3, false);
         if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
+        if (sh) distributed::EnqueueMeshWorkload(*cq, w4, false);
         distributed::Finish(*cq);
         chain.push_back(ms_since(t0));
     }
@@ -522,6 +658,7 @@ int main(int argc, char** argv) {
         tbms.push_back(ms_since(t0));
     }
     const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain), sa = stat(tams), sb = stat(tbms);
+    const Stat s3 = stat(prems), s4 = stat(postms);
     char sbuf[640];
     std::snprintf(sbuf, sizeof sbuf,
                   ", \"split\": %s, \"g2d_only\": %s, \"kcap\": %u, \"hl\": %u, \"ovh\": %u, \"heavy_rows\": %zu, "
@@ -531,15 +668,18 @@ int main(int argc, char** argv) {
                   split ? "true" : "false", g2d_only ? "true" : "false", kcap, HL, ovh, heavy.size(),
                   (unsigned long long)heavy_planes, (unsigned long long)light_planes, (unsigned long long)a_max,
                   (unsigned long long)b_max, plan_ms, split_upload_ms, sa.min, sa.med, sb.min, sb.med);
-    char buf[1700];
+    char buf[2048];
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"n_groups\": %u, \"groups_processed\": %u, "
                   "\"cores\": %u, \"t1_cores\": %u, \"reps\": %d, \"grads_out\": %s, "
                   "\"t1_ms_first\": %.4f, \"t1_ms_min\": %.4f, \"t1_ms_med\": %.4f, "
                   "\"t2_ms_first\": %.4f, \"t2_ms_min\": %.4f, \"t2_ms_med\": %.4f, "
+                  "\"sh_rest\": %s, \"t2sh_pre_ms_first\": %.4f, \"t2sh_pre_ms_min\": %.4f, \"t2sh_pre_ms_med\": %.4f, "
+                  "\"t2sh_post_ms_first\": %.4f, \"t2sh_post_ms_min\": %.4f, \"t2sh_post_ms_med\": %.4f, "
                   "\"chain_ms_min\": %.4f, \"chain_ms_med\": %.4f, \"host_repack_ms\": 0%s}",
                   n_tiles, n_recs, n_slots, ng, tot_groups, want, want1, reps, grads ? "true" : "false",
-                  s1.first, s1.min, s1.med, s2.first, s2.min, s2.med, sc.min, sc.med, sbuf);
+                  s1.first, s1.min, s1.med, s2.first, s2.min, s2.med, sh ? "true" : "false", s3.first, s3.min,
+                  s3.med, s4.first, s4.min, s4.med, sc.min, sc.med, sbuf);
     std::ofstream(odir + "/timing.json") << buf << "\n";
     std::printf("[STEP] %s\n", buf);
     dev->close();

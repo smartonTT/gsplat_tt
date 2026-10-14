@@ -29,7 +29,8 @@ using namespace tt::tt_metal;
 
 namespace {
 constexpr uint32_t SMALL = 64, TILE_B = 4096, TILE_BF16 = 2048, TRAIN_PAGE = 4 * TILE_B, BULK_REC_SLOT = 4096;
-constexpr uint32_t CB_XRAMP = 0, CB_YRAMP = 1, CB_T_RB = 2, CB_MB_COUNTS = 3, CB_CORE_TILES = 7, CB_DA_RING = 10,
+constexpr uint32_t CB_XRAMP = 0, CB_YRAMP = 1, CB_T_RB = 2, CB_MB_COUNTS = 3, CB_CORE_TILES = 7, CB_TRAIN_OPC = 9,
+                   CB_DA_RING = 10,
                    CB_BUCKET_BULK = 12, CB_COLOR_OUT = 16, CB_TRAIN_OUT = 17;
 
 template <class T>
@@ -76,27 +77,41 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "prep file sizes do not match meta.json\n");
         return 2;
     }
+    const size_t rec_words = recs.size();
     recs.resize(size_t(n_pages) * 16, 0u);
-    for (uint32_t t = 0; t < n_tiles; t++) {
-        if (tiles[t * 16 + 2] > 2 * BULK_REC_SLOT) {
-            std::fprintf(stderr, "tile %u: %u records > one bulk slot (%u)\n", t, tiles[t * 16 + 2], 2 * BULK_REC_SLOT);
-            return 2;
-        }
+    // #781: fp32 [op, r, g, b] per record row (opc.f32, task #717 side slab), regrouped so each
+    // tile's list starts on a 64 B page (4 records); the device copy of tile word 3 holds that page.
+    auto opc_rows = load<float>(dir + "/opc.f32");
+    if (opc_rows.size() * 2 != rec_words) {
+        std::fprintf(stderr, "opc.f32 does not match recs.u32\n");
+        return 2;
     }
+    opc_rows.resize(size_t(n_pages) * 8, 0.0f);
+    std::vector<float> opc;
+    for (uint32_t t = 0; t < n_tiles; t++) {
+        const uint32_t page = tiles[t * 16 + 1], n = tiles[t * 16 + 2];
+        if (uint64_t(page) * 2 + n > uint64_t(n_pages) * 2) { std::fprintf(stderr, "tile %u past recs\n", t); return 2; }
+        tiles[t * 16 + 3] = uint32_t(opc.size() / 16);
+        opc.insert(opc.end(), opc_rows.begin() + size_t(page) * 8, opc_rows.begin() + (size_t(page) * 2 + n) * 4);
+        opc.resize((opc.size() + 15) / 16 * 16, 0.0f);
+    }
+    if (opc.empty()) opc.assign(16, 0.0f);
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
     const CoreCoord grid = dev->compute_with_storage_grid_size();
-    if (n_tiles > grid.x * grid.y) { std::fprintf(stderr, "more tiles than cores\n"); return 2; }
+    const uint32_t n_cores = grid.x * grid.y, per_core = (n_tiles + n_cores - 1) / n_cores;
     const int reps = argc > 2 ? std::atoi(argv[2]) : 5;
 
     auto b_tiles = make_dram(dev.get(), uint64_t(n_tiles) * SMALL, SMALL);
     auto b_recs = make_dram(dev.get(), uint64_t(n_pages) * SMALL, SMALL);
     auto b_ramps = make_dram(dev.get(), 2ull * TILE_B, TILE_B);
+    auto b_opc = make_dram(dev.get(), uint64_t(opc.size()) * 4, SMALL);
     auto b_out = make_dram(dev.get(), uint64_t(n_tiles) * TRAIN_PAGE, TRAIN_PAGE);
     distributed::EnqueueWriteMeshBuffer(*cq, b_tiles, tiles, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_recs, recs, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_ramps, ramps, true);
+    distributed::EnqueueWriteMeshBuffer(*cq, b_opc, opc, true);
     {
         // Poison the output so a tile the device never wrote cannot pass.
         std::vector<uint32_t> nan(size_t(n_tiles) * TRAIN_PAGE / 4, 0x7fc00000u);
@@ -111,13 +126,15 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_T_RB, TILE_BF16, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_MB_COUNTS, 128, 64, DataFormat::UInt32);
     add_cb(prog, cores, CB_CORE_TILES, SMALL, 1, DataFormat::UInt32);
-    add_cb(prog, cores, CB_DA_RING, SMALL, 1 + 64, DataFormat::UInt32);
+    // Train-mode decode-ahead ring: 64 B header + 64 slots of 128 B (#724, blend_train::da_slot_bytes).
+    add_cb(prog, cores, CB_DA_RING, SMALL, 1 + 64 * 2, DataFormat::UInt32);
     add_cb(prog, cores, CB_BUCKET_BULK, SMALL, BULK_REC_SLOT, DataFormat::Float32);
+    add_cb(prog, cores, CB_TRAIN_OPC, 32, BULK_REC_SLOT, DataFormat::Float32);  // 16 B x 2 * BULK_REC_SLOT
     add_cb(prog, cores, CB_COLOR_OUT, TILE_BF16, 6, DataFormat::Float16_b);
     add_cb(prog, cores, CB_TRAIN_OUT, TILE_B, 4, DataFormat::Float32);
 
     std::vector<uint32_t> rct, wct;
-    for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+    for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
     TensorAccessorArgs::create_dram_interleaved().append_to(wct);
     const std::string kd = BWD_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "fwd_reader.cpp", cores,
@@ -149,9 +166,10 @@ int main(int argc, char** argv) {
     for (uint32_t y = 0; y < grid.y; y++)
         for (uint32_t x = 0; x < grid.x; x++) {
             const uint32_t lin = y * grid.x + x;
-            const uint32_t ta = std::min(lin, n_tiles), nt = lin < n_tiles ? 1u : 0u;
+            const uint32_t ta = std::min(lin * per_core, n_tiles), nt = std::min(per_core, n_tiles - ta);
             SetRuntimeArgs(prog, kr, CoreCoord{x, y},
-                           {uint32_t(b_tiles->address()), uint32_t(b_recs->address()), uint32_t(b_ramps->address()), ta, nt});
+                           {uint32_t(b_tiles->address()), uint32_t(b_recs->address()), uint32_t(b_ramps->address()),
+                            uint32_t(b_opc->address()), ta, nt});
             SetRuntimeArgs(prog, kw, CoreCoord{x, y}, {uint32_t(b_out->address()), ta, nt});
             SetRuntimeArgs(prog, kc, CoreCoord{x, y}, {0u, floor_bits});  // eps 0: compile-time default
         }

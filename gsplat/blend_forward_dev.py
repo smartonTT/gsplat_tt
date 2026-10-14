@@ -8,14 +8,16 @@ defines) and reads back its fp32 R/G/B/T train buffer (one 16 KB page per screen
 
 Lossless: every valid Gaussian goes to every tile in the oracle's front-to-back order with all
 32 microblocks in its mask, so the only cull is the oracle's own alpha < alpha_min rule (no
-3-sigma tile rect, no microblock cull, no T early-out). Opacity and colours travel as UNORM16
-(the production record format; |error| <= 2^-17); the conic and mean are fp32.
+3-sigma tile rect, no microblock cull, no T early-out). Opacity and colours travel as fp32 in
+opc.f32 (the train-mode side slab, task #717: lossless, colours may exceed 1); the records keep
+the UNORM16 words of the production format, which BLEND_TRAIN does not read. Conic and mean fp32.
 
 File layout (little endian):
   tiles.u32  16 words per tile (every screen tile, row-major): tile_id, rec_page, num_g, 0...
   recs.u32   PACK2 records, 2 per 64 B page, each tile's list starting on a page:
              A' = -A/2, B' = -B, C' = -C/2, mask (0xffffffff), mx, my (tile-local fp32),
              op16 | r16 << 16, g16 | b16 << 16
+  opc.f32    fp32 opacity, r, g, b per record row of recs.u32 (zeros for a pad record)
   ramps.f32  2 tilized fp32 tiles: x = c + 0.5, y = r + 0.5
   meta.json  n_tiles, n_rec_pages, H, W
 The bench writes train.f32: per tile 4 tilized fp32 tiles R, G, B, T (T < 0: the pixel
@@ -30,7 +32,8 @@ import sys
 
 import numpy as np
 
-from gsplat.blend_backward_dev import TILE, cfg_from_dump, f32, fbits, tile_index, tilize
+from gsplat.blend_backward_dev import (TILE, cfg_from_dump, f32, fbits, pair_lists, tile_index, tile_rects_vec,
+                                      tilize)
 
 REC_WORDS = 8
 FULL_MASK = 0xFFFFFFFF
@@ -59,7 +62,8 @@ def prep(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
     tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
     rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
     ramps = np.stack([tilize(cc.astype(f32) + f32(0.5)), tilize(rr.astype(f32) + f32(0.5))])
-    tiles, recs = [], []
+    op, col = np.asarray(opacity, f32).reshape(-1), np.asarray(colors, f32)
+    tiles, recs, opc = [], [], []
     for ty in range(tiles_y):
         for tx in range(tiles_x):
             page = len(recs) // 2
@@ -69,17 +73,59 @@ def prep(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
                 recs.append([fbits(f32(-0.5) * A), fbits(-B), fbits(f32(-0.5) * C), FULL_MASK,
                              fbits(m2[g, 0] - f32(tx * TILE)), fbits(m2[g, 1] - f32(ty * TILE)),
                              int(op16[g] | (col16[g, 0] << 16)), int(col16[g, 1] | (col16[g, 2] << 16))])
+                opc.append([op[g], col[g, 0], col[g, 1], col[g, 2]])
             if len(recs) % 2:
                 recs.append([0] * REC_WORDS)  # pad: the next tile starts on a page
+                opc.append([0.0] * 4)
     return {"tiles": np.asarray(tiles, np.uint32).reshape(-1, 16),
-            "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS), "ramps": ramps,
-            "H": H, "W": W}
+            "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS), "opc": np.asarray(opc, f32).reshape(-1, 4),
+            "ramps": ramps, "H": H, "W": W}
+
+
+def prep_binned(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
+    """prep() with each Gaussian only in the tiles of its 3-sigma rectangle (blend_backward_dev
+    tile_rects_vec + pair_lists, the rule of forward_fast and the device T1), numpy-vectorised for
+    the hero view. Same layout: every screen tile row-major, each tile's PACK2 list front to back
+    starting on a page. Equal to prep() with each tile's list cut to its rectangle's Gaussians."""
+    m2 = np.asarray(means2d, f32)
+    con = np.asarray(conic, f32)
+    op16 = unorm16(opacity)
+    col16 = unorm16(colors)
+    tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
+    nt = tiles_x * tiles_y
+    pl = pair_lists(tile_rects_vec(m2, valid, con, H, W, TILE), order, tiles_x)
+    g, tid = pl["g"], pl["tid"]
+    cnt = np.bincount(tid, minlength=nt).astype(np.int64)
+    pages = (cnt + 1) // 2
+    page0 = np.concatenate([[0], np.cumsum(pages)[:-1]]).astype(np.int64)
+    start = np.concatenate([[0], np.cumsum(cnt)[:-1]]).astype(np.int64)
+    row = 2 * page0[tid] + np.arange(g.size, dtype=np.int64) - start[tid]
+    ty, tx = np.divmod(tid, tiles_x)
+    bits = lambda v: np.asarray(v, f32).view(np.uint32)  # noqa: E731
+    recs = np.zeros((2 * int(pages.sum()), REC_WORDS), np.uint32)
+    recs[row, 0] = bits(f32(-0.5) * con[g, 0])
+    recs[row, 1] = bits(-con[g, 1])
+    recs[row, 2] = bits(f32(-0.5) * con[g, 2])
+    recs[row, 3] = FULL_MASK
+    recs[row, 4] = bits(m2[g, 0] - (tx * TILE).astype(f32))
+    recs[row, 5] = bits(m2[g, 1] - (ty * TILE).astype(f32))
+    recs[row, 6] = op16[g] | (col16[g, 0] << 16)
+    recs[row, 7] = col16[g, 1] | (col16[g, 2] << 16)
+    opc = np.zeros((len(recs), 4), f32)
+    opc[row, 0] = np.asarray(opacity, f32).reshape(-1)[g]
+    opc[row, 1:] = np.asarray(colors, f32)[g]
+    tiles = np.zeros((nt, 16), np.uint32)
+    tiles[:, 0], tiles[:, 1], tiles[:, 2] = np.arange(nt), page0, cnt
+    rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
+    ramps = np.stack([tilize(cc.astype(f32) + f32(0.5)), tilize(rr.astype(f32) + f32(0.5))])
+    return {"tiles": tiles, "recs": recs, "opc": opc, "ramps": ramps, "H": H, "W": W}
 
 
 def write(p: dict, out: str) -> None:
     os.makedirs(out, exist_ok=True)
     p["tiles"].tofile(os.path.join(out, "tiles.u32"))
     p["recs"].tofile(os.path.join(out, "recs.u32"))
+    p["opc"].astype(f32).tofile(os.path.join(out, "opc.f32"))
     p["ramps"].astype(f32).tofile(os.path.join(out, "ramps.f32"))
     meta = {"n_tiles": len(p["tiles"]), "n_rec_pages": max(1, len(p["recs"]) // 2), "H": p["H"], "W": p["W"]}
     with open(os.path.join(out, "meta.json"), "w") as f:
@@ -95,10 +141,8 @@ def emulate(p: dict, cfg) -> np.ndarray:
     for i, (_, page, n) in enumerate(p["tiles"][:, :3]):
         R, G, Bc = (np.zeros(1024, f32) for _ in range(3))
         T = np.ones(1024, f32)
-        for w in p["recs"][2 * page:2 * page + n]:
+        for w, (op, cr, cg, cb) in zip(p["recs"][2 * page:2 * page + n], p["opc"][2 * page:2 * page + n]):
             A, B, C, _, mx, my = (np.uint32(v).view(f32) for v in w[:6])
-            op, cr = unorm16_decode(w[6] & 0xFFFF), unorm16_decode(w[6] >> 16)
-            cg, cb = unorm16_decode(w[7] & 0xFFFF), unorm16_decode(w[7] >> 16)
             dx, dy = x - mx, y - my
             pw = A * (dx * dx) + B * (dx * dy) + C * (dy * dy)
             pw = np.clip(pw, f32(-80.0), f32(0.0))
@@ -112,6 +156,41 @@ def emulate(p: dict, cfg) -> np.ndarray:
             Bc = np.where(acc, Bc + at * cb, Bc)
             T = np.where(acc, tn, np.where(live, -np.abs(T), T)).astype(f32)
         out[i] = np.stack([R, G, Bc, T])
+    return out
+
+
+def emulate_fast(p: dict, cfg) -> np.ndarray:
+    """emulate() vectorised across tiles (step k blends record k of every tile that has one);
+    the same fp32 operations per pixel, for the hero view."""
+    tiles = p["tiles"]
+    page, n = tiles[:, 1].astype(np.int64), tiles[:, 2].astype(np.int64)
+    s = np.argsort(-n, kind="stable")
+    page, n = page[s], n[s]
+    nt = len(tiles)
+    x, y = (np.asarray(v, f32)[None] for v in p["ramps"])
+    amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1.0)
+    R, G, Bc = (np.zeros((nt, 1024), f32) for _ in range(3))
+    T = np.ones((nt, 1024), f32)
+    for k in range(int(n.max()) if nt else 0):
+        m = int(np.searchsorted(-n, -k, side="left"))   # tiles with n > k
+        w = p["recs"][2 * page[:m] + k]
+        A, B, C, _, mx, my = (np.ascontiguousarray(w[:, i]).view(f32)[:, None] for i in range(6))
+        op, cr, cg, cb = (np.asarray(p["opc"][2 * page[:m] + k, i], f32)[:, None] for i in range(4))
+        dx, dy = x - mx, y - my
+        pw = A * (dx * dx) + B * (dx * dy) + C * (dy * dy)
+        pw = np.clip(pw, f32(-80.0), f32(0.0))
+        al = np.minimum(op * np.exp(pw).astype(f32), amax)
+        Tk = T[:m]
+        tn = Tk * (one - al)
+        live = (al >= amin) & (Tk >= 0)
+        acc = live & (tn >= tmin)
+        at = al * Tk
+        R[:m] = np.where(acc, R[:m] + at * cr, R[:m])
+        G[:m] = np.where(acc, G[:m] + at * cg, G[:m])
+        Bc[:m] = np.where(acc, Bc[:m] + at * cb, Bc[:m])
+        T[:m] = np.where(acc, tn, np.where(live, -np.abs(Tk), Tk)).astype(f32)
+    out = np.zeros((nt, 4, 1024), f32)
+    out[s] = np.stack([R, G, Bc, T], 1)
     return out
 
 
@@ -136,9 +215,10 @@ def to_image(train: np.ndarray, tiles: np.ndarray, H: int, W: int, background) -
 
 def compare(d, img: np.ndarray, fT: np.ndarray, bar: float) -> dict:
     ei = np.abs(img - d["image"])
-    eT = np.abs(fT - d["final_T"])
+    # The hero dump (docs/t685/hero.py) has no final_T: its image alone gates.
+    eT = np.abs(fT - d["final_T"]) if "final_T" in d.files else np.zeros(1)
     rep = {"max_abs_image": float(ei.max()), "max_abs_image_rgb": [float(ei[..., k].max()) for k in range(3)],
-           "max_abs_final_T": float(eT.max()), "bar": bar}
+           "max_abs_final_T": float(eT.max()), "bar": bar, "final_T_gated": "final_T" in d.files}
     rep["pass"] = bool(rep["max_abs_image"] <= bar and rep["max_abs_final_T"] <= bar)
     return rep
 
@@ -150,31 +230,46 @@ def main(argv=None) -> int:
     a.add_argument("npz")
     a.add_argument("out")
     a.add_argument("--emulate", action="store_true", help="also compare the numpy model with the oracle")
+    a.add_argument("--binned", action="store_true", help="3-sigma tile binning (prep_binned; hero size)")
     c = sub.add_parser("check")
     c.add_argument("npz")
     c.add_argument("prep_dir", help="prep dir holding the device train.f32")
     c.add_argument("--bar", type=float, default=1e-4, help="max abs error for image and final_T")
     c.add_argument("--image-out", help="write the device image (H,W,3 fp32) here for blend_backward_dev")
+    c.add_argument("--binned", action="store_true", help="the prep dir came from prep --binned")
+    c.add_argument("--no-model", action="store_true", help="skip the numpy model (minutes at hero size)")
     args = ap.parse_args(argv)
     d = np.load(args.npz, allow_pickle=False)
     cfg = cfg_from_dump(d)
     H, W = d["image"].shape[:2]
-    p = prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"], H, W)
+    p = (prep_binned if args.binned else prep)(d["means2d"], d["conic"], d["opacity"], d["colors"],
+                                               d["order"], d["valid"], H, W)
     if args.cmd == "prep":
         write(p, args.out)
         print(json.dumps({"n_tiles": len(p["tiles"]), "n_recs": len(p["recs"])}))
         if args.emulate:
-            img, fT, _ = to_image(emulate(p, cfg), p["tiles"], H, W, cfg.background)
+            img, fT, _ = to_image(emulate_fast(p, cfg), p["tiles"], H, W, cfg.background)
             print(json.dumps({"emulate_vs_oracle": compare(d, img, fT, 1e-4)}))
         return 0
     train = np.fromfile(os.path.join(args.prep_dir, "train.f32"), f32).reshape(-1, 4, 1024)
     img, fT, stop = to_image(train, p["tiles"], H, W, cfg.background)
     rep = compare(d, img, fT, args.bar)
-    model = to_image(emulate(p, cfg), p["tiles"], H, W, cfg.background)
-    rep["max_abs_image_vs_model"] = float(np.abs(img - model[0]).max())
-    rep["max_abs_final_T_vs_model"] = float(np.abs(fT - model[1]).max())
+    if "fwd_model_image" in d.files:
+        # #781 hero: the dump image is forward_fast's (centred power form, fp32 colours), which
+        # differs from the device math by up to 2e-2 at hero size (fp32 alpha_min / T_min flips
+        # over up to 25k Gaussians a tile). The gate is the numpy model of the device math
+        # (emulate_fast on prep_binned, computed once on the host), as on the crops.
+        rep["max_abs_image_vs_dump"] = rep["max_abs_image"]
+        rep["gate"] = "fwd_model"
+        rep["max_abs_image_vs_model"] = float(np.abs(img - d["fwd_model_image"]).max())
+        rep["max_abs_final_T_vs_model"] = float(np.abs(fT - d["fwd_model_final_T"]).max())
+        rep["pass"] = bool(rep["max_abs_image_vs_model"] <= args.bar and rep["max_abs_final_T_vs_model"] <= args.bar)
     rep["stopped_px"] = int(stop.sum())
-    rep["stopped_px_model"] = int(model[2].sum())
+    if not args.no_model:
+        model = to_image(emulate_fast(p, cfg), p["tiles"], H, W, cfg.background)
+        rep["max_abs_image_vs_model"] = float(np.abs(img - model[0]).max())
+        rep["max_abs_final_T_vs_model"] = float(np.abs(fT - model[1]).max())
+        rep["stopped_px_model"] = int(model[2].sum())
     if args.image_out:
         img.astype(f32).tofile(args.image_out)
     print(json.dumps({"npz": os.path.basename(args.npz), **rep}))

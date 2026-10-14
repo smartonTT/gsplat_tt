@@ -25,7 +25,7 @@
 #include "api/dataflow/dataflow_api.h"
 
 namespace {
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_AUX = 7;
 constexpr uint32_t GPB = 16, SLOT_PAGE = 4096, SLOTS_PER_PAGE = 64, SLOT_WORDS = 16;
 constexpr uint32_t P_PAGE = 4096, MV_PAGE = 2048, META_PAGE = 512, VIS_PAGE = 128;
 }  // namespace
@@ -223,6 +223,11 @@ void kernel_main() {
     constexpr auto sa = TensorAccessorArgs<va.next_compile_time_args_offset()>();
     constexpr auto ta = TensorAccessorArgs<sa.next_compile_time_args_offset()>();
     constexpr auto ia = TensorAccessorArgs<ta.next_compile_time_args_offset()>();
+#ifdef T2_SH
+    // #751: the t2sh pre pass aux page per group (arg 9, accessor 7), consumed after the reduce.
+    constexpr auto xa = TensorAccessorArgs<ia.next_compile_time_args_offset()>();
+    const auto AX = TensorAccessor(xa, get_arg_val<uint32_t>(9), P_PAGE);
+#endif
     const auto P = TensorAccessor(pa, p_addr, P_PAGE);
     const auto M = TensorAccessor(ma, m_addr, MV_PAGE);
     const auto V = TensorAccessor(va, v_addr, MV_PAGE);
@@ -253,6 +258,10 @@ void kernel_main() {
             noc_async_read(get_noc_addr(g, M), get_write_ptr(CB_M), MV_PAGE);
             cb_reserve_back(CB_V, 1);
             noc_async_read(get_noc_addr(g, V), get_write_ptr(CB_V), MV_PAGE);
+#ifdef T2_SH
+            cb_reserve_back(CB_AUX, 1);
+            noc_async_read(get_noc_addr(g, AX), get_write_ptr(CB_AUX), P_PAGE);
+#endif
             noc_async_read_barrier();
             uint32_t kmax = 0;
             for (uint32_t i = 0; i < 64; i++) kmax = meta[64 + i] > kmax ? meta[64 + i] : kmax;
@@ -277,6 +286,9 @@ void kernel_main() {
             cb_push_back(CB_P, 1);
             cb_push_back(CB_M, 1);
             cb_push_back(CB_V, 1);
+#ifdef T2_SH
+            cb_push_back(CB_AUX, 1);
+#endif
             noc_async_read_barrier();
             const uint32_t base = pg0 * SLOTS_PER_PAGE;
             for (uint32_t k = 0; k < nk; k++) {

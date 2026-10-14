@@ -2,6 +2,8 @@
 
 Branch `ttp/t748-minimal-on-device-bicycle-training-step-`. Device: bh-49 p150a (measurement
 reservation, `ttp lock p100`), run 2026-10-14 08:57 PDT at commit 6d808b6f (SYNC_STAMP MATCH).
+SH bands 1-3 (#751/#756): branch `ttp/t751-t2-sh-bands-1-3-and-full-colour-clamp-ma`, run
+2026-10-14 10:56 PDT on bh-49 at commit 9c467a44.
 
 ## What runs on device
 
@@ -14,6 +16,16 @@ reservation, `ttp lock p100`), run 2026-10-14 08:57 PDT at commit 6d808b6f (SYNC
    `t2g_compute`). It reads the same slot buffer, so **nothing is re-packed on the host between
    T1 and T2** (`host_repack_ms` = 0). The buffer is filled with NaN before T1, and the check
    counts any slot T1 left unwritten.
+3. **SH mode** (only when `<dir>/t2/sh_rest.f32` exists; otherwise the step is exactly the
+   sh0 chain above). Per step: T1 -> **t2sh pre** -> T2 (`T2_SH`, grads out) -> **t2sh post**.
+   - pre (`t2sh_reader/compute/writer`): SH basis for bands 1-15 from the view direction
+     (`sh_consts`: campos, rest scale, Adam betas, eps), full colour with the clamp-keep mask,
+     and the view-direction Jacobian. Writes one aux page per group.
+   - T2 with `T2_SH` reads the aux page: adds the direction term to dL/dmeans and applies the
+     full-colour clamp mask to dL/dsh0.
+   - post (`T2SH_POST`): rest-band grads from the T2 grads stream and sparse Adam on the rest
+     bands (visible Gaussians only). Outputs `sh_rest_out.f32`, `sh_m_out.u16`,
+     `sh_v_out.u16`, `sh_grads.f32`.
 
 Not on device yet: the forward render and the fused L1 + D-SSIM loss. Here the image and
 dL/dimage come from the T0 dump through the T1 prep planes. These are the next stages.
@@ -28,14 +40,22 @@ inputs from T1's `blend_backward` output.
 | dump | T1 slots vs blend_backward_ref | NaN slots | T2 vs t2_step (worst grad / Adam) | T0 autograd grads (worst) | T0 bf16 Adam params/delta (worst) | result |
 |---|---|---|---|---|---|---|
 | t0_sh0 | 3.7e-5 | 0 | 1.7e-4 / 1.0e-6 | 4.5e-4 | 1.4e-4 | PASS |
-| t0_sh3 | 1.0e-4 | 0 | 2.7e-4 / 4.9e-6 | means 0.57, sh0 1990 | means delta 0.51 | T1/T2 PASS; T0 not gated |
+| t0_sh3 | 1.0e-4 | 0 | 2.7e-4 / 8.8e-6 | 3.9e-4 | 5.5e-4 | PASS (all bands gated) |
+
+sh3 per SH band vs T0 (worst relative):
+
+| band | grad | param after Adam |
+|---|---|---|
+| 0 | 1.5e-5 | 1.2e-7 |
+| 1 | 1.5e-5 | 8.4e-8 |
+| 2 | 1.5e-5 | 7.1e-8 |
+| 3 | 1.5e-5 | 1.1e-6 |
 
 Bars: slots 1e-2, grads 1e-2, Adam 1e-3 (relative). Full reports: `out/check-*.json`.
 
-For sh3, T0 is reported but not gated. T2 handles SH band 0 only. The oracle's dL/dmeans
-includes the view-direction term from SH bands 1-3. Its dL/dsh0 is zero wherever the
-**full** colour clamps (e.g. Gaussian 1, green channel). T2 computes the clamp from band 0
-alone. Both are real gaps for SH-3 training (see levers).
+Before #756 the sh3 T0 check failed (means 0.57, sh0 1990): T2 had no view-direction term
+in dL/dmeans and took the clamp from band 0 alone. With the t2sh passes both are fixed and
+T0 is gated on all bands. sh0 numbers are unchanged with the SH code in the binary.
 
 **A full view (hero) has not been checked yet.** The hero dump (`docs/t685/hero.py`) has no
 T2 inputs (3D params, Adam state).
@@ -43,7 +63,9 @@ T2 inputs (3D params, Adam state).
 ## Timing (crop only; not a ms/view number)
 
 `out/timing-sh*.json`, 10 reps, 110 T2 cores, 4 T1 cores:
-T1 0.058 ms, T2 0.043 ms, chained T1+T2 (one Finish) 0.085 ms, host re-pack 0. On a 64x64
+T1 0.058 ms, T2 0.043 ms, chained T1+T2 (one Finish) 0.085 ms, host re-pack 0.
+SH3 (#756, min of 10): T1 0.057, t2sh pre 0.019, T2 (T2_SH) 0.043, t2sh post 0.028 ms;
+chain 0.104 ms. sh0 rerun on the same build: T1 0.058, T2 0.044, chain 0.085 ms. On a 64x64
 crop this is almost all dispatch overhead. The sustained multi-view bicycle ms/view run and
 the 1-2k-iteration loss curve have not been done yet.
 
@@ -108,8 +130,8 @@ and 0.086 ms (T1+T2). Not a ms/view number yet.
 2. Train-mode forward on device (blend_fwd_bench, #716) writing T1 records/planes, plus the
    fused L1 + D-SSIM loss kernel (#736/#742/#743) writing dL/dimage. This removes the dump
    from the loop.
-3. SH bands 1-3 in T2 (or a separate pass), with the full-colour clamp mask from the forward.
-   Needed for SH-3 training and the T0 gate on sh3.
+3. Done in #756 (SH bands 1-3 via t2sh pre/post). Next for SH: fold pre into T2's reader
+   group walk to save one dispatch (~0.02 ms on the crop).
 4. Sustained NN-ordered multi-view timing (benchmarks/cameras_train_*.json), then the short
    training run with the loss curve.
 5. T2 FPU reduce with an on-device block-float split (#740), replacing the gather reduce.
@@ -154,3 +176,54 @@ Adam given device grads 4.8e-6, moments bit-equal, pfwc 5.1e-5 (bar 1e-3). End-t
 (reported): 5.8e-3 from bf16 rounding flips. On the ill rows the device is closer to fp64 than
 the host fp32 reference (means 4.0e4 vs 3.6e5). Full report: `out/check-hero-t2.json`. The
 device outputs are those of the 12:36 PDT run; only the check changed.
+
+## #781: first dump-free hero chain (forward -> loss -> T1/T2), 2026-10-14
+
+Driver: `docs/train-step/drive_loop.sh 11d4bf19` on bh-49 (p150, under `ttp lock p100`), log
+`out/hero7-driver.log`, per-stage outputs in `out/loop/` (crops) and `out/loop-hero/` (hero).
+The forward prep is binned and vectorized (`blend_forward_dev.prep_binned`, unit-tested against
+`prep` on crops); the hero forward gate is the numpy model of the device math
+(`hero_model.py`, `emulate_fast`), computed once on the Mac.
+
+| run | forward vs oracle | loss grad vs oracle | T1 | T2 | chain gate |
+|---|---|---|---|---|---|
+| sh0 64x64 crop | 3.4e-7 (pass) | l2rel 6.1e-7 (pass) | pass | pass | pass, T0 pass |
+| sh3 64x64 crop | 4.1e-7 (pass) | l2rel 5.7e-7 (pass) | pass | pass | pass (T0 flag false, see below) |
+| hero 1237x822 | **fail**: 1.4e-2 vs model, 1.7e-2 vs dump | **no oracle** (see below) | pass | pass | T1/T2 pass vs device dL/dimage |
+
+Hero device times (median of 5, single p150, no host round trips between stages):
+
+| stage | ms | note |
+|---|---|---|
+| forward (blend_fwd_bench, 4.48 M records, 1014 tiles) | 440.4 | not oracle-clean, so not a headline |
+| loss (D-SSIM+L1, 3042 tiles, 110 cores) | 0.96 | b2b; fwd part 0.44 |
+| T1 | 81.4 | |
+| T2 | 98.4 | |
+| T1+T2 chain | 179.7 | was 186.2 in #770 |
+
+Open problems found (none of these numbers counts as a training ms/view yet):
+1. Hero forward misses the gate. 128 of 1014 tiles hold more than 8192 records (max 25069) and go
+   through the CONTINUE sub-chunk path that the 64x64 crops never reach; the device image was
+   deleted on the box before the pull, so the error is not yet localized to those tiles.
+2. The hero loss stage has no oracle: `chain_dump` compares with the dump's `dL_dimage`, which at
+   hero size is not a D-SSIM+L1 gradient (the dump has no `loss` key), hence l2rel 3.7. A host
+   numpy D-SSIM+L1 gradient of the device image against the target is needed.
+3. Forward at 440 ms is 2.4x the whole backward; a sustained ms/view (step 4) and the 1-2k-step
+   loss curve (step 5) are not run.
+4. sh3 crop, T0 flag false: every gradient matches T0 to about 1e-5 except `means`
+   (max rel 0.57, l2rel 1.0e-2; Adam delta on means 0.26). The sh0 crop passes, so the likely gap is
+   the SH-direction term of dL/dmeans (view-dependent colour) or the raw<0 colour mask on it
+   (decision #763); `out/loop/loop-sh3/out/check.log`.
+
+## #795: sh3 dL/dmeans (step 3 of the #781 open problems), 2026-10-14
+
+Cause of the sh3 crop T0 miss on dL/dmeans (max rel 0.57): the #781 chain ran T2 alone, which
+owns SH band 0 and has no view-direction term (d colour / d means through the SH bands 1-3).
+The host reference with that term removed reproduces the device number exactly (0.5697952 vs
+0.5697944); with it, `t2_param_backward.check` on the sh3 dump gives means 1.4e-5 (bar 1e-2).
+Fix: merged the #751/#756 t2sh pre/post passes (bands 1-15, view-direction Jacobian, rest-band
+sparse Adam; train_step runs them when t2/sh_rest.f32 exists) into this chain, with the
+full-colour keep mask changed to raw >= 0 only (#763) in `sh_lanes` and `t2sh_compute.cpp`.
+`t2_dev.check` and `train_step_dev check` now compare every band the device owns, and T0 is
+gated on sh3 once the device owns all bands. Host check after the merge: sh0 and sh3 T2 gates
+pass. Not yet rebuilt or rerun on device (next run).
