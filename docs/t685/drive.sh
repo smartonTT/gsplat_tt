@@ -26,16 +26,21 @@ echo "sync rc=$rc"; grep '^\[sync_remote\]' "$O/sync.log"
 rsha=$(timeout 60 "${SSH[@]}" "sed -n 's/^sha=//p' $T/SYNC_STAMP")
 echo "STAMP remote=$rsha local=$sha $([ "$rsha" = "$sha" ] && echo MATCH || echo MISMATCH)"
 ENV="cd $T && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal \
-  TT_METAL_ARCH_NAME=blackhole PYTHONDONTWRITEBYTECODE=1 TT_METAL_CACHE=/localdev/smarton/.cache/ttmc-t693 && source .venv/bin/activate"
+  TT_METAL_ARCH_NAME=blackhole PYTHONDONTWRITEBYTECODE=1 TT_METAL_CACHE=/localdev/smarton/.cache/ttmc-t693 \
+  TT_METAL_OPERATION_TIMEOUT_SECONDS=${OP_TIMEOUT:-60} && source .venv/bin/activate"
+# WATCH=1: tt-metal watcher (waypoints per RISC) with its log pulled back under out/remote/logs.
+[ "${WATCH:-0}" = 1 ] && ENV="$ENV && export TT_METAL_WATCHER=2 TT_METAL_LOGS_PATH=$T/tmp/t693/logs"
+if [ "${RESET_FIRST:-0}" = 1 ]; then echo "=== tt-smi -r first"; timeout 300 "${SSH[@]}" "$ENV && tt-smi -r > /dev/null 2>&1; echo reset rc=\$?"; fi
 echo "=== build $(date +%T)"
 timeout 900 "${SSH[@]}" "$ENV && mkdir -p tmp/t693 && (cmake -G Ninja -S render/train -B render/train/build -DCMAKE_BUILD_TYPE=Release \
   && nice -n 19 cmake --build render/train/build -j 8) > tmp/t693/build.log 2>&1; rc=\$?; tail -25 tmp/t693/build.log; exit \$rc"
 brc=$?; echo "build rc=$brc"
 if [ $brc = 0 ]; then
-  for n in sh0 sh3; do
+  for n in ${NPZS:-sh0 sh3}; do
     echo "=== run $n $(date +%T)"
     timeout 600 "${SSH[@]}" "$ENV && rm -rf tmp/t693/$n && python3 -m gsplat.blend_backward_dev prep benchmarks/train_oracle/t0_${n}_64x64_n50.npz tmp/t693/$n \
-      && timeout 480 render/train/build/blend_bwd_bench tmp/t693/$n \${BWD_CORES:-} > tmp/t693/$n/run.log 2>&1; rc=\$?; tail -20 tmp/t693/$n/run.log; exit \$rc"
+      && timeout ${RUN_TIMEOUT:-240} render/train/build/blend_bwd_bench tmp/t693/$n \${BWD_CORES:-} > tmp/t693/$n/run.log 2>&1; rc=\$?; tail -20 tmp/t693/$n/run.log; \
+      if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > tmp/t693/$n/reset.log 2>&1; echo \"reset rc=\$?\"; fi; exit \$rc"
     echo "run $n rc=$?"
   done
 fi
