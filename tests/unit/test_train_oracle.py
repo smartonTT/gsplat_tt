@@ -9,6 +9,8 @@ dumps in benchmarks/train_oracle/ are current.
     python3 -m pytest -q tests/unit/test_train_oracle.py
 The full every-entry FD check: python3 -m gsplat.train_oracle --fd-report <json>
 """
+import dataclasses
+import math
 import pathlib
 import sys
 
@@ -242,3 +244,36 @@ def test_training_colour_clamps_at_zero_only():
     if g2d["colors"][0, 0] != 0:
         assert grads["sh"][0, 0, 0] != 0
     assert grads["sh"][0, 0, 2] == 0
+
+
+def test_jacobian_clamp_matches_3dgs():
+    # #786: 3DGS/gsplat clamp the camera-space mean the projection Jacobian sees to
+    # 1.3 x tan(half FOV) per axis. A large Gaussian whose centre is past the clamp
+    # stays visible; its conic must follow the clamped J in the oracle and in
+    # rasterization.py, and the oracle's gradient must be the forward's derivative.
+    cfg, cam, scene, _, _ = _case(3)
+    lim = 1.3 * cam.width / (2.0 * float(cam.K[0, 0]))
+    R, t = cam.w2c[:3, :3], cam.w2c[:3, 3]
+    p = {k: v.clone() for k, v in scene.items()}
+    pc = torch.tensor([1.2 * lim * 2.0, 0.3 * lim * 2.0, 2.0], dtype=R.dtype)
+    p["means"][0] = R.T @ (pc - t)
+    p["log_scales"][0] = math.log(0.8)
+    with torch.no_grad():
+        on = o.render(p, cam, cfg)
+        off = o.render(p, cam, dataclasses.replace(cfg, jclamp=None))
+    assert bool(on.visible[0]) and bool(off.visible[0])
+    assert not torch.allclose(on.conic[0], off.conic[0])
+    q = p["quats"] / p["quats"].norm(dim=-1, keepdim=True)
+    _, cov2d, _, _, valid = project_gaussians(
+        p["means"], torch.exp(p["log_scales"]), q, cam.w2c, cam.K,
+        cam.height, cam.width, max_radius=-1)
+    assert bool(valid[0])
+    conic_ref = torch.linalg.inv(cov2d[0])  # cov2d holds valid rows only
+    torch.testing.assert_close(on.conic[0], torch.stack(
+        [conic_ref[0, 0], conic_ref[0, 1], conic_ref[1, 1]]), rtol=1e-9, atol=1e-12)
+
+    def conic0(m0):
+        pp = dict(p)
+        pp["means"] = torch.cat([m0[None], p["means"][1:]])
+        return o.render(pp, cam, cfg).conic[0]
+    assert torch.autograd.gradcheck(conic0, (p["means"][0].clone().requires_grad_(),))
