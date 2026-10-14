@@ -26,8 +26,8 @@ using namespace tt::tt_metal;
 
 namespace {
 constexpr uint32_t P_PAGE = 4096, MV_PAGE = 2048, META_PAGE = 512, VIS_PAGE = 128, F_PAGE = 256,
-                   SLOT_PAGE = 4096, GPB = 16, NCONST = 31, STAGE_PAGES = 64;
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6;
+                   SLOT_PAGE = 4096, GPB = 16, NCONST = 31, A_ENTRIES = 2, A_TILE = 2048;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_A = 7;
 constexpr uint32_t CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_FO = 19, CB_GO = 20;
 
 template <class T>
@@ -132,7 +132,8 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_V, MV_PAGE, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_K, P_PAGE, 2);
     add_cb(prog, cores, CB_WH, 64, 2);
-    add_cb(prog, cores, CB_WS, VIS_PAGE + META_PAGE + STAGE_PAGES * SLOT_PAGE, 1);
+    add_cb(prog, cores, CB_WS, VIS_PAGE + META_PAGE + A_ENTRIES * 64 * 2, 1);
+    add_cb(prog, cores, CB_A, A_TILE, 4 * A_ENTRIES, DataFormat::Float16_b);
     add_cb(prog, cores, CB_PO, P_PAGE, 2);
     add_cb(prog, cores, CB_MO, MV_PAGE, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_VO, MV_PAGE, 2, DataFormat::Float16_b);
@@ -142,7 +143,7 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> rct, wct;
     for (int i = 0; i < 6; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
     for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
-    std::map<std::string, std::string> rdef = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"}}, wdef;
+    std::map<std::string, std::string> rdef = {{"T2_A_ENTRIES", std::to_string(A_ENTRIES) + "u"}}, wdef;
     if (grads) wdef["T2_GRADS_OUT"] = "1";
     const std::string kd = T2_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "t2_reader.cpp", cores,
@@ -153,9 +154,8 @@ int main(int argc, char** argv) {
                                               .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = wdef});
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_P] = UnpackToDestMode::UnpackToDestFp32;
-    u2d[CB_K] = UnpackToDestMode::UnpackToDestFp32;
     auto kc = CreateKernel(prog, kd + "t2_compute.cpp", cores,
-                           ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
+                           ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
                                          .math_approx_mode = false, .defines = wdef});
     // Blocks round-robin over the used cores; groups processed = groups with any visible row.

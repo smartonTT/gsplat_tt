@@ -1,9 +1,14 @@
-// T2 param pass compute (#697): segment reduce of the rank planes, projection forward recompute
+// T2 param pass compute (#697, #713): segment reduce of the slots, projection forward recompute
 // + backward to means / log_scales / quats / opacity logit / SH0, sparse Adam (fp32 math, bf16
 // RNE moments rounded on the SFPU), pfwc epilogue. Model: gsplat/t2_param_backward.py; layout:
 // gsplat/t2_dev.py (one tile = 64 Gaussians x 16 streams, stream s = SFPU vectors 2s, 2s+1).
-// Per group: Dst tile 0 params, 1 m, 2 v, 3 g2d (then pfwc out), 4 rank plane (then grads),
-// 5-7 scratch. The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
+// Per group: Dst tile 0 params, 1 m, 2 v, 3 g2d (then pfwc out), 4 grads, 5-7 scratch.
+// Segment reduce (#713): per slot page window, four FPU matmuls (bf16 0/1 segment tiles from CB_A
+// x the raw fp32 page tile from CB_K, HiFi4, fp32 Dst) accumulate into tiles 4-7 (lanes 0-31 /
+// 32-63 of the left / right page column halves, rows = lanes, columns = streams); the right
+// halves fold into the left on the SFPU, tiles 4 and 5 are transposed in Dst, and SFPTRANSP
+// regroups the four 16-lane chunks into the stream layout of tile 3.
+// The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
 // Runtime args: group count, then NCONST fp32 constants (bits, t2_dev.consts order).
 #include <cstdint>
 
@@ -13,12 +18,14 @@
 #include "api/compute/pack.h"
 #include "api/compute/reconfig_data_format.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
+#include "api/compute/matmul.h"
+#include "api/compute/transpose_wh_dest.h"
 #include "sfpi.h"
 #include "sfpu/ckernel_sfpu_converter.h"
 #include "llk_math_eltwise_unary_sfpu.h"
 
 namespace {
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_A = 7;
 constexpr uint32_t CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_FO = 19, CB_GO = 20;
 constexpr uint32_t NCONST = 31;
 }  // namespace
@@ -384,10 +391,41 @@ __attribute__((noinline)) void t2_body() {
     }
 }
 
-// Rank plane (tile 4) into the g2d accumulator (tile 3): 9 streams, both parities.
-inline void t2_add_plane() {
-#pragma GCC unroll 18
-    for (uint32_t v = 0; v < 18; v++) dst_reg[TG + v] = vFloat(dst_reg[TG + v]) + vFloat(dst_reg[TK + v]);
+// Matmul accumulators (tiles 4-7) to zero.
+inline void t2_zero_acc() {
+#pragma GCC unroll 8
+    for (uint32_t v = TK; v < TK + 128; v++) dst_reg[v] = 0.0f;
+}
+
+// Fold the right column halves of tiles 6, 7 (faces 1, 3) into the left halves of 4, 5 (faces 0, 2).
+inline void t2_fold() {
+#pragma GCC unroll 8
+    for (uint32_t v = 0; v < 8; v++) {
+        dst_reg[128 + v] = vFloat(dst_reg[128 + v]) + vFloat(dst_reg[192 + 8 + v]);
+        dst_reg[128 + 16 + v] = vFloat(dst_reg[128 + 16 + v]) + vFloat(dst_reg[192 + 24 + v]);
+        dst_reg[160 + v] = vFloat(dst_reg[160 + v]) + vFloat(dst_reg[224 + 8 + v]);
+        dst_reg[160 + 16 + v] = vFloat(dst_reg[160 + 16 + v]) + vFloat(dst_reg[224 + 24 + v]);
+    }
+}
+
+// After the Dst transposes, lanes 16c..16c+15 (chunk c) of stream s sit at row s of tile 4 face 0
+// (c=0), tile 4 face 1 (c=1), tile 5 face 0 (c=2), tile 5 face 1 (c=3). Load streams 4m..4m+3 of
+// each chunk (one column half), SFPTRANSP swaps sub-row and register, so register i holds stream
+// 4m+i with sub-row = chunk: exactly rows 4s..4s+3 of tile 3. Streams 9-11 land in g2d scratch.
+inline void t2_regroup() {
+#pragma GCC unroll 3
+    for (uint32_t m = 0; m < 3; m++) {
+#pragma GCC unroll 2
+        for (uint32_t h = 0; h < 2; h++) {
+            vFloat a = dst_reg[128 + 2 * m + h], b = dst_reg[128 + 8 + 2 * m + h];
+            vFloat c = dst_reg[160 + 2 * m + h], d = dst_reg[160 + 8 + 2 * m + h];
+            subvec_transp(a, b, c, d);
+            dst_reg[TG + 8 * m + h] = a;
+            dst_reg[TG + 8 * m + 2 + h] = b;
+            dst_reg[TG + 8 * m + 4 + h] = c;
+            dst_reg[TG + 8 * m + 6 + h] = d;
+        }
+    }
 }
 }  // namespace
 #endif
@@ -403,7 +441,7 @@ void kernel_main() {
         cb_wait_front(CB_HDR, 1);
         const uint32_t ha = get_tile_address(CB_HDR, 0);  // all threads (mailbox sync)
         asm volatile("fence" ::: "memory");
-        const uint32_t nk = reinterpret_cast<const volatile uint32_t*>(ha)[0];
+        const uint32_t nw = reinterpret_cast<const volatile uint32_t*>(ha)[0];
         cb_pop_front(CB_HDR, 1);
 
         tile_regs_acquire();
@@ -419,18 +457,31 @@ void kernel_main() {
         copy_tile_to_dst_init_short_with_dt(CB_M, CB_V);
         copy_tile(CB_V, 0, 2);
         cb_pop_front(CB_V, 1);
-        copy_tile_to_dst_init_short_with_dt(CB_V, CB_K);
-        cb_wait_front(CB_K, 1);
-        copy_tile(CB_K, 0, 3);
-        cb_pop_front(CB_K, 1);
-        for (uint32_t k = 1; k < nk; k++) {
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((t2_zero_acc()));
+        MATH((_llk_math_eltwise_unary_sfpu_done_()));
+        reconfig_data_format(CB_K, CB_A);
+        mm_init_short(CB_A, CB_K);
+        for (uint32_t w = 0; w < nw; w++) {
+            cb_wait_front(CB_A, 4);
             cb_wait_front(CB_K, 1);
-            copy_tile(CB_K, 0, 4);
+            matmul_tiles(CB_A, CB_K, 0, 0, 4);
+            matmul_tiles(CB_A, CB_K, 1, 0, 5);
+            matmul_tiles(CB_A, CB_K, 2, 0, 6);
+            matmul_tiles(CB_A, CB_K, 3, 0, 7);
             cb_pop_front(CB_K, 1);
-            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-            MATH((t2_add_plane()));
-            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            cb_pop_front(CB_A, 4);
         }
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((t2_fold()));
+        MATH((_llk_math_eltwise_unary_sfpu_done_()));
+        transpose_wh_dest_init_short<true>();
+        transpose_wh_dest<true>(4);
+        transpose_wh_dest<true>(5);
+        MATH((_llk_math_eltwise_unary_sfpu_init_<SfpuType::unused>()));
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((t2_regroup()));
+        MATH((_llk_math_eltwise_unary_sfpu_done_()));
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_body()));
         MATH((sfpi::dst_reg++));
