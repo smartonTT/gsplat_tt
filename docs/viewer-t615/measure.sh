@@ -2,7 +2,8 @@
 # t615: page FPS on bh-50 for 1 chip and AFR on 2 chips through a temporary tunnel (local 8095).
 # Exit trap: close tunnel, stop viewer, release IRD job $JOB, confirm it is gone.
 # Run 2 (job 133865): bh-50's boards are /dev/tenstorrent/0 (fw 18.12.1) and /7 (fw 19.7.0);
-# one process opening both fails the firmware-bundle check, so 1 chip = TT_VISIBLE_DEVICES=0, AFR = 0,7.
+# one process opening both fails the firmware-bundle check, so 1 chip = TT_VISIBLE_DEVICES=0, AFR = 0,1 (one board per worker).
+# Run 4 (job 133878): AFR 0,7 failed: TT_VISIBLE_DEVICES takes logical ids (0..1 here), not /dev nodes; /dev/7 is id 1.
 # The boards are unharvested (14x10 under ETH dispatch): both arms cap the grid at 12x10 as on bh-30.
 export VIEWER_GRID_X=12
 # Run 3 under ETH dispatch: 1-chip selftest 14.27 ms here (bh-30 ~8.3). Run 4 uses worker dispatch,
@@ -60,7 +61,11 @@ arm() {  # arm <label>
 echo "=== $(ts) arm 1chip (single-chip viewer, TT_VISIBLE_DEVICES=0)"
 VIEWER_VISIBLE_DEVICES=0 timeout 300 opt/viewer/viewer.sh restart
 arm 1chip
-echo "=== $(ts) restart AFR 0,7"
-VIEWER_AFR_DEVICES=0,7 timeout 300 opt/viewer/viewer.sh restart
+echo "=== $(ts) restart AFR 0,1"
+VIEWER_AFR_DEVICES=0,1 timeout 300 opt/viewer/viewer.sh restart
 arm afr2
+# board 1 alone (fw 19.7.0): shows whether one board limits the AFR pair
+echo "=== $(ts) arm 1chip-b1 (TT_VISIBLE_DEVICES=1)"
+VIEWER_VISIBLE_DEVICES=1 timeout 300 opt/viewer/viewer.sh restart
+arm 1chip-b1
 echo "=== $(ts) done"
