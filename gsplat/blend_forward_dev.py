@@ -8,14 +8,16 @@ defines) and reads back its fp32 R/G/B/T train buffer (one 16 KB page per screen
 
 Lossless: every valid Gaussian goes to every tile in the oracle's front-to-back order with all
 32 microblocks in its mask, so the only cull is the oracle's own alpha < alpha_min rule (no
-3-sigma tile rect, no microblock cull, no T early-out). Opacity and colours travel as UNORM16
-(the production record format; |error| <= 2^-17); the conic and mean are fp32.
+3-sigma tile rect, no microblock cull, no T early-out). Opacity and colours travel as fp32 in
+opc.f32 (the train-mode side slab, task #717: lossless, colours may exceed 1); the records keep
+the UNORM16 words of the production format, which BLEND_TRAIN does not read. Conic and mean fp32.
 
 File layout (little endian):
   tiles.u32  16 words per tile (every screen tile, row-major): tile_id, rec_page, num_g, 0...
   recs.u32   PACK2 records, 2 per 64 B page, each tile's list starting on a page:
              A' = -A/2, B' = -B, C' = -C/2, mask (0xffffffff), mx, my (tile-local fp32),
              op16 | r16 << 16, g16 | b16 << 16
+  opc.f32    fp32 opacity, r, g, b per record row of recs.u32 (zeros for a pad record)
   ramps.f32  2 tilized fp32 tiles: x = c + 0.5, y = r + 0.5
   meta.json  n_tiles, n_rec_pages, H, W
 The bench writes train.f32: per tile 4 tilized fp32 tiles R, G, B, T (T < 0: the pixel
@@ -60,7 +62,8 @@ def prep(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
     tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
     rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
     ramps = np.stack([tilize(cc.astype(f32) + f32(0.5)), tilize(rr.astype(f32) + f32(0.5))])
-    tiles, recs = [], []
+    op, col = np.asarray(opacity, f32).reshape(-1), np.asarray(colors, f32)
+    tiles, recs, opc = [], [], []
     for ty in range(tiles_y):
         for tx in range(tiles_x):
             page = len(recs) // 2
@@ -70,11 +73,13 @@ def prep(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
                 recs.append([fbits(f32(-0.5) * A), fbits(-B), fbits(f32(-0.5) * C), FULL_MASK,
                              fbits(m2[g, 0] - f32(tx * TILE)), fbits(m2[g, 1] - f32(ty * TILE)),
                              int(op16[g] | (col16[g, 0] << 16)), int(col16[g, 1] | (col16[g, 2] << 16))])
+                opc.append([op[g], col[g, 0], col[g, 1], col[g, 2]])
             if len(recs) % 2:
                 recs.append([0] * REC_WORDS)  # pad: the next tile starts on a page
+                opc.append([0.0] * 4)
     return {"tiles": np.asarray(tiles, np.uint32).reshape(-1, 16),
-            "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS), "ramps": ramps,
-            "H": H, "W": W}
+            "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS), "opc": np.asarray(opc, f32).reshape(-1, 4),
+            "ramps": ramps, "H": H, "W": W}
 
 
 def prep_binned(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
@@ -106,17 +111,21 @@ def prep_binned(means2d, conic, opacity, colors, order, valid, H: int, W: int) -
     recs[row, 5] = bits(m2[g, 1] - (ty * TILE).astype(f32))
     recs[row, 6] = op16[g] | (col16[g, 0] << 16)
     recs[row, 7] = col16[g, 1] | (col16[g, 2] << 16)
+    opc = np.zeros((len(recs), 4), f32)
+    opc[row, 0] = np.asarray(opacity, f32).reshape(-1)[g]
+    opc[row, 1:] = np.asarray(colors, f32)[g]
     tiles = np.zeros((nt, 16), np.uint32)
     tiles[:, 0], tiles[:, 1], tiles[:, 2] = np.arange(nt), page0, cnt
     rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
     ramps = np.stack([tilize(cc.astype(f32) + f32(0.5)), tilize(rr.astype(f32) + f32(0.5))])
-    return {"tiles": tiles, "recs": recs, "ramps": ramps, "H": H, "W": W}
+    return {"tiles": tiles, "recs": recs, "opc": opc, "ramps": ramps, "H": H, "W": W}
 
 
 def write(p: dict, out: str) -> None:
     os.makedirs(out, exist_ok=True)
     p["tiles"].tofile(os.path.join(out, "tiles.u32"))
     p["recs"].tofile(os.path.join(out, "recs.u32"))
+    p["opc"].astype(f32).tofile(os.path.join(out, "opc.f32"))
     p["ramps"].astype(f32).tofile(os.path.join(out, "ramps.f32"))
     meta = {"n_tiles": len(p["tiles"]), "n_rec_pages": max(1, len(p["recs"]) // 2), "H": p["H"], "W": p["W"]}
     with open(os.path.join(out, "meta.json"), "w") as f:
@@ -132,10 +141,8 @@ def emulate(p: dict, cfg) -> np.ndarray:
     for i, (_, page, n) in enumerate(p["tiles"][:, :3]):
         R, G, Bc = (np.zeros(1024, f32) for _ in range(3))
         T = np.ones(1024, f32)
-        for w in p["recs"][2 * page:2 * page + n]:
+        for w, (op, cr, cg, cb) in zip(p["recs"][2 * page:2 * page + n], p["opc"][2 * page:2 * page + n]):
             A, B, C, _, mx, my = (np.uint32(v).view(f32) for v in w[:6])
-            op, cr = unorm16_decode(w[6] & 0xFFFF), unorm16_decode(w[6] >> 16)
-            cg, cb = unorm16_decode(w[7] & 0xFFFF), unorm16_decode(w[7] >> 16)
             dx, dy = x - mx, y - my
             pw = A * (dx * dx) + B * (dx * dy) + C * (dy * dy)
             pw = np.clip(pw, f32(-80.0), f32(0.0))
@@ -164,12 +171,11 @@ def emulate_fast(p: dict, cfg) -> np.ndarray:
     amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1.0)
     R, G, Bc = (np.zeros((nt, 1024), f32) for _ in range(3))
     T = np.ones((nt, 1024), f32)
-    col = lambda w: unorm16_decode(w)[:, None]  # noqa: E731
     for k in range(int(n.max()) if nt else 0):
         m = int(np.searchsorted(-n, -k, side="left"))   # tiles with n > k
         w = p["recs"][2 * page[:m] + k]
         A, B, C, _, mx, my = (np.ascontiguousarray(w[:, i]).view(f32)[:, None] for i in range(6))
-        op, cr, cg, cb = col(w[:, 6] & 0xFFFF), col(w[:, 6] >> 16), col(w[:, 7] & 0xFFFF), col(w[:, 7] >> 16)
+        op, cr, cg, cb = (np.asarray(p["opc"][2 * page[:m] + k, i], f32)[:, None] for i in range(4))
         dx, dy = x - mx, y - my
         pw = A * (dx * dx) + B * (dx * dy) + C * (dy * dy)
         pw = np.clip(pw, f32(-80.0), f32(0.0))

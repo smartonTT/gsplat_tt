@@ -1,5 +1,5 @@
 """T0 forward harness (#716): the numpy model of the BLEND_TRAIN device forward (same prep
-files, UNORM16 opacity/colours, fp32 math) must match the oracle image and final T."""
+files, fp32 opacity/colours from opc.f32, fp32 math) must match the oracle image and final T."""
 import os
 import pathlib
 import sys
@@ -13,10 +13,9 @@ from gsplat import blend_forward_dev as fwd  # noqa: E402
 from gsplat.blend_backward_dev import cfg_from_dump, tilize  # noqa: E402
 
 DUMPS = sorted(str(p) for p in (ROOT / "benchmarks" / "train_oracle").glob("t0_sh*_64x64_n50.npz"))
-# #763 (3DGS colour max(SH+0.5, 0), no clamp at 1) left 2 sh3 colours above 1 (max 1.084); the
-# UNORM16 record colour clips them at 1, so the device forward cannot match that oracle image.
-COLOUR_GT1 = pytest.mark.xfail(strict=True, reason="UNORM16 record colour clips the #763 colours > 1")
-ORACLE_DUMPS = [pytest.param(p, marks=COLOUR_GT1) if "sh3" in p else p for p in DUMPS]
+# #763 (3DGS colour max(SH+0.5, 0), no clamp at 1) left 2 sh3 colours above 1 (max 1.084): the
+# fp32 opc.f32 side slab (#717) carries them losslessly, so every dump meets the oracle.
+ORACLE_DUMPS = DUMPS
 
 
 @pytest.mark.parametrize("path", ORACLE_DUMPS, ids=[os.path.basename(p) for p in DUMPS])
@@ -73,10 +72,11 @@ def test_prep_binned_is_prep_cut_to_rects(path, scale):
         want = full["recs"][2 * fp:2 * fp + fn][keep]
         assert bp == page and bn == len(want)
         assert (binned["recs"][2 * bp:2 * bp + bn] == want).all()
+        assert (binned["opc"][2 * bp:2 * bp + bn] == full["opc"][2 * fp:2 * fp + fn][keep]).all()
         assert (binned["recs"][2 * bp + bn:2 * (bp + (bn + 1) // 2)] == 0).all()   # pad record
         page += (bn + 1) // 2
         dropped += fn - bn
-    assert len(binned["recs"]) == 2 * page
+    assert len(binned["recs"]) == 2 * page and binned["opc"].shape == (2 * page, 4)
     if scale == 64.0:
         assert dropped > 0
 
