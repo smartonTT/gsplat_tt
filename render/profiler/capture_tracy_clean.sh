@@ -33,7 +33,7 @@ export PYTHONPATH=/localdev/smarton/tt-metal/tools:${PYTHONPATH:-}
 export TT_METAL_DEVICE_PROFILER=1
 export GSPLAT_TT_PROFILE=1
 
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/$USER/gstt2-sync}"  # opt/sync_remote.sh default dir, never a ~/dev mirror (#676)
 cd "$REPO" || { echo "[capture_clean] FATAL: cannot cd $REPO" >&2; exit 1; }
 OUTDIR="$REPO/opt/profiler/wrap_out_render-clean"
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"

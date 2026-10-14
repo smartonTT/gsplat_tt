@@ -21,7 +21,7 @@
 #   devrun.sh --no-verify --timeout 2700 --tag ablation-phasing -- \
 #     bash /localdev/smarton/prof_ablation_phasing.sh
 set -uo pipefail
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/$USER/gstt2-sync}"  # opt/sync_remote.sh default dir, never a ~/dev mirror (#676)
 cd "$REPO" || exit 1
 
 COMPUTE=render/kernels/compute/alpha_blend_compute_mb.cpp

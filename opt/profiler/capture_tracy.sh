@@ -46,7 +46,7 @@ export GSPLAT_TT_PROFILE=1
 # here replaced the +24 KB the default pfwc writer split needs and failed with
 # TT_FATAL state.offset <= max_size.
 
-REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
+REPO="${GSTT2_REPO:-/localdev/$USER/gstt2-sync}"  # override to capture from another tree
 cd "$REPO" || { echo "[capture_tracy] FATAL: cannot cd $REPO" >&2; exit 1; }
 # tt-metal hashes zones to 16 bits over "name,abs path,line": a collision at this
 # checkout path makes ReadMeshDeviceProfilerResults throw (#416). Fail before the run.
