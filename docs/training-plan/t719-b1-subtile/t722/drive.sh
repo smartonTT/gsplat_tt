@@ -4,6 +4,7 @@
 # proxies (rebuilt only if missing), then
 #   md5:  BLEND_T_PERIOD=0, each arm: 1M_s4 3M_s2 full_s1 (raw_md5 must match arm 0)
 #   b2b:  default period, each arm: s4 {0p5M,1M,1p5M,3M}, s2 {1M,3M,full}, full_s1 (arms interleaved)
+#   hero: default period, full scene, cameras_v2 hero view (hero_clean.png) per arm
 #   ttp detach t722-ab -- docs/training-plan/t719-b1-subtile/t722/drive.sh <rev>   (Mac, worktree root)
 # Restrictions: only the existing measurement reservation (no ird reserve/extend/release), never the
 # viewer box bh-30; every ssh/scp goes through shims forcing StrictHostKeyChecking=yes; only files
@@ -53,14 +54,16 @@ step() {  # name timeout B1 PERIOD cfgs...
   local n=$1 to=$2 b=$3 p=$4; shift 4
   $DEVRUN --host "$H" --no-verify --timeout "$to" --tag t722-$n -- \
     "T=$T B1=$b PERIOD=$p MESH_DEVICE=$MESH_DEVICE RUN_TIMEOUT=240 bash $T/$D/remote.sh $n $*" 2>&1 \
-    | tee "$O/$n-b$b-p$p.out" | grep -E "$pat" | cut -c1-260
+    | tee "$O/$n-b$b-p$p-$1.out" | grep -E "$pat" | cut -c1-260
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n b$b rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
-for b in 0 1 2; do step md5 900 $b 0 1M_s4 3M_s2 full_s1; done
-for b in 0 1 2; do step g4 900 $b default 1M_s4 0p5M_s4 1p5M_s4 3M_s4; done
-for b in 0 1 2; do step g21 900 $b default 1M_s2 3M_s2 full_s2 full_s1; done
-for b in 2 1 0; do step r2 600 $b default 1M_s4 3M_s4; done
+# devrun refuses timeouts over 600 s: one config per step, 400 s each (a run is RUN_TIMEOUT=240).
+for c in 1M_s4 3M_s2 full_s1; do for b in 0 1 2; do step md5 400 $b 0 $c; done; done
+for c in 1M_s4 0p5M_s4 1p5M_s4 3M_s4 1M_s2 3M_s2 full_s2 full_s1; do
+  for b in 0 1 2; do step grid 400 $b default $c; done
+done
+for b in 0 1 2; do step hero 400 $b default hero; done
 $SSH "$H" "for d in /localdev/smarton/.cache/ttmc-t722-*; do echo \$d; done > $T/tmp/t722/jit-dirs.txt"
 mkdir -p "$O/logs"; scp -q -o BatchMode=yes "$H:$T/tmp/t722/*.*" "$O/logs/" || rc=4
 $SSH "$H" "rm -f $T/tmp/d1/bicycle_*.ply $T/tmp/d1/scene.npz; df -h /localdev/smarton | tail -1" > "$O/disk.txt" 2>&1; cat "$O/disk.txt"

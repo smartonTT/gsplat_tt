@@ -18,16 +18,18 @@ tag0=${1:?tag}; shift
 fail=0
 cd "$T" || exit 1; source .venv/bin/activate
 for cfg in "$@"; do
-  tag=$tag0-b$B1-p$PERIOD-$cfg; cam=tmp/d1/cams_$cfg.json
-  [ -f $cam ] || { echo "missing $cam"; exit 2; }
+  tag=$tag0-b$B1-p$PERIOD-$cfg; cam=tmp/d1/cams_$cfg.json; camarg="--cameras $cam"
+  # cfg 'hero': full scene, default cameras (cameras_v2), so hero_clean.png is the reference hero view
+  if [ "$cfg" = hero ]; then camarg=""; else [ -f $cam ] || { echo "missing $cam"; exit 2; }; fi
   echo "=== $tag $(cut -c1-8 SHA) $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   TT_METAL_CACHE_RENDER=$C/ttmc-t722-b$B1-p$PERIOD timeout ${RUN_TIMEOUT:-240} python3 render/run.py --no-ref \
-    --cameras $cam --iter-dir t722-$tag --back-to-back --b2b-passes 6 > $S/run-$tag.log 2>&1
+    $camarg --iter-dir t722-$tag --back-to-back --b2b-passes 6 > $S/run-$tag.log 2>&1
   rc=$?
   echo "run rc=$rc"
   grep -E "^(B2B |SUMMARY)|raw_md5|TTW_TIMING (b2b_ms_frame|b2b_ms_frame_median)=|Traceback|TT_THROW|TT_FATAL|error:" $S/run-$tag.log | cut -c1-400 | head -14
   if [ $rc = 124 ] || [ $rc = 137 ]; then echo "HANG in $tag: tt-smi -r"; tt-smi -r > $S/reset-$tag.log 2>&1; echo "reset rc=$?"; exit 124; fi
   [ $rc = 0 ] || fail=1
+  [ "$cfg" = hero ] && [ -f tmp/t722-$tag/hero_clean.png ] && cp tmp/t722-$tag/hero_clean.png $S/hero-b$B1.png
 done
 echo "=== done $tag0 $(date +%T)"
 exit $fail
