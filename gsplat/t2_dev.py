@@ -10,7 +10,14 @@ of the group at element 64 s + i (SFPU vectors 2 s, 2 s + 1). Block = 16 groups 
   slots   T1 v2 slot pages (16 floats, 9 used) packed 64 slots per 4 KB DRAM page
   vis     u32 page/block (128 B): bit i of word w = row 32 w + i visible (PFWC_VIS stand-in)
   pfwc    fp32 SoA, stream-major, 256 B per (stream, group): page = s * n_groups + g
-  grads   fp32 page/group, param streams (debug output, T2_GRADS_OUT)
+  grads   fp32 page/group, param streams (debug output, T2_GRADS_OUT); with SH bands, stream 14
+          = the visible flag (read by the t2sh post pass)
+  SH bands 1-15 (#751, t2sh_* kernels, only when the scene has sh_degree > 0):
+  sh_rest   fp32, 3 pages/group (page 3 g + r): stream 3 jj + c = band 5 r + jj + 1, colour c
+  sh_m/v    bf16, same pages
+  aux       fp32 page/group, written by the t2sh pre pass for T2 and the post pass:
+            3 c + k = d raw_c / d mean_k (clamp-masked), 9 10 14 = view dir x y z,
+            11..13 = colour clamp keep r g b, 15 = 1/|mean - campos|
 
   python3 -m gsplat.t2_dev prep-dump <t0.npz> <dir>     T0 dump -> device inputs + reference
   python3 -m gsplat.t2_dev prep-synth <dir> --n N --mean-count C   timing case (random)
@@ -34,6 +41,7 @@ GPB = 16          # groups per block (1024 rows)
 SLOTS_PER_PAGE = 64
 STREAMS = 14
 NCONST = 31
+REST = 15         # SH bands 1..15 in the rest pages (lower degrees zero-padded)
 
 
 def param_cols(p: dict) -> np.ndarray:
@@ -62,6 +70,32 @@ def to_pages(cols: np.ndarray, n_groups: int, pad_row=None) -> np.ndarray:
 def from_pages(pages: np.ndarray, N: int, S: int) -> np.ndarray:
     ng = pages.shape[0]
     return pages.reshape(ng, 16, G).transpose(0, 2, 1).reshape(ng * G, 16)[:N, :S].copy()
+
+
+def rest_pages(sh: np.ndarray, n_groups: int) -> np.ndarray:
+    """(N, K, 3) SH -> bands 1..15 as rest pages (3 n_groups, 1024), page 3 g + r."""
+    sh = np.asarray(sh)
+    N, K = sh.shape[:2]
+    rest = np.zeros((N, REST, 3), sh.dtype)
+    rest[:, :K - 1] = sh[:, 1:]
+    pages = [to_pages(rest[:, 5 * r:5 * r + 5].reshape(N, 15), n_groups) for r in range(3)]
+    return np.stack(pages, 1).reshape(3 * n_groups, 1024)
+
+
+def from_rest_pages(pages: np.ndarray, N: int, K: int) -> np.ndarray:
+    ng = pages.shape[0] // 3
+    pg = pages.reshape(ng, 3, 1024)
+    rest = np.concatenate([from_pages(pg[:, r], N, 15).reshape(N, 5, 3) for r in range(3)], 1)
+    return rest[:, :K - 1]
+
+
+def sh_consts(w2c, lr, betas, eps, step) -> list:
+    """t2sh kernels: campos xyz, sh_rest step size, b1 1-b1 b2 1-b2 1/sqrt(bc2) eps."""
+    R = np.asarray(w2c, f32)[:3, :3]
+    cam = -(R.T @ np.asarray(w2c, f32)[:3, 3]).astype(f32)
+    c = consts(w2c, np.eye(3), 1, 1, {**lr, "sh_dc": 0.0}, betas, eps, step)
+    bc1 = 1.0 - betas[0] ** (step + 1)
+    return [float(x) for x in cam] + [float(f32(lr["sh_rest"] / bc1))] + c[-6:]
 
 
 def bf16_bits(x: np.ndarray) -> np.ndarray:
@@ -132,7 +166,15 @@ def prep_dump(dump: str, out: Path, bw: dict | None = None) -> dict:
              counts=bw["counts"], **{f"p_{k}": a for k, a in params.items()},
              **{f"m_{k}": a for k, a in m.items()}, **{f"v_{k}": a for k, a in v.items()})
     cm = {"consts": consts(d["w2c"], d["K"], H, W, lr, betas, eps, step), "source": str(dump)}
+    K = params["sh"].shape[1]
+    if K > 1:
+        cm.update(sh_bands=int(K), sh_consts=sh_consts(d["w2c"], lr, betas, eps, step))
     write_inputs(out, params, m, v, bw["slots"], bw["P"], bw["counts"], vis, cm)
+    if K > 1:
+        ng = json.loads((out / "meta.json").read_text())["n_groups"]
+        rest_pages(params["sh"], ng).astype(f32).tofile(out / "sh_rest.f32")
+        for nm, a in (("sh_m", m), ("sh_v", v)):
+            rest_pages(bf16_bits(a["sh"]), ng).tofile(out / f"{nm}.u16")
     return json.loads((out / "meta.json").read_text())
 
 
@@ -187,15 +229,16 @@ def reference(indir: Path) -> dict:
 
 
 def adam_ref(indir: Path, grads: dict, visible: np.ndarray, sh_rest: np.ndarray) -> dict:
-    """The reference Adam step and pfwc streams from given grads (the device's SH0 bands,
-    `sh_rest` for the higher bands T2 does not own)."""
+    """The reference Adam step and pfwc streams from given grads: the device's SH bands it
+    owns (band 0 alone, or every band with the #751 t2sh passes), `sh_rest` for the others."""
     r = np.load(indir / "ref_in.npz")
     g = lambda q: {k: r[f"{q}_{k}"] for k in t2.PARAM_NAMES}  # noqa: E731
-    gg = {**grads, "sh": np.concatenate([np.asarray(grads["sh"], f32).reshape(len(visible), 1, 3),
-                                          np.asarray(sh_rest, f32)], 1)}
+    kb = np.asarray(grads["sh"]).shape[1]
+    gg = {**grads, "sh": np.concatenate([np.asarray(grads["sh"], f32).reshape(len(visible), kb, 3),
+                                          np.asarray(sh_rest, f32)[:, kb - 1:]], 1)}
     p1, m1, v1 = t2.adam_step(g("p"), gg, g("m"), g("v"), int(r["step"]), visible,
                               json.loads(str(r["lr"])), tuple(r["betas"]), float(r["eps"]))
-    sl = lambda d: {**d, "sh": np.asarray(d["sh"])[:, :1, :]}  # noqa: E731
+    sl = lambda d: {**d, "sh": np.asarray(d["sh"])[:, :kb, :]}  # noqa: E731
     return {"params": sl(p1), "m": sl(m1), "v": sl(v1), "pfwc": t2.pfwc_inputs(p1)}
 
 
@@ -210,7 +253,7 @@ def row_err(a, ref, floor_frac: float = 1e-4, scale: float | None = None) -> np.
     return (np.abs(a - f) / np.maximum(np.abs(f), floor_frac * scale)).max(1)
 
 
-def fp32_ill_rows(indir: Path, ref: dict, bar: float) -> tuple[np.ndarray, dict]:
+def fp32_ill_rows(indir: Path, ref: dict, bar: float, kb: int = 1) -> tuple[np.ndarray, dict]:
     """Rows where fp32 cannot give the grads: the fp32 reference itself misses the fp64
     evaluation of the same math (same g2d) by more than `bar` on any param.
 
@@ -225,7 +268,7 @@ def fp32_ill_rows(indir: Path, ref: dict, bar: float) -> tuple[np.ndarray, dict]
                                         np.asarray(r["w2c"], np.float64),
                                         np.asarray(r["K"], np.float64), int(r["H"]),
                                         int(r["W"]), ft=np.float64)
-    g64 = {**g64, "sh": g64["sh"][:, :1, :]}
+    g64 = {**g64, "sh": g64["sh"][:, :kb, :]}
     # The error floor (1e-4 of the tensor's max) must come from the rows the gate keeps: the
     # ill rows' grads are up to 1e5x the others' and would hide milder ill rows under it
     # (#770 hero: 81 rows flagged, 6 more with fp32-vs-fp64 errors up to 0.37 slipped by).
@@ -244,29 +287,49 @@ def fp32_ill_rows(indir: Path, ref: dict, bar: float) -> tuple[np.ndarray, dict]
     return ill, {"g64": g64, "e32": e32}
 
 
+def outputs(indir: Path, outdir: Path) -> dict:
+    """Device params / m / v (/ grads) after T2 and, with SH bands, the t2sh post pass."""
+    meta = json.loads((indir / "meta.json").read_text())
+    N, ng, K = meta["n"], meta["n_groups"], meta.get("sh_bands", 1)
+    rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(-1, 1024)  # noqa: E731
+    o = {"params": from_cols(from_pages(rd("params_out.f32", f32), N, STREAMS)),
+         "m": from_cols(from_pages(bits_bf16(rd("m_out.u16", np.uint16)), N, STREAMS)),
+         "v": from_cols(from_pages(bits_bf16(rd("v_out.u16", np.uint16)), N, STREAMS))}
+    rest = {"params": ("sh_rest_out.f32", f32), "m": ("sh_m_out.u16", np.uint16),
+            "v": ("sh_v_out.u16", np.uint16)}
+    if (outdir / "grads.f32").exists():
+        o["grads"] = from_cols(from_pages(rd("grads.f32", f32), N, STREAMS))
+        rest["grads"] = ("sh_grads.f32", f32)
+    if K > 1:
+        for w, (fn, dt) in rest.items():
+            pg = rd(fn, dt)
+            pg = bits_bf16(pg) if dt == np.uint16 else pg
+            o[w]["sh"] = np.concatenate([o[w]["sh"], from_rest_pages(pg, N, K)], 1)
+    return o
+
+
 def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     meta = json.loads((indir / "meta.json").read_text())
     N, ng = meta["n"], meta["n_groups"]
     ref = reference(indir)
     sh_rest = np.asarray(ref["grads"]["sh"])[:, 1:]
-    # T2 owns SH0 only (higher SH bands are another pass): compare the band-0 slice.
+    # T2 alone owns SH0; with the #751 t2sh passes (meta sh_bands) the device owns every band.
+    o = outputs(indir, outdir)
+    p, m, v = o["params"], o["m"], o["v"]
+    kb = p["sh"].shape[1]
     for w in ("grads", "params", "m", "v"):
         if w in ref:
-            ref[w] = {**ref[w], "sh": np.asarray(ref[w]["sh"])[:, :1, :]}
-    rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
-    p = from_cols(from_pages(rd("params_out.f32", f32), N, STREAMS))
-    m = from_cols(from_pages(bits_bf16(rd("m_out.u16", np.uint16)), N, STREAMS))
-    v = from_cols(from_pages(bits_bf16(rd("v_out.u16", np.uint16)), N, STREAMS))
+            ref[w] = {**ref[w], "sh": np.asarray(ref[w]["sh"])[:, :kb, :]}
     rep = {"n": N, "n_slots": meta["n_slots"], "max_count": meta["max_count"]}
     # Gate on the rows fp32 can resolve; the others (fp32_ill_rows) and everything Adam and
     # pfwc derive from their grads are reported against the fp64 evaluation.
-    ill, x = fp32_ill_rows(indir, ref, grad_bar / 10)
+    ill, x = fp32_ill_rows(indir, ref, grad_bar / 10, kb)
     ok = ~ill
     rep["fp32_ill_rows"] = int(ill.sum())
     rep["fp32_ill_rows_max"] = max(16, N // 10000)
     gr = None
-    if (outdir / "grads.f32").exists():
-        gr = from_cols(from_pages(rd("grads.f32", f32), N, STREAMS))
+    if "grads" in o:
+        gr = o["grads"]
         rep["grads"] = {k: t2.rel_error(gr[k][ok], ref["grads"][k][ok]) for k in t2.PARAM_NAMES}
         rep["grads_all_rows"] = {k: t2.rel_error(gr[k], ref["grads"][k]) for k in t2.PARAM_NAMES}
         if ill.any():
@@ -282,8 +345,8 @@ def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     # end-to-end comparison (adam_e2e, gated rows only) is reported, not gated.
     ar = ref if gr is None else adam_ref(indir, gr, ref["visible"], sh_rest)
     rows = ok if gr is None else np.ones(N, bool)
-    pin = from_cols(param_cols({k: np.load(indir / "ref_in.npz")[f"p_{k}"]
-                                for k in t2.PARAM_NAMES}))
+    pin = {k: np.asarray(np.load(indir / "ref_in.npz")[f"p_{k}"]) for k in t2.PARAM_NAMES}
+    pin["sh"] = pin["sh"][:, :kb]
 
     def adam_rep(r, sel):
         out = {f"{w}_{k}": t2.rel_error(a[k][sel], r[w][k][sel])

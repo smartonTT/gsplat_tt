@@ -43,11 +43,23 @@ def test_fresh_case_gate():
     _assert_pass(rep)
 
 
-def test_rejects_sh3():
-    d = dict(np.load(DUMP))
-    d["sh_degree"] = np.int32(3)
-    with pytest.raises(ValueError):
-        t2.check(d)
+def test_sh3_dump_gate():
+    # #751: bands 1-3 (dL/dsh1-15, view-direction term in dL/dmeans) and the full-colour
+    # clamp mask on dL/dsh0.
+    _assert_pass(t2.check(np.load(DUMP.with_name("t0_sh3_64x64_n50.npz"))))
+
+
+def test_sh_dbasis_matches_finite_difference():
+    rng = np.random.default_rng(1)
+    d = rng.normal(size=(64, 3))
+    d /= np.linalg.norm(d, axis=1, keepdims=True)
+    h = 1e-6
+    for a in range(3):
+        e = np.zeros(3)
+        e[a] = h
+        fd = (np.stack(t2.sh_basis(*(d + e).T)) - np.stack(t2.sh_basis(*(d - e).T))) / (2 * h)
+        an = np.stack([g[a] for g in t2.sh_dbasis(*d.T)])
+        assert np.abs(fd - an).max() < 1e-6
 
 
 def test_segment_reduce_matches_t1_sum_order():
