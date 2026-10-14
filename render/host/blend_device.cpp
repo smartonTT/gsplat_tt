@@ -302,14 +302,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     // The ring CB exists only when the knob is on: 64 B header + 64 slots of 64 B
     // (DA_SLOTS / DA_SLOT_BYTES in alpha_blend_compute_mb.cpp).
     const char* blend_da_env = std::getenv("GSPLAT_TT_BLEND_DECODE_AHEAD");
-    // Task #717: train mode decodes its fp32 op/colour in the simple loop (off).
+    // Task #724: train mode decodes ahead too, with fp32 op/colour words in 128 B
+    // slots (64 B header + 64 slots = 1 + 128 pages of 64 B).
     const std::string blend_da =
-        gsplat_tt::blend_train::enabled() ? std::string("0")
-        : (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env)
-                                                                 : std::string("2");
+        (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
     if (blend_da != "0") {
         constexpr uint32_t CB_DA_RING = 10;
-        cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
+        cb_cfg(CB_DA_RING, 64, 1u + 64u * (gsplat_tt::blend_train::da_slot_bytes() / 64u), DataFormat::UInt32);
     }
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m

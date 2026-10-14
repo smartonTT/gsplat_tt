@@ -1123,7 +1123,14 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #endif
 // Decode-ahead stages the default blend path only; other knob mixes (and
 // MB_STATS) run without it, so the host default can stay on.
-#if BLEND_DECODE_AHEAD && (!(BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_JUMP_WALK && BLEND_ABL == 0 && \
+// Task #724: train mode (fp32 op/colour, BLEND_SFPU_UNORM 0) has its own ring form.
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+#define BLEND_DA_F32 1
+#else
+#define BLEND_DA_F32 0
+#endif
+#if BLEND_DECODE_AHEAD && (!(BLEND_COEF_DEST && (BLEND_SFPU_UNORM == 1 || BLEND_DA_F32) && BLEND_JUMP_WALK && \
+                             BLEND_ABL == 0 && \
                              !BLEND_FPU_QF_ABL) || defined(GSPLAT_TT_MB_STATS))
 #undef BLEND_DECODE_AHEAD
 #define BLEND_DECODE_AHEAD 0
@@ -1230,7 +1237,15 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
 #endif
 constexpr uint32_t CB_DA_RING = BLEND_CB_BASE + 10;
 constexpr uint32_t DA_SLOTS = 64;  // power of two; mirrors blend_device.cpp
+// Task #724: train mode stages 9 fp32 values (18 SFPLOADI words), so its slots
+// are 128 B: [0, 18) the words, [30] the mask, [31] the marker kind.
+#if BLEND_DA_F32
+constexpr uint32_t DA_SLOT_BYTES = 128;
+#else
 constexpr uint32_t DA_SLOT_BYTES = 64;
+#endif
+constexpr uint32_t DA_W_MASK = DA_SLOT_BYTES / 4u - 2u;
+constexpr uint32_t DA_W_KIND = DA_SLOT_BYTES / 4u - 1u;
 constexpr uint32_t DA_HDR_BYTES = 64;
 constexpr uint32_t DA_PROD = 0, DA_CONS = 8;  // header words
 constexpr uint32_t DA_MARK_RB = 1, DA_MARK_END = 2;
@@ -1305,15 +1320,48 @@ inline void da_put_rec(const uint32_t* rec, uint32_t mask) {
     s[11] = (w6 >> 16) + klo2;
     s[12] = (w7 & 0xffffu) + klo;
     s[13] = (w7 >> 16) + klo2;
-    s[14] = mask;
+    s[DA_W_MASK] = mask;
     da_publish();
 }
+#if BLEND_DA_F32
+// Task #724: the same words with the fp32 op/colour of the reader's side CB
+// (CB_TRAIN_OPC) in place of the UNORM16 halves: L0 USHORT lo + L0 HI16_ONLY
+// hi per value, the encoding the five geometry values already use, so TRISC1
+// stores the same bits as blend_stage_coeffs (the DA 0 train path).
+inline void da_put_rec_f32(const uint32_t* rec, const volatile uint32_t* opc, uint32_t mask) {
+    constexpr uint32_t klo = 0x71020000u, khi = 0x71080000u;
+    const uint32_t a = rec[0], b = rec[1], c = rec[2], d = rec[4], e = rec[5];
+    const uint32_t op = opc[0], cr = opc[1], cg = opc[2], cbv = opc[3];
+    da_wait_space();
+    volatile uint32_t* s = da_slot(g_da_idx);
+    s[0] = (d & 0xffffu) + klo;
+    s[1] = (d >> 16) + khi;
+    s[2] = (e & 0xffffu) + klo;
+    s[3] = (e >> 16) + khi;
+    s[4] = (a & 0xffffu) + klo;
+    s[5] = (a >> 16) + khi;
+    s[6] = (b & 0xffffu) + klo;
+    s[7] = (b >> 16) + khi;
+    s[8] = (c & 0xffffu) + klo;
+    s[9] = (c >> 16) + khi;
+    s[10] = (op & 0xffffu) + klo;
+    s[11] = (op >> 16) + khi;
+    s[12] = (cr & 0xffffu) + klo;
+    s[13] = (cr >> 16) + khi;
+    s[14] = (cg & 0xffffu) + klo;
+    s[15] = (cg >> 16) + khi;
+    s[16] = (cbv & 0xffffu) + klo;
+    s[17] = (cbv >> 16) + khi;
+    s[DA_W_MASK] = mask;
+    da_publish();
+}
+#endif
 #if BLEND_DECODE_AHEAD == 2
 inline void da_put_mark(uint32_t kind) {
     da_wait_space();
     volatile uint32_t* s = da_slot(g_da_idx);
-    s[14] = 0u;
-    s[15] = kind;
+    s[DA_W_MASK] = 0u;
+    s[DA_W_KIND] = kind;
     da_publish();
 }
 #endif
@@ -1392,6 +1440,44 @@ inline void da_stage(const volatile uint32_t* s) {
     TTI_SFPMUL(2, 1, 9, 2, 0);
     TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CB);
 }
+#if BLEND_DA_F32
+// Task #724: da_stage for the fp32 slots of da_put_rec_f32 (no UNORM decode).
+inline void da_stage_f32(const volatile uint32_t* s) {
+    volatile uint32_t* ib = ckernel::instrn_buffer;
+    constexpr uint32_t A0 = (DR_S) * 2u;
+    uint32_t v0 = s[0], v1 = s[1];
+    ib[0] = v0; v0 = s[2];
+    ib[0] = v1; v1 = s[3];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MX);
+    ib[0] = v0; v0 = s[4];
+    ib[0] = v1; v1 = s[5];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MY);
+    ib[0] = v0; v0 = s[6];
+    ib[0] = v1; v1 = s[7];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_A);
+    ib[0] = v0; v0 = s[8];
+    ib[0] = v1; v1 = s[9];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_B);
+    ib[0] = v0; v0 = s[10];
+    ib[0] = v1; v1 = s[11];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_C);
+    ib[0] = v0; v0 = s[12];
+    ib[0] = v1; v1 = s[13];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_OP);
+    ib[0] = v0; v0 = s[14];
+    ib[0] = v1; v1 = s[15];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_CR);
+    ib[0] = v0; v0 = s[16];
+    ib[0] = v1; v1 = s[17];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_CG);
+    ib[0] = v0;
+    ib[0] = v1;
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_CB);
+}
+#define DA_STAGE da_stage_f32
+#else
+#define DA_STAGE da_stage
+#endif
 #endif  // TRISC_MATH
 #endif  // BLEND_DECODE_AHEAD
 
@@ -1612,7 +1698,9 @@ inline void tc_dump() {
 
 #if BLEND_DECODE_AHEAD
 // The records loop of process_tile_l1_blend in decode-ahead mode, per thread.
-inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask, uint32_t& g_seen) {
+inline void blend_da_walk(
+    uint32_t num_g, uint32_t buck, uint32_t opc_base, uint32_t& live_mb_mask, uint32_t& g_seen) {
+    (void)opc_base;
 #if defined(TRISC_UNPACK)
     mb_cb_consume_fence();  // first read of this slab on this thread
     for (uint32_t g = 0; g < num_g; g++) {
@@ -1627,7 +1715,11 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         const uint32_t* rec = l1_splat_words(buck, g);
         const uint32_t mask = rec[3] & live_mb_mask;
         if (mask != 0u) {
+#if BLEND_DA_F32
+            da_put_rec_f32(rec, reinterpret_cast<const volatile uint32_t*>(opc_base) + g * 4u, mask);
+#else
             da_put_rec(rec, mask);
+#endif
         }
     }
 #if BLEND_DECODE_AHEAD == 2
@@ -1647,7 +1739,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         if (mask != 0u) {
             TC_LIVE(mask);
             const volatile uint32_t* s = da_wait_slot();
-            da_stage(s);
+            DA_STAGE(s);
             da_consumed();
             dispatch_blend_jump(mask);
         }
@@ -1657,9 +1749,9 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
     g_seen += num_g;  // unused here: the markers carry the readback positions
     for (;;) {
         const volatile uint32_t* s = da_wait_slot();
-        const uint32_t mask = s[14];
+        const uint32_t mask = s[DA_W_MASK];
         if (mask == 0u) {
-            const uint32_t kind = s[15];
+            const uint32_t kind = s[DA_W_KIND];
             da_consumed();
             if (kind == DA_MARK_END) {
                 break;
@@ -1672,7 +1764,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
             continue;
         }
         TC_LIVE(mask);
-        da_stage(s);
+        DA_STAGE(s);
         da_consumed();
         blend_qf_pad<BLEND_QF_PAD>();
         dispatch_blend_jump(mask);
@@ -1740,7 +1832,11 @@ inline void process_tile_l1_blend(
     asm volatile("" : "+r"(raw_klo), "+r"(raw_khi), "+r"(raw_klo2));
 #endif
 #if BLEND_DECODE_AHEAD
-    blend_da_walk(num_g, buck, live_mb_mask, g_seen);
+#if BLEND_DA_F32
+    blend_da_walk(num_g, buck, opc_base, live_mb_mask, g_seen);
+#else
+    blend_da_walk(num_g, buck, 0u, live_mb_mask, g_seen);
+#endif
 #else
 #if BLEND_ABL == 4
     for (uint32_t g = num_g; g < num_g; g++) {

@@ -47,6 +47,11 @@ constexpr uint32_t kOpcBytes = 16u;                   // fp32 op, r, g, b
 constexpr uint32_t kOpcPageBytes = 64u;               // 4 entries per DRAM page
 constexpr uint32_t kOpcReaderArg = 28u;               // reader runtime arg index
 
+// Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
+// DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
+// and marker kind in the last two words. Flag off keeps 64 B slots.
+inline uint32_t da_slot_bytes() { return enabled() ? 128u : 64u; }
+
 // Smallest UNORM16 code whose decode is >= v (v not NaN): the round-to-nearest
 // code (nearest) or the next one, saturating at 65535 (decode 1.0).
 inline uint32_t cull_op16_from_nearest(uint32_t nearest) {
