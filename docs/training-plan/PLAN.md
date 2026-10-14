@@ -3,6 +3,9 @@
 2026-10-13 PDT. A plan only: no device runs, no reservation, no p100 lock. To be sent to the user
 before any device time goes to the training path (msg #357).
 
+**Update 2026-10-14 (#799):** the single-chip plan (PLAN-single-chip.md) and its refresh in
+docs/training-plan/t799/PLAN.md replace this plan's ranking.
+
 Labels: **M** = measured on our hardware (cited), **E** = estimate from measured numbers (basis
 shown), **P** = published GPU number (not measured by us), **P?** = seen in a search snippet or a
 secondary table, not checked against the full paper.

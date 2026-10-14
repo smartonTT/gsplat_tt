@@ -15,6 +15,12 @@ Timing box (msg #382): all training timing is taken on the p150 measurement box 
 task is reserving now (single free p150 board, not bh-30). Numbers taken on bh-33 are labelled
 **p100 (provisional)**. Every number from earlier tasks quoted below is p100.
 
+**Update 2026-10-14 (#799):** the current hero step is ~76.8 ms/view of device time (forward 14.70,
+loss 0.89, T1 LPT 51.95, T2 split 9.29; all M, pre-jclamp), down from ~196 (#773). The ranked next
+levers (T2 k-grouped rows, T1 per-tile stop, exact alpha test in training lists, dump-free loop,
+T8b densification) are in docs/training-plan/t799/PLAN.md, which takes precedence over §4 and §8
+where they differ.
+
 ## 1. Resolution: what the other trainers use for bicycle
 
 | trainer | bicycle training/eval images | source |

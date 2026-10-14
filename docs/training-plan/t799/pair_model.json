@@ -1,0 +1,128 @@
+{
+ "off": {
+  "jclamp": null,
+  "visible_rows": 1809729,
+  "opacity_rect": {
+   "rows": 1809729,
+   "slots": 4007978,
+   "max_k": 1014,
+   "rows_k_gt_16": 2365,
+   "rows_k_gt_64": 1161,
+   "rows_k_gt_256": 1077,
+   "heavy_slots_k_gt_16": 1059549,
+   "light_planes_kcap16": 160272,
+   "light_planes_kcap16_bucketed": 46668,
+   "p50_p99_p999": [
+    1.0,
+    6.0,
+    21.0
+   ]
+  },
+  "rect": {
+   "rows": 1809729,
+   "slots": 4490511,
+   "max_k": 1014,
+   "rows_k_gt_16": 2990,
+   "rows_k_gt_64": 1402,
+   "rows_k_gt_256": 1252,
+   "heavy_slots_k_gt_16": 1246250,
+   "light_planes_kcap16": 191492,
+   "light_planes_kcap16_bucketed": 51449,
+   "p50_p99_p999": [
+    1.0,
+    6.0,
+    30.0
+   ]
+  },
+  "tight_alpha": {
+   "rows": 1804507,
+   "slots": 3162197,
+   "max_k": 1014,
+   "rows_k_gt_16": 1510,
+   "rows_k_gt_64": 912,
+   "rows_k_gt_256": 649,
+   "heavy_slots_k_gt_16": 537960,
+   "light_planes_kcap16": 127458,
+   "light_planes_kcap16_bucketed": 41391,
+   "p50_p99_p999": [
+    1.0,
+    4.0,
+    14.0
+   ]
+  },
+  "pairs_rect": 4490511,
+  "pairs_tight": 3162197,
+  "tight_frac": 0.7041953577220944,
+  "tile_pairs_rect_max_mean": [
+   25081,
+   4428.511834319526
+  ],
+  "tile_pairs_tight_max_mean": [
+   20792,
+   3118.537475345168
+  ]
+ },
+ "on": {
+  "jclamp": 1.3,
+  "visible_rows": 1808382,
+  "opacity_rect": {
+   "rows": 1808382,
+   "slots": 2982001,
+   "max_k": 1014,
+   "rows_k_gt_16": 1188,
+   "rows_k_gt_64": 39,
+   "rows_k_gt_256": 3,
+   "heavy_slots_k_gt_16": 34269,
+   "light_planes_kcap16": 155656,
+   "light_planes_kcap16_bucketed": 46362,
+   "p50_p99_p999": [
+    1.0,
+    6.0,
+    14.0
+   ]
+  },
+  "rect": {
+   "rows": 1808382,
+   "slots": 3300478,
+   "max_k": 1014,
+   "rows_k_gt_16": 1658,
+   "rows_k_gt_64": 98,
+   "rows_k_gt_256": 11,
+   "heavy_slots_k_gt_16": 56377,
+   "light_planes_kcap16": 187102,
+   "light_planes_kcap16_bucketed": 51112,
+   "p50_p99_p999": [
+    1.0,
+    6.0,
+    16.0
+   ]
+  },
+  "tight_alpha": {
+   "rows": 1803453,
+   "slots": 2637695,
+   "max_k": 1014,
+   "rows_k_gt_16": 506,
+   "rows_k_gt_64": 13,
+   "rows_k_gt_256": 1,
+   "heavy_slots_k_gt_16": 13879,
+   "light_planes_kcap16": 122172,
+   "light_planes_kcap16_bucketed": 41132,
+   "p50_p99_p999": [
+    1.0,
+    4.0,
+    10.0
+   ]
+  },
+  "pairs_rect": 3300478,
+  "pairs_tight": 2637695,
+  "tight_frac": 0.7991857543058914,
+  "tile_pairs_rect_max_mean": [
+   23886,
+   3254.9092702169623
+  ],
+  "tile_pairs_tight_max_mean": [
+   20251,
+   2601.2771203155817
+  ]
+ }
+}

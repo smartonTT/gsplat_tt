@@ -4,6 +4,10 @@ Plan only. No device work was run for this doc. "M" means measured on device (p1
 noted), with the task that measured it. "E" means estimate or model. "P" means published, not
 measured. "Mac" means computed on the Mac from the hero dump or the dataset.
 
+**Superseded in part (2026-10-14, #799):** T2 98.4 -> 9.29 (#784) and T1 82.4 -> 51.95 (#785) have
+landed; the step is now ~76.8 ms/view. See docs/training-plan/t799/PLAN.md for the current breakdown
+and lever ranking.
+
 ## 0. Correction: 14.7 ms/view is the forward, not the step
 
 The "~14.7 ms/view" in the task title is the training-mode forward only
