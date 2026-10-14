@@ -1,0 +1,14 @@
+tmp/t661/out/viewer-b0g11.log:[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+tmp/t661/out/viewer-afr.log:[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+tmp/t661/out/viewer-afr.log:[afr] worker 0 chip 0 pid 6016 ready in 3.9 s, stage grid 11x10
+tmp/t661/out/viewer-afr.log:[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 12x10
+tmp/t661/out/viewer-afr.log:[afr] worker 1 chip 1 pid 6328 ready in 4.0 s, stage grid 12x10
+tmp/t661/out/viewer-afr.log:[afr] stage grids [(11, 10), (12, 10)] differ: capping every chip to 11x10 so all render the same bits
+tmp/t661/out/viewer-afr.log:[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+tmp/t661/out/viewer-afr.log:[afr] worker 1 chip 1 pid 6649 ready in 4.0 s, stage grid 11x10
+tmp/t661/out/viewer-b0.log:[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+tmp/t661/out/viewer-b1.log:[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 12x10
+tmp/t661/out/viewer-afrdiff.log:[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 11x10
+tmp/t661/out/viewer-afrdiff.log:[afr] worker 0 chip 0 pid 7849 ready in 3.9 s, stage grid 11x10
+tmp/t661/out/viewer-afrdiff.log:[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 12x10
+tmp/t661/out/viewer-afrdiff.log:[afr] worker 1 chip 1 pid 8159 ready in 4.0 s, stage grid 12x10

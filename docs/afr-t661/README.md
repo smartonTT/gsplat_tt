@@ -40,3 +40,32 @@ seams. The firmware difference does not change the bits.
 `docs/afr-t661/verify.sh` (with JOB=<own IRD job on bh-50>, after deploying the head with
 docs/viewer-t615/deploy.sh). Arms: b0, b1, AFR (cap on), AFR (cap off), and b0 at 11x10.
 compare.py prints the md5, PSNR and pixel diffs.
+
+## Device result (bh-50, IRD 134009, 2 cards, HEAD 2c37346f, 2026-10-13 20:20-20:37 PDT)
+
+In this container card 0 was the harvested 11x10 board and card 1 the 13x10 board (capped to 12x10),
+the reverse of t615's order. Artifacts: `run2/` (compare.txt, grids.txt, sweeps, diff images).
+
+| arm | card / grid | hero md5 | PSNR vs reference_v2 | px diff vs b0 |
+|---|---|---|---|---|
+| b0 (1 chip) | 0 / 11x10 | eb8d8a50 | 42.845 dB | 0 |
+| b0g11 (1 chip, cap 11x10) | 0 / 11x10 | eb8d8a50 | 42.845 dB | 0 |
+| b1 (1 chip, board alone) | 1 / 12x10 | a5a83cfd | 42.845 dB | 257 (max 13) |
+| AFR, same-grid cap on: chip 0 | 0 / 11x10 | eb8d8a50 | 42.845 dB | 0 |
+| AFR, same-grid cap on: chip 1 | 1 / capped to 11x10 | eb8d8a50 | 42.845 dB | **0** |
+| AFR, cap off: chip 0 | 0 / 11x10 | eb8d8a50 | 42.845 dB | 0 |
+| AFR, cap off: chip 1 | 1 / 12x10 | a5a83cfd | 42.845 dB | 257 (max 13) |
+
+- The mismatch follows the core grid, in both directions: turning the cap off brings back exactly
+  t615's 257 px / max 13 difference, and capping makes chip 1 bit-identical to chip 0.
+- Board 1 opened alone now works (b1 arm); the t615 failure was a leftover AFR worker holding it.
+- Diff images: `diff10-afr-hero_viewer_chip1.png` (x10 vs reference) shows the usual edge and spoke
+  structure, no tile seams. `px-b0-..._vs_b1-...png` (pixels that differ, 12x10 vs 11x10) shows
+  isolated scattered pixels, no tile or block pattern.
+- AFR page FPS with the cap on (headless sweep, 240 Hz camera, 1024x1024): 132.3 and 133.2 decoded
+  FPS (run2/sweep-afr-r*.txt). t615 run 5 (no cap) had 113.3 page FPS; the runs differ in setup, so
+  this is not a cap speedup claim, only evidence the cap costs nothing visible.
+
+Conclusion: root cause is the core count per chip (our code partitions work by core count), not
+firmware. Fixed in code (9653fd24): AFR chips now render the same bits. The branch is ready to land
+behind its flag (VIEWER_AFR_DEVICES; single-chip stays default).

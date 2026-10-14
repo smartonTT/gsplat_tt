@@ -1,0 +1,28 @@
+HERO afr-hero_viewer md5=eb8d8a50 psnr_vs_ref=42.845
+HERO afr-hero_viewer_chip1 md5=eb8d8a50 psnr_vs_ref=42.845
+HERO afrdiff-hero_viewer md5=eb8d8a50 psnr_vs_ref=42.845
+HERO afrdiff-hero_viewer_chip1 md5=a5a83cfd psnr_vs_ref=42.845
+HERO b0-hero_viewer md5=eb8d8a50 psnr_vs_ref=42.845
+HERO b0g11-hero_viewer md5=eb8d8a50 psnr_vs_ref=42.845
+HERO b1-hero_viewer md5=a5a83cfd psnr_vs_ref=42.845
+PAIR afr-hero_viewer afr-hero_viewer_chip1 px_diff=0 max=0
+PAIR afr-hero_viewer afrdiff-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer afrdiff-hero_viewer_chip1 px_diff=257 max=13
+PAIR afr-hero_viewer b0-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer b0g11-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer b1-hero_viewer px_diff=257 max=13
+PAIR afr-hero_viewer_chip1 afrdiff-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer_chip1 afrdiff-hero_viewer_chip1 px_diff=257 max=13
+PAIR afr-hero_viewer_chip1 b0-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer_chip1 b0g11-hero_viewer px_diff=0 max=0
+PAIR afr-hero_viewer_chip1 b1-hero_viewer px_diff=257 max=13
+PAIR afrdiff-hero_viewer afrdiff-hero_viewer_chip1 px_diff=257 max=13
+PAIR afrdiff-hero_viewer b0-hero_viewer px_diff=0 max=0
+PAIR afrdiff-hero_viewer b0g11-hero_viewer px_diff=0 max=0
+PAIR afrdiff-hero_viewer b1-hero_viewer px_diff=257 max=13
+PAIR afrdiff-hero_viewer_chip1 b0-hero_viewer px_diff=257 max=13
+PAIR afrdiff-hero_viewer_chip1 b0g11-hero_viewer px_diff=257 max=13
+PAIR afrdiff-hero_viewer_chip1 b1-hero_viewer px_diff=0 max=0
+PAIR b0-hero_viewer b0g11-hero_viewer px_diff=0 max=0
+PAIR b0-hero_viewer b1-hero_viewer px_diff=257 max=13
+PAIR b0g11-hero_viewer b1-hero_viewer px_diff=257 max=13
