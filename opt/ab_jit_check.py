@@ -13,6 +13,15 @@ Each arm is a JIT cache directory, or a text file with one path per line
 
 Exit 0: every --kernel differs between the arms. 1: some --kernel is identical
 or missing (the gate must fail or be flagged A/A). 2: usage error.
+
+Runtime-arg-only A/Bs (the knob is a runtime arg/env, e.g. #684
+GSPLAT_TT_TEST_PREGROW_TILE_CAP): identical hashes are then correct, so the
+check flips. It requires the same hashes for every --kernel AND each arm's
+--marker string in that arm's --log file(s), proving the knob took effect:
+
+  python3 opt/ab_jit_check.py --runtime-arg-only --arm base=<c> --arm cand=<c> \
+      --kernel <name> --marker base='<str>' --marker cand='<str>' \
+      --log base=<run.log> [--log base=...] --log cand=<run.log> [...]
 """
 import argparse
 import os
@@ -64,10 +73,52 @@ def check(arms, kernels):
     return ok, lines
 
 
+def check_runtime_arg_only(arms, kernels, markers, logs):
+    """Hashes must match per --kernel; each arm's marker must be in its logs.
+    markers: {label: str}; logs: {label: [text, ...]}."""
+    lines, ok = [], True
+    (la, a), (lb, b) = arms
+    for k in kernels:
+        ha, hb = a.get(k, set()), b.get(k, set())
+        if not ha or not hb:
+            ok = False
+            lines.append(f"MISSING {k}: {la}={sorted(ha)} {lb}={sorted(hb)}")
+        elif ha != hb:
+            ok = False
+            lines.append(f"DIFF {k}: {la}={sorted(ha)} {lb}={sorted(hb)} (runtime-arg-only expects same)")
+        else:
+            lines.append(f"OK {k}: same hashes {sorted(ha)} (runtime-arg-only)")
+    for label in (la, lb):
+        m = markers.get(label)
+        texts = logs.get(label, [])
+        if m is None or not texts:
+            ok = False
+            lines.append(f"MISSING marker/log for {label}")
+        elif any(m in t for t in texts):
+            lines.append(f"OK marker {label}: {m!r} found")
+        else:
+            ok = False
+            lines.append(f"NO-MARKER {label}: {m!r} not in its log(s)")
+    return ok, lines
+
+
+def _kv(ap, specs, what):
+    out = []
+    for x in specs or []:
+        if "=" not in x:
+            ap.error(f"--{what} needs label=value")
+        out.append(tuple(x.split("=", 1)))
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--arm", action="append", required=True, help="label=path")
     ap.add_argument("--kernel", action="append", required=True)
+    ap.add_argument("--runtime-arg-only", action="store_true",
+                    help="knob is runtime-only: require same hashes + per-arm log markers")
+    ap.add_argument("--marker", action="append", help="label=string (runtime-arg-only)")
+    ap.add_argument("--log", action="append", help="label=path (runtime-arg-only)")
     args = ap.parse_args(argv)
     if len(args.arm) != 2 or any("=" not in x for x in args.arm):
         ap.error("need exactly two --arm label=path")
@@ -77,6 +128,33 @@ def main(argv=None):
         if not os.path.exists(path):
             ap.error(f"{path} not found")
         arms.append((label, kernel_hashes(path)))
+    if args.runtime_arg_only:
+        labels = {lab for lab, _ in arms}
+        if len(labels) != 2:
+            ap.error("--runtime-arg-only needs two distinct --arm labels")
+        markers = dict(_kv(ap, args.marker, "marker"))
+        logs = {}
+        log_owner = {}
+        for lab, path in _kv(ap, args.log, "log"):
+            real = os.path.realpath(path)
+            if log_owner.setdefault(real, lab) != lab:
+                ap.error(f"--log {path} is used by both arms; each arm needs its own log")
+            if not os.path.isfile(path):
+                ap.error(f"{path} not found")
+            with open(path, errors="replace") as f:
+                logs.setdefault(lab, []).append(f.read())
+        if set(markers) != labels or set(logs) != labels:
+            ap.error("--runtime-arg-only needs --marker and --log for each arm label")
+        ma, mb = (markers[lab] for lab, _ in arms)
+        if not ma.strip() or not mb.strip():
+            ap.error("--marker must not be empty or whitespace-only")
+        if ma in mb or mb in ma:
+            ap.error("--marker strings must differ and neither may contain the other")
+        ok, lines = check_runtime_arg_only(arms, args.kernel, markers, logs)
+        print("\n".join(lines))
+        print("JIT-HASH OK (runtime-arg-only)" if ok
+              else "JIT-HASH FAIL: runtime-arg-only check failed")
+        return 0 if ok else 1
     ok, lines = check(arms, args.kernel)
     print("\n".join(lines))
     print("JIT-HASH OK" if ok else "JIT-HASH FAIL: gate is A/A for the edited kernel(s)")

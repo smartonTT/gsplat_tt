@@ -1,0 +1,104 @@
+ttp lock: waiting for p100 (held by task #727 (run 2045) since 03:38 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #727 (run 2045) since 03:38 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #727 (run 2045) since 03:38 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #727 (run 2045) since 03:38 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #728 (run 2046) since 03:51 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #728 (run 2046) since 03:51 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #728 (run 2046) since 03:51 PDT; 2 ahead in queue)
+ttp lock: got p100 after 12.2 min
+SSH_PREFLIGHT=ok
+=== t720 23e60ae1=23e60ae128c3606eb82285af174769c61e594b45 to bh-49:/localdev/smarton/gstt2-sync mesh=P150 Wed Oct 14 03:56:17 PDT 2026
+sync rc=0
+[sync_remote] 23e60ae128c3606eb82285af174769c61e594b45 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t720: 1084 files, 64831403 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 11 of 1086 files, 236396 bytes (tar)
+[sync_remote] sha=23e60ae128c3606eb82285af174769c61e594b45 so_md5=53daa104020c81d4833c63b878bbb3bf 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+prep dump64 planes=(24, 64, 64)
+prep syncrop planes=(24, 256, 384)
+prep syn1 planes=(3, 832, 1248)
+prep syn5 planes=(15, 832, 1248)
+prep syn6 planes=(18, 832, 1248)
+sfilt SF_CMODE=1 (1 = hoisted taps compiled)
+check-run dump64 rc=0
+[LOSS] sfilt SF_CMODE=1
+[LOSS] stage=sfilt_program planes=24 strips=48 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=sfilt P=24 Hp=64 Wp=64 tiles=96 strips=48 cores=110 b2b_ms=0.0127 launch_ms_med=0.0265 launch_ms_min=0.0261 iters=50
+check-run syncrop rc=0
+[LOSS] sfilt SF_CMODE=1
+[LOSS] stage=sfilt_program planes=24 strips=288 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=sfilt P=24 Hp=256 Wp=384 tiles=2304 strips=288 cores=110 b2b_ms=0.1308 launch_ms_med=0.1454 launch_ms_min=0.1436 iters=50
+check-run syn1 rc=0
+[LOSS] sfilt SF_CMODE=1
+[LOSS] stage=sfilt_program planes=3 strips=117 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1825 launch_ms_med=0.1989 launch_ms_min=0.1923 iters=50
+round 1 fpu-syn rc=0
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2089 launch_ms_med=0.2245 launch_ms_min=0.2213 iters=50
+round 1 sfpu-syn1 rc=0
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1831 launch_ms_med=0.1984 launch_ms_min=0.1927 iters=50
+round 1 sfpu-syn5 rc=0
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.8003 launch_ms_med=0.8145 launch_ms_min=0.8016 iters=50
+round 1 sfpu-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9533 launch_ms_med=0.9697 launch_ms_min=0.9553 iters=50
+round 2 fpu-syn rc=0
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2089 launch_ms_med=0.2242 launch_ms_min=0.2205 iters=50
+round 2 sfpu-syn1 rc=0
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1829 launch_ms_med=0.1987 launch_ms_min=0.1934 iters=50
+round 2 sfpu-syn5 rc=0
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7997 launch_ms_med=0.8150 launch_ms_min=0.8030 iters=50
+round 2 sfpu-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9532 launch_ms_med=0.9684 launch_ms_min=0.9583 iters=50
+round 3 fpu-syn rc=0
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2090 launch_ms_med=0.2244 launch_ms_min=0.2223 iters=50
+round 3 sfpu-syn1 rc=0
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1821 launch_ms_med=0.1979 launch_ms_min=0.1931 iters=50
+round 3 sfpu-syn5 rc=0
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7997 launch_ms_med=0.8152 launch_ms_min=0.8062 iters=50
+round 3 sfpu-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9542 launch_ms_med=0.9682 launch_ms_min=0.9597 iters=50
+round 4 fpu-syn rc=0
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2091 launch_ms_med=0.2243 launch_ms_min=0.2208 iters=50
+round 4 sfpu-syn1 rc=0
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1819 launch_ms_med=0.1982 launch_ms_min=0.1921 iters=50
+round 4 sfpu-syn5 rc=0
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7998 launch_ms_med=0.8139 launch_ms_min=0.8031 iters=50
+round 4 sfpu-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9531 launch_ms_med=0.9701 launch_ms_min=0.9598 iters=50
+remote rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t720 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t720/docs/t720/out-bh-49/remote: 48 entries (tar)
+pull rc=0
+MISSING filt_compute: fpu=['15834630616583679872'] sfpu=[]
+MISSING sfilt_compute: fpu=[] sfpu=['16813469214164508401']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+ab_jit_check rc=1 (1 expected: each compute kernel exists in one arm only)
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2089 launch_ms_med=0.2245 launch_ms_min=0.2213 iters=50
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2089 launch_ms_med=0.2242 launch_ms_min=0.2205 iters=50
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2090 launch_ms_med=0.2244 launch_ms_min=0.2223 iters=50
+[LOSS] mode=filt hibits=9 H=822 W=1237 tiles=3042 strips=117 cores=110 b2b_ms=0.2091 launch_ms_med=0.2243 launch_ms_min=0.2208 iters=50
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1831 launch_ms_med=0.1984 launch_ms_min=0.1927 iters=50
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1829 launch_ms_med=0.1987 launch_ms_min=0.1934 iters=50
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1821 launch_ms_med=0.1979 launch_ms_min=0.1931 iters=50
+[LOSS] mode=sfilt P=3 Hp=832 Wp=1248 tiles=3042 strips=117 cores=110 b2b_ms=0.1819 launch_ms_med=0.1982 launch_ms_min=0.1921 iters=50
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.8003 launch_ms_med=0.8145 launch_ms_min=0.8016 iters=50
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7997 launch_ms_med=0.8150 launch_ms_min=0.8030 iters=50
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7997 launch_ms_med=0.8152 launch_ms_min=0.8062 iters=50
+[LOSS] mode=sfilt P=15 Hp=832 Wp=1248 tiles=15210 strips=585 cores=110 b2b_ms=0.7998 launch_ms_med=0.8139 launch_ms_min=0.8031 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9533 launch_ms_med=0.9697 launch_ms_min=0.9553 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9532 launch_ms_med=0.9684 launch_ms_min=0.9583 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9542 launch_ms_med=0.9682 launch_ms_min=0.9597 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9531 launch_ms_med=0.9701 launch_ms_min=0.9598 iters=50
+[CHECK] mode=sfilt case=dump64 planes=24 vs_fp64_fp32taps_l2rel=3.90e-08 maxrel=1.63e-07 bias=+5.95e-12 vs_fp64_truetaps_l2rel=3.92e-08 model_vs_fp64_l2rel=3.90e-08 bitmatch_fused=0.976654 bitmatch_unfused=0.616272 max_ulp_vs_fused=1023 worst_plane_l2rel=3.99e-08 PASS
+[CHECK] mode=sfilt case=syncrop planes=24 vs_fp64_fp32taps_l2rel=3.76e-08 maxrel=1.80e-07 bias=-2.57e-11 vs_fp64_truetaps_l2rel=3.77e-08 model_vs_fp64_l2rel=3.76e-08 bitmatch_fused=0.973343 bitmatch_unfused=0.617466 max_ulp_vs_fused=2161968020 worst_plane_l2rel=4.00e-08 PASS
+[CHECK] mode=sfilt case=syn1 planes=3 vs_fp64_fp32taps_l2rel=3.70e-08 maxrel=1.80e-07 bias=-3.10e-11 vs_fp64_truetaps_l2rel=3.71e-08 model_vs_fp64_l2rel=3.70e-08 bitmatch_fused=0.991572 bitmatch_unfused=0.617964 max_ulp_vs_fused=2 worst_plane_l2rel=3.71e-08 PASS
+[ORACLE] case=dump64 (64, 64, 3) sfpu_model loss_err=+9.67e-10 grad_l2rel=2.22e-07 (exact-filter fp32 algorithm: loss_err=+7.45e-10 grad_l2rel=1.81e-07) PASS
+[ORACLE] case=syncrop (256, 384, 3) sfpu_model loss_err=-4.77e-08 grad_l2rel=8.11e-06 (exact-filter fp32 algorithm: loss_err=-2.38e-09 grad_l2rel=5.56e-06) PASS
+bike psnr=23.9 dB
+[ORACLE] case=bike_top (256, 384, 3) sfpu_model loss_err=+1.85e-08 grad_l2rel=1.18e-05 (exact-filter fp32 algorithm: loss_err=-1.77e-08 grad_l2rel=6.98e-06) PASS
+[ORACLE] case=bike_mid (256, 384, 3) sfpu_model loss_err=-4.96e-09 grad_l2rel=2.17e-06 (exact-filter fp32 algorithm: loss_err=+3.99e-09 grad_l2rel=1.37e-06) PASS
+[CHECK] overall PASS bitmatch_fused={'dump64': 0.976654052734375, 'syncrop': 0.9733428955078125, 'syn1': 0.9915717712442472}
+check rc=0
+=== done Wed Oct 14 03:58:33 PDT 2026
