@@ -32,4 +32,39 @@ Visual check: no tile seams or block artifacts; the diff follows spokes and fine
 ## md5 at BLEND_T_PERIOD=0 and JIT check
 
 First try: every arm failed to build (`alpha_blend_compute_mb.cpp:1602: division by zero`,
--Werror, present since 0066e274). Fixed in b889a6af; rerun results below.
+-Werror, present since 0066e274). Fixed in b889a6af; rerun (t722-ab4, b889a6af, 2026-10-14
+04:18-04:30 PDT) below. Raw lines: evidence/ab4-b2b-lines.txt.
+
+### Gate 1: md5 at BLEND_T_PERIOD=0 (169 views, 6 passes)
+
+| config | B1=0 raw_md5 | B1=1 | B1=2 | B1=0 ms/view | B1=1 | B1=2 |
+|---|---|---|---|---|---|---|
+| s4 1M | e50cf545 | e50cf545 | e50cf545 | 8.017 | 5.440 | 4.839 |
+| s2 3M | d56f6f98 | d56f6f98 | d56f6f98 | 8.891 | 6.816 | 6.686 |
+| s1 6.13M | 87e8ad77 | 87e8ad77 | 87e8ad77 | 8.812 | 8.401 | 8.404 |
+
+PASS: equal in all arms.
+
+### Grid rerun at default period (b889a6af)
+
+| config | B1=0 | B1=1 | B1=2 | raw_md5 (all arms) |
+|---|---|---|---|---|
+| s4 1M | 6.531 | 4.954 | 4.789 | b35dad8b |
+| s2 3M | 7.357 | 6.389 | 6.329 | 16ba349e |
+| s1 6.13M | 8.023 | 7.924 | 7.927 | fba4b01a |
+
+Matches the 80c35b73 grid within 0.003 ms/view.
+
+### Gate 3: JIT check
+
+`opt/ab_jit_check.py` (from 3e73326c; not on this branch) on each arm's own eth JIT cache, kernels
+matblend_compute, matblend_brisc, matblend_ncrisc: B1=0 vs 1 and B1=0 vs 2, at period 0 and
+default: JIT-HASH OK in all four (hashes differ; the other kernels are identical, as expected
+since B1' only changes the blend). Output: evidence/jit-check.txt.
+
+## Verdict
+
+Lossless and bit-exact, -27% at s4 1M (6.53 -> 4.79 ms/view, B1=2), -14% at s2 3M, -1% at s1.
+Pass bar not met: 1M s4 is 4.79 (bar 2.0), and 3M s4 still overflows the per-tile sort bucket in
+every arm. Fixing 3M s4 needs the full B1 (emit and sort per sub-tile, num_ids buckets), which
+this branch does not do. Hero: evidence/hero-b2.png, evidence/hero-b2-diff-x8.png.
