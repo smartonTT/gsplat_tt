@@ -3,7 +3,7 @@
 #   ttp detach t743 -- docs/t743/drive.sh <rev>       (Mac, worktree root)
 # ARMS="name:VAR=v,VAR=v name2:..." timing arms (own JIT caches), ROUNDS alternated rounds on the 1237x822
 # syn case. CHECK=<arm name>: also run the 6 T0 oracle cases with that arm's env and check them on the Mac.
-# DISASM=1: objdump of each arm's ssim_fwd/bwd math (trisc1) ELF, SFPU opcode counts.
+# JITK: kernels opt/ab_jit_check.py checks on the first two arms. DISASM=1: objdump of each arm's ssim_fwd/bwd math (trisc1) ELF, SFPU opcode counts.
 # Same steps as docs/t736/drive.sh: ssh preflight @p100, opt/sync_remote.sh (one-way, repo-scoped), ssh+tar
 # (bh-49 has no rsync). Existing measurement reservation only (no ird reserve/extend/release), never bh-30,
 # StrictHostKeyChecking=yes.
@@ -79,7 +79,7 @@ timeout 120 "${SSH[@]}" "rm -rf $T/tmp/t743 $C-*"; echo "remote cleanup rc=$?"
 set -- $ARMS
 if [ $# -ge 2 ]; then
   python3 opt/ab_jit_check.py --arm "${1%%:*}=$O/remote/jit-${1%%:*}.txt" --arm "${2%%:*}=$O/remote/jit-${2%%:*}.txt" \
-    --kernel ssim_fwd_compute --kernel ssim_bwd_compute; echo "ab_jit_check rc=$?"
+    $(for k in ${JITK:-ssim_fwd_compute ssim_bwd_compute}; do printf -- '--kernel %s ' "$k"; done); echo "ab_jit_check rc=$? (kernels: ${JITK:-ssim_fwd_compute ssim_bwd_compute})"
 fi
 for a in $ARMS; do n=${a%%:*}; echo "-- $n"; grep -h "^\[LOSS\] mode" "$O"/remote/syn/r*-$n/run.log; done
 if [ -n "$CHECK" ]; then python3 opt/t736/ssim_check.py check "$O/remote"; echo "check rc=$?"; fi

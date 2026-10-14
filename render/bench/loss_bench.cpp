@@ -420,14 +420,25 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
     }
     const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
     const std::string kd = LOSS_KERNEL_DIR;
+    // #743 LOSS_SSIM_RD (default 1): reader_ssim.cpp SSIM_RD (fewer DRAM reads, same data); 0 = t736 reader.
+    const char* rde = std::getenv("LOSS_SSIM_RD");
+    const bool rd = !(rde && rde[0] == '0');
+    // #743 LOSS_SSIM_CBD: reader input CBs hold this many rows / output tiles (default 2).
+    const char* cbe = std::getenv("LOSS_SSIM_CBD");
+    const uint32_t cbd = cbe && cbe[0] ? uint32_t(std::max(2, std::atoi(cbe))) : 2u;
+    std::fprintf(stderr, "[LOSS] ssim reader SSIM_RD=%d cbd=%u\n", int(rd), cbd);
+    float wmf = float(-lam / n);
+    uint32_t wm_bits;
+    std::memcpy(&wm_bits, &wmf, 4);
     auto mk = [&](bool bwd) {
         Program prog = CreateProgram();
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         std::vector<std::pair<uint32_t, uint32_t>> cbs;
         if (bwd) {
-            cbs = {{0, 18}, {1, 4}, {16, 2}, {17, 2}};
+            cbs = {{0, 9 * cbd}, {1, 2 * cbd}, {16, 2}, {17, 2}};
         } else {
-            cbs = {{0, 6}, {1, 6}, {2, 4}, {3, 6}, {16, 6}, {17, 2}, {18, 4}, {19, 1}, {20, 1}};
+            cbs = {{0, 3 * cbd}, {1, 3 * cbd}, {2, 2 * cbd}, {3, 3 * cbd}, {16, 6}, {17, 2}, {18, 4}, {19, 1}, {20, 1}};
+            if (rd) cbs.push_back({4, 1});  // reader's constant wm tile (never pushed)
         }
         for (uint32_t q = 6; q < 15; q++) cbs.push_back({q, 1});
         for (auto [id, pages] : cbs) {
@@ -439,6 +450,7 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
         for (int i = 0; i < (bwd ? 1 : 2); i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_w);
         std::map<std::string, std::string> rdefs;
         if (bwd) rdefs["SSIM_BWD"] = "1";
+        if (rd) rdefs["SSIM_RD"] = "1";
         std::map<std::string, std::string> wdefs;
         if (const char* a = std::getenv("LOSS_SSIM_DMABL"); a && a[0] && std::string(a) != "0") {
             rdefs["SSIM_DMABL"] = wdefs["SSIM_DMABL"] = a;  // #743 timing ablation only
@@ -466,7 +478,8 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
                     SetRuntimeArgs(prog, kw, cc, {uint32_t(bg->address()), t0, t1, nh, nw});
                 } else {
                     SetRuntimeArgs(prog, kr, cc, {uint32_t(bx->address()), uint32_t(by->address()),
-                                                  uint32_t(bk->address()), t0, t1, nh, nw});
+                                                  uint32_t(bk->address()), t0, t1, nh, nw, wm_bits,
+                                                  L.H / TS, L.W / TS});
                     SetRuntimeArgs(prog, kw, cc, {uint32_t(bd->address()), uint32_t(bs->address()), t0, t1, nh, nw, c});
                 }
                 SetRuntimeArgs(prog, kcmp, cc, {t0, t1, nh});
