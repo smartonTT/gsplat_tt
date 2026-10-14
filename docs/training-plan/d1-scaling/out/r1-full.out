@@ -1,0 +1,32 @@
+[ttw 2026-10-14T00:45:34-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T00:45:34-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-14T00:45:34-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T00:45:34-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T00:45:34-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T00:45:34-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T00:45:34-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T00:45:34-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T00:45:34-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T00:45:34-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T00:45:34-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T00:45:34-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=e515eb2a bin=7f442ac3b98c0722 t691 3702fbb5 D1 sweep (bh-49)
+  data: # sha=
+=========================================
+host=bh-49  tag=t691-r1-full  timeout=560s  worry=600s  ts=2026-10-14T00:45:35-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/docs/training-plan/d1-scaling/remote.sh 1 b2b full_s1 full_s2 full_s4
+-----------------------------------------
+=== r1-b2b-full_s1 3702fbb5 07:45:38 load=1.15
+run rc=0
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.916 fps=126.33 ms_frame_median=7.917 pass_ms_frame=7.919,7.917,7.918,7.917,7.916,7.908 check_pass_ms_frame=7.969 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.916 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t691-r1-b2b-full_s1
+TTW_TIMING b2b_ms_frame=7.916
+TTW_TIMING b2b_ms_frame_median=7.917
+=== r1-b2b-full_s2 3702fbb5 07:46:06 load=1.45
+run rc=1
+Traceback (most recent call last):
+=== r1-b2b-full_s4 3702fbb5 07:46:10 load=1.33
+run rc=1
+Traceback (most recent call last):
+=== done 1 b2b 07:46:13
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t691/tmp/ttw-state/logs/t691-r1-full-20261014-004534.log

@@ -70,17 +70,29 @@ Corrections to PLAN.md §1 from data that came in after it:
 
 | stage | at N = 5.56M (today's bicycle.ply) | at N = 1.2M (parity-sized model, see note) | basis |
 |---|---:|---:|---|
-| forward (pfwc, sort, mat, blend) | 8.57 | ~2.4 | M p100 at 5.56M; at 1.2M: pfwc x N ratio, the rest x pair ratio 0.3 (E, Speedy-Splat's 10.6x fewer Gaussians gave 6.7x faster render, P) |
+| forward (pfwc, sort, mat, blend) | 8.57 (p100); **7.92 b2b on p150a at 6.13M** (D1) | **~3.5** (D1) | M p100 at 5.56M; M p150a at 6.13M and on pruned proxies (D1, d1-scaling/RESULTS.md): 1M 3.25, 1.5M 3.93 ms b2b, 1.2M interpolated; pair ratio at 1.2M is 0.39, not the 0.3 first assumed |
 | loss L1 + D-SSIM fwd+bwd, fused | 0.2-0.4 | 0.2-0.4 | PLAN.md row d, resolution-bound not N-bound |
-| blend backward | 8.7-10.2 | 2.6-3.1 | PLAN.md row e: 2.3-2.7x the blend part |
+| blend backward | 8.7-10.2 | **3.4-4.0** (D1) | PLAN.md row e: 2.3-2.7x the blend part; at 1.2M scaled by D1's measured blend ratio 0.395 (2.86 / 7.24 ms) |
 | pair-grad scatter + segmented reduce | 0.3-0.9 | 0.1-0.3 | PLAN.md rows g, h at 215 GB/s |
 | projection + SH3 backward + Adam (visible rows, fp32 params, bf16 moments) | 7.6 | ~1.6 | 1.7M (0.36M) visible x 59 x 16 B / 215 GB/s |
 | exposed pfwc at the step boundary | 1.4 | 0.3 | PLAN.md row k |
-| **step at final N** | **~27-29** | **~7-8** | E |
+| **step at final N** | **~27-29** | **~9-10** (was ~7-8 before D1) | E |
 
 Note on N: parity on bicycle needs about 1-1.5M Gaussians with a good densifier (LiteGS 25.10 dB
 at ~1M, P?; Taming's budget curve flattens above ~1.4M on Mip-NeRF360, P). The pair ratio at
-that N is the biggest unknown in this table; task D1 measures it.
+that N is the biggest unknown in this table; task D1 measured it (below).
+
+**D1 results (#691, M on p150a bh-49, best-iter-229, 169 train views; d1-scaling/RESULTS.md):**
+- Forward at full res = **~0.9-1.0 ms fixed floor + 3.1-3.6 ns per tile-Gaussian pair**
+  (fits rms 0.03-0.06 ms). Blend is 92% of forward latency on the full model.
+- Pruned proxies keep original splat sizes; a model trained to 1.2M probably has larger splats
+  and so more pairs per Gaussian, so ~3.5 ms is more likely low than high (E).
+- **Lower resolution is slower, not faster, with today's 32x32 screen-tile split:** at the same N,
+  1/2 res is 5-27% slower and 1/4 res 78-100% slower (260 and 70 tiles for ~110+ cores; blend
+  cost per pair 3.6 -> 5.8 -> 11 ns). The full model at 1/2 and 1/4 res, and 3M/1.5M at 1/4 res,
+  **fail outright**: a tile's list exceeds the 65,472-record sort bucket.
+  T11 (DashGaussian) therefore needs a low-res blend path first (smaller tiles or heavy-tile
+  split across cores, plus bigger buckets) before it can save anything.
 
 Run average, not final N: a 30k run starts from SfM points (bicycle ~54k, E from the COLMAP
 model) and reaches final N around iteration 15k. Averaged over the run the step is ~0.6x the
@@ -88,7 +100,8 @@ final-N step (E: linear growth to 15k, flat after), so **~4.5 ms/iter**; with a 
 resolution schedule (-45.7% average run time on 3DGS backbones, P) **~2.5-3 ms/iter** (E).
 
 **Verdict on paper: 2.5-3 ms/iter run average at parity quality (E), on a p100-calibrated
-model.** 1-2 ms needs the per-pair blend cost (forward and backward share it) to fall by about
+model.** After D1 the final-N step at 1.2M is ~9-10 ms, so the run average is ~5.5-6 ms/iter
+(E, same 0.6x), and the DashGaussian cut does not apply until low-res rendering is fixed. 1-2 ms needs the per-pair blend cost (forward and backward share it) to fall by about
 2x more. That is the same per-pair work as the render headline's gap (8.06 vs 1.83 ms), so the
 render levers R1-R5 of structural plan 4 count double in training. The p150's extra cores (vs
 110 on the p100) help by an amount the p1 re-baseline will show.
