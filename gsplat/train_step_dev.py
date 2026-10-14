@@ -13,7 +13,7 @@ Stages checked:
          plus the count of slots left NaN (the bench poisons the buffer before T1)
   t2     device grads / params / m / v / pfwc vs t2_step fed the ORACLE slots (t2_dev.check)
   t0     device grads vs the dump's autograd grad_* and device params vs adam_bf16_param_*
-         (the T0 oracle itself, SH band 0)
+         (the T0 oracle itself, all SH bands; gated for every sh_degree since #751)
 """
 from __future__ import annotations
 
@@ -66,26 +66,29 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     s["pass"] = bool(s["rel_err"] <= slot_bar and s["nan_slots"] == 0)
     rep["t1"] = s
     rep["t2"] = t2_dev.check(indir / "t2", outdir, grad_bar, adam_bar)
-    # Against the T0 oracle directly (autograd grads, bf16-moment Adam), SH band 0.
-    rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
-    band0 = lambda k, a: np.asarray(a)[:, :1, :] if k == "sh" else np.asarray(a)  # noqa: E731
+    # Against the T0 oracle directly (autograd grads, bf16-moment Adam), every SH band (#751:
+    # bands 1-15 and the view-direction term from the t2sh passes).
+    o = t2_dev.outputs(indir / "t2", outdir)
     t0 = {}
-    if (outdir / "grads.f32").exists():
-        g = t2_dev.from_cols(t2_dev.from_pages(rd("grads.f32", f32), N, t2_dev.STREAMS))
-        t0["grads"] = {k: t2.rel_error(g[k], band0(k, d[f"grad_{k}"])) for k in t2.PARAM_NAMES}
-    p = t2_dev.from_cols(t2_dev.from_pages(rd("params_out.f32", f32), N, t2_dev.STREAMS))
-    t0["params"] = {k: t2.rel_error(p[k], band0(k, d[f"adam_bf16_param_{k}"])) for k in t2.PARAM_NAMES}
-    pin = {k: band0(k, d[f"param_{k}"]) for k in t2.PARAM_NAMES}
-    t0["delta"] = {k: t2.rel_error(p[k] - pin[k], band0(k, d[f"adam_bf16_param_{k}"]) - pin[k])
+    if "grads" in o:
+        t0["grads"] = {k: t2.rel_error(o["grads"][k], d[f"grad_{k}"]) for k in t2.PARAM_NAMES}
+    p = o["params"]
+    t0["params"] = {k: t2.rel_error(p[k], d[f"adam_bf16_param_{k}"]) for k in t2.PARAM_NAMES}
+    pin = {k: np.asarray(d[f"param_{k}"]) for k in t2.PARAM_NAMES}
+    t0["delta"] = {k: t2.rel_error(p[k] - pin[k], d[f"adam_bf16_param_{k}"] - pin[k])
                    for k in t2.PARAM_NAMES}
+    if p["sh"].shape[1] > 1:  # per band (0, 1-3, 4-8, 9-15) for the report
+        bands = {"sh0": (0, 1), "sh1": (1, 4), "sh2": (4, 9), "sh3": (9, 16)}
+        t0["sh_bands"] = {f"{w}_{b}": t2.rel_error(a[:, i:j], ref[:, i:j])
+                          for b, (i, j) in bands.items() if j <= p["sh"].shape[1]
+                          for w, a, ref in (("grad", o.get("grads", {}).get("sh"), d["grad_sh"]),
+                                            ("param", p["sh"], d["adam_bf16_param_sh"]))
+                          if a is not None}
     t0["worst_grad"] = max(t0.get("grads", {"-": 0.0}).values())
     t0["worst_param"] = max(max(t0["params"].values()), max(t0["delta"].values()))
     t0["pass"] = bool(t0["worst_grad"] <= grad_bar and t0["worst_param"] <= adam_bar)
-    # T2 owns SH band 0 only: with sh_degree > 0 the oracle's dL/dmeans has the view-direction
-    # term of bands 1-3 and its dL/dsh0 uses the full-colour clamp mask, so T0 is reported, not gated.
-    t0["gated"] = int(d.get("sh_degree", 0)) == 0
     rep["t0"] = t0
-    rep["pass"] = bool(s["pass"] and rep["t2"]["pass"] and (t0["pass"] or not t0["gated"]))
+    rep["pass"] = bool(s["pass"] and rep["t2"]["pass"] and t0["pass"])
     return rep
 
 

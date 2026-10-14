@@ -25,15 +25,31 @@ def _emulate(indir, outdir):
     for i, s in enumerate(t2.PFWC_STREAMS):
         pf[i, :N] = ref["pfwc"][s][:N]
     pf.tofile(outdir / "pfwc.f32")
+    if meta.get("sh_bands", 1) > 1:  # the t2sh post pass outputs
+        td.rest_pages(ref["params"]["sh"], ng).astype(np.float32).tofile(outdir / "sh_rest_out.f32")
+        td.rest_pages(ref["grads"]["sh"], ng).astype(np.float32).tofile(outdir / "sh_grads.f32")
+        for w in ("m", "v"):
+            td.rest_pages(td.bf16_bits(ref[w]["sh"]), ng).tofile(outdir / f"sh_{w}_out.u16")
 
 
 @pytest.mark.parametrize("dump", ["t0_sh0_64x64_n50.npz", "t0_sh3_64x64_n50.npz"])
 def test_dump_roundtrip(tmp_path, dump):
-    # sh3: the reference carries 16 SH bands, the device only SH0; check() compares band 0.
+    # sh3: bands 1-15 come back in the t2sh rest pages; check() compares all 16 bands.
     td.prep_dump(f"benchmarks/train_oracle/{dump}", tmp_path / "in")
     _emulate(tmp_path / "in", tmp_path / "out")
     rep = td.check(tmp_path / "in", tmp_path / "out")
     assert rep["pass"] and rep["worst_adam"] == 0.0 and rep["m_bits_equal"]
+    if "sh3" in dump:
+        assert set(rep["grads"]) == set(t2.PARAM_NAMES) and rep["worst_grad"] == 0.0
+
+
+def test_rest_pages_roundtrip():
+    sh = np.random.default_rng(0).normal(size=(130, 16, 3)).astype(np.float32)
+    pg = td.rest_pages(sh, 16)
+    assert pg.shape == (48, 1024)
+    assert np.array_equal(td.from_rest_pages(pg, 130, 16), sh[:, 1:])
+    # band j = 5 r + jj + 1, colour c at stream 3 jj + c of page 3 g + r
+    assert pg[3 * 1 + 2, 64 * (3 * 1 + 2) + 5] == sh[64 + 5, 5 * 2 + 1 + 1, 2]
 
 
 def test_synth_meta_and_vis(tmp_path):
