@@ -5,6 +5,7 @@
 # Steps: ssh preflight (@p100), opt/sync_remote.sh --no-build (one-way, repo-scoped, this worktree),
 # build render/train (train_step), per dump: train_step_dev prep on the box, train_step run, pull
 # tmp/t748 back, then `train_step_dev check` here (T1 slots, T2 vs t2_step, T0 oracle).
+# RUNS=hero (#750): the full-view hero chain; see the hero branch below (check runs on the box).
 # Restrictions: existing measurement reservation only (no ird reserve/extend/release), never the
 # viewer box bh-30, StrictHostKeyChecking=yes on every ssh.
 set -u
@@ -38,6 +39,18 @@ RUNS=${RUNS:-"sh0 sh3"}
 if [ $brc = 0 ]; then
   for n in $RUNS; do
     echo "=== run $n $(date +%T)"
+    if [ "$n" = hero ]; then
+      # #750 hero: dump + prep built on the Mac (tmp/t750, docs/t685/hero.py + train_step_dev prep),
+      # pushed over ssh (tar), run, checked on the box, big files deleted there (keep disk lean).
+      [ -s tmp/t750/hero.npz ] && [ -s tmp/t750/in-hero/chain.json ] || { echo "no tmp/t750 hero prep"; continue; }
+      tar -C tmp/t750 -cf - hero.npz in-hero | timeout 1200 "${SSH[@]}" "rm -rf $T/tmp/t748/hero && mkdir -p $T/tmp/t748/hero && tar -C $T/tmp/t748/hero -xf -"
+      echo "push hero rc=$?"
+      timeout 2400 "${SSH[@]}" "$ENV && cd tmp/t748/hero && mkdir -p out && (timeout ${RUN_TIMEOUT:-600} ../../../render/train/build/train_step in-hero out ${CORES:-110} ${REPS:-5} grads > out/run.log 2>&1; rc=\$?; tail -20 out/run.log; \
+        if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > out/reset.log 2>&1; echo \"reset rc=\$?\"; exit \$rc; fi; \
+        cd ../../.. && nice -n 19 python3 -m gsplat.train_step_dev check tmp/t748/hero/hero.npz tmp/t748/hero/in-hero tmp/t748/hero/out > tmp/t748/hero/check.log 2>&1; echo \"CHECK hero rc=\$?\"; tail -60 tmp/t748/hero/check.log); \
+        rc=\$?; mkdir -p tmp/t748/out-hero && cp tmp/t748/hero/out/*.json tmp/t748/hero/out/run.log tmp/t748/hero/check.log tmp/t748/out-hero/ 2>/dev/null; rm -rf tmp/t748/hero; exit \$rc"
+      echo "run hero rc=$?"; continue
+    fi
     timeout 900 "${SSH[@]}" "$ENV && rm -rf tmp/t748/in-$n tmp/t748/out-$n && mkdir -p tmp/t748/out-$n \
       && python3 -m gsplat.train_step_dev prep benchmarks/train_oracle/t0_${n}_64x64_n50.npz tmp/t748/in-$n \
       && timeout ${RUN_TIMEOUT:-300} render/train/build/train_step tmp/t748/in-$n tmp/t748/out-$n ${CORES:-110} ${REPS:-10} grads > tmp/t748/out-$n/run.log 2>&1; rc=\$?; tail -20 tmp/t748/out-$n/run.log; \
@@ -47,6 +60,7 @@ if [ $brc = 0 ]; then
 fi
 opt/sync_remote.sh --pull tmp/t748 "$O/remote" "$H" "$T"; echo "pull rc=$?"
 for n in $RUNS; do
+  if [ "$n" = hero ]; then cp "$O/remote/out-hero/check.json" "$O/check-hero.json" 2>/dev/null; cat "$O/remote/out-hero/timing.json" 2>/dev/null; continue; fi
   if [ -s "$O/remote/out-$n/params_out.f32" ]; then python3 -m gsplat.train_step_dev check benchmarks/train_oracle/t0_${n}_64x64_n50.npz "$O/remote/in-$n" "$O/remote/out-$n" > "$O/check-$n.json"; echo "CHECK $n rc=$?"; cat "$O/remote/out-$n/timing.json" 2>/dev/null
   else echo "CHECK $n: no outputs"; fi
 done
