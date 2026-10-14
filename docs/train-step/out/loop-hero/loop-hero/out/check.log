@@ -1,0 +1,138 @@
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:110: RuntimeWarning: divide by zero encountered in divide
+  idet = ft(1) / (a * c - b * b)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:133: RuntimeWarning: invalid value encountered in multiply
+  ga = -(A * A * gA + A * B * gB + B * B * gC)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:134: RuntimeWarning: invalid value encountered in multiply
+  gc = -(B * B * gA + B * C * gB + C * C * gC)
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:135: RuntimeWarning: invalid value encountered in multiply
+  gb = -(ft(2) * A * B * gA + (A * C + B * B) * gB + ft(2) * B * C * gC)
+{
+ "dump": "chain.npz",
+ "t1": {
+  "rel_err_all": 0.024857564469255865,
+  "tie_slots": 56202,
+  "rel_err": 0.001584241008581039,
+  "per_term": {
+   "dmx": 0.035286935926593196,
+   "dmy": 0.02970018630906255,
+   "dA": 0.0015813627691233134,
+   "dB": 0.001584241008581039,
+   "dC": 0.0024618647480168995,
+   "dop": 0.0036650395945343585,
+   "dr": 4.41144898453346e-05,
+   "dg": 0.00022781020748892947,
+   "db": 6.907845909278651e-05
+  },
+  "nan_slots": 0,
+  "pass": true
+ },
+ "t2": {
+  "n": 1809729,
+  "n_slots": 4478225,
+  "max_count": 1014,
+  "fp32_ill_rows": 82,
+  "fp32_ill_rows_max": 180,
+  "grads": {
+   "means": 0.0029560193901835012,
+   "log_scales": 0.001909262652089338,
+   "quats": 0.0010329105411572244,
+   "opacity_logits": 0.0001480663655160404,
+   "sh": 2.204342797789353e-07
+  },
+  "grads_all_rows": {
+   "means": 2.2340701725558616,
+   "log_scales": 2.216894377533344,
+   "quats": 4.563867722413414,
+   "opacity_logits": 0.00035691013085427663,
+   "sh": 1.0959768993706096e-05
+  },
+  "ill": {
+   "means": {
+    "dev_vs_f64": 279313.2781421656,
+    "ref32_vs_f64": 882558.1995843807
+   },
+   "log_scales": {
+    "dev_vs_f64": 819996.0012830115,
+    "ref32_vs_f64": 2674106.6613899106
+   },
+   "quats": {
+    "dev_vs_f64": 42407.74267782669,
+    "ref32_vs_f64": 38224.888472843544
+   },
+   "opacity_logits": {
+    "dev_vs_f64": 0.00021725810151248064,
+    "ref32_vs_f64": 0.004633716544960452
+   },
+   "sh": {
+    "dev_vs_f64": 1.0958388940104357e-05,
+    "ref32_vs_f64": 5.6272497861125305e-08
+   }
+  },
+  "ill_dev_finite": true,
+  "adam": {
+   "params_means": 0.0,
+   "params_log_scales": 0.0,
+   "params_quats": 1.5975556121090243e-07,
+   "params_opacity_logits": 1.7830212867779343e-07,
+   "params_sh": 1.0911577161545246e-07,
+   "m_means": 0.0,
+   "m_log_scales": 0.0,
+   "m_quats": 0.0,
+   "m_opacity_logits": 0.0,
+   "m_sh": 0.0,
+   "v_means": 0.0,
+   "v_log_scales": 0.0,
+   "v_quats": 0.0,
+   "v_opacity_logits": 0.0,
+   "v_sh": 0.0,
+   "delta_means": 0.0,
+   "delta_log_scales": 0.0,
+   "delta_quats": 1.8626344356403923e-06,
+   "delta_opacity_logits": 4.7683533922066035e-06,
+   "delta_sh": 2.980217317446788e-06
+  },
+  "adam_e2e": {
+   "params_means": 0.0,
+   "params_log_scales": 0.0,
+   "params_quats": 2.0366179840292491e-07,
+   "params_opacity_logits": 3.3797699644067976e-07,
+   "params_sh": 0.0,
+   "m_means": 0.00048287307159810124,
+   "m_log_scales": 0.005076142131979695,
+   "m_quats": 0.00164073000672043,
+   "m_opacity_logits": 0.0,
+   "m_sh": 0.0,
+   "v_means": 0.005050505050505051,
+   "v_log_scales": 0.004273504273504274,
+   "v_quats": 2.74675782375072e-06,
+   "v_opacity_logits": 0.0,
+   "v_sh": 0.0,
+   "delta_means": 0.0,
+   "delta_log_scales": 0.0,
+   "delta_quats": 1.8626309662398137e-06,
+   "delta_opacity_logits": 8.979078746520607e-05,
+   "delta_sh": 0.0
+  },
+  "pfwc": {
+   "mx": 0.0,
+   "my": 0.0,
+   "mz": 0.0,
+   "c00": 6.976633824288974e-06,
+   "c01": 4.5134346793648924e-05,
+   "c02": 1.4341032684072675e-05,
+   "c11": 6.972238944800785e-06,
+   "c12": 5.0544505755901605e-05,
+   "c22": 7.643268661481394e-06,
+   "opacity": 3.6243621651142213e-07,
+   "col_r": 0.0,
+   "col_g": 0.0,
+   "col_b": 0.0
+  },
+  "m_bits_equal": true,
+  "worst_grad": 0.0029560193901835012,
+  "worst_adam": 4.7683533922066035e-06,
+  "worst_pfwc": 5.0544505755901605e-05,
+  "pass": true
+ },
+ "pass": true
+}

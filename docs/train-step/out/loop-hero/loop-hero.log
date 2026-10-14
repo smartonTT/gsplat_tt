@@ -1,0 +1,27 @@
+STEP hero fwd_prep rc=0 wall_ms=1239
+STEP hero fwd_dev rc=0 wall_ms=4791
+STEP hero fwd_check rc=1 wall_ms=1243
+STEP hero loss_prep rc=0 wall_ms=370
+STEP hero loss_dev rc=0 wall_ms=11975
+STEP hero chain_dump rc=0 wall_ms=1040
+/localdev/smarton/gstt2-sync/gsplat/t2_param_backward.py:110: RuntimeWarning: divide by zero encountered in divide
+  idet = ft(1) / (a * c - b * b)
+STEP hero t1t2_prep rc=0 wall_ms=319927
+STEP hero step_dev rc=0 wall_ms=5491
+STEP hero check rc=0 wall_ms=13950
+--- hero fwd
+{"npz": "hero_chain.npz", "max_abs_image": 0.016695082187652588, "max_abs_image_rgb": [0.016695082187652588, 0.0071160197257995605, 0.010800033807754517], "max_abs_final_T": 0.0, "bar": 0.0001, "final_T_gated": false, "pass": false, "max_abs_image_vs_dump": 0.016695082187652588, "gate": "fwd_model", "max_abs_image_vs_model": 0.013716191053390503, "max_abs_final_T_vs_model": 0.002208407189755235, "stopped_px": 1016814}
+{"n_tiles": 1014, "n_rec_pages": 2239363, "device_ms_first": 454.6175, "device_ms_min": 440.3687, "device_ms_med": 440.3829, "reps": 5}
+
+--- hero loss
+[LOSS] ssim reader SSIM_RD=1 cbd=2
+[LOSS] stage=ssim_programs H=822 W=1237 tiles=3042 cores=110
+[LOSS] stage=launch1_done
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.295781901 b2b_ms=0.9576 fwd_b2b_ms=0.4387 launch_ms_med=0.9656 launch_ms_min=0.9569 iters=5
+{"H": 822, "W": 1237, "image_max_abs_vs_oracle": 0.016695082187652588, "host_ms": 27.25, "consts_ms_per_dataset": 277.786}
+{"loss": 0.2957819009535083, "oracle_loss": null, "grad_l2rel_vs_oracle": 3.6981566347815287, "grad_finite": true, "grad_max_rel_vs_oracle": 26.722801119593335, "host_ms": 983.636}
+--- hero step
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 5, "grads_out": true, "t1_ms_first": 115.4078, "t1_ms_min": 81.3593, "t1_ms_med": 81.3678, "t2_ms_first": 105.9262, "t2_ms_min": 98.4001, "t2_ms_med": 98.4018, "chain_ms_min": 179.7122, "chain_ms_med": 179.7208, "host_repack_ms": 0}
+
+CHAIN hero pass=True t1=True t2=True t0=None
+128K	tmp/t781/loop-hero

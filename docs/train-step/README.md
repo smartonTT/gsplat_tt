@@ -154,3 +154,37 @@ Adam given device grads 4.8e-6, moments bit-equal, pfwc 5.1e-5 (bar 1e-3). End-t
 (reported): 5.8e-3 from bf16 rounding flips. On the ill rows the device is closer to fp64 than
 the host fp32 reference (means 4.0e4 vs 3.6e5). Full report: `out/check-hero-t2.json`. The
 device outputs are those of the 12:36 PDT run; only the check changed.
+
+## #781: first dump-free hero chain (forward -> loss -> T1/T2), 2026-10-14
+
+Driver: `docs/train-step/drive_loop.sh 11d4bf19` on bh-49 (p150, under `ttp lock p100`), log
+`out/hero7-driver.log`, per-stage outputs in `out/loop/` (crops) and `out/loop-hero/` (hero).
+The forward prep is binned and vectorized (`blend_forward_dev.prep_binned`, unit-tested against
+`prep` on crops); the hero forward gate is the numpy model of the device math
+(`hero_model.py`, `emulate_fast`), computed once on the Mac.
+
+| run | forward vs oracle | loss grad vs oracle | T1 | T2 | chain gate |
+|---|---|---|---|---|---|
+| sh0 64x64 crop | 3.4e-7 (pass) | l2rel 6.1e-7 (pass) | pass | pass | pass, T0 pass |
+| sh3 64x64 crop | 4.1e-7 (pass) | l2rel 5.7e-7 (pass) | pass | pass | pass (T0 flag false, see below) |
+| hero 1237x822 | **fail**: 1.4e-2 vs model, 1.7e-2 vs dump | **no oracle** (see below) | pass | pass | T1/T2 pass vs device dL/dimage |
+
+Hero device times (median of 5, single p150, no host round trips between stages):
+
+| stage | ms | note |
+|---|---|---|
+| forward (blend_fwd_bench, 4.48 M records, 1014 tiles) | 440.4 | not oracle-clean, so not a headline |
+| loss (D-SSIM+L1, 3042 tiles, 110 cores) | 0.96 | b2b; fwd part 0.44 |
+| T1 | 81.4 | |
+| T2 | 98.4 | |
+| T1+T2 chain | 179.7 | was 186.2 in #770 |
+
+Open problems found (none of these numbers counts as a training ms/view yet):
+1. Hero forward misses the gate. 128 of 1014 tiles hold more than 8192 records (max 25069) and go
+   through the CONTINUE sub-chunk path that the 64x64 crops never reach; the device image was
+   deleted on the box before the pull, so the error is not yet localized to those tiles.
+2. The hero loss stage has no oracle: `chain_dump` compares with the dump's `dL_dimage`, which at
+   hero size is not a D-SSIM+L1 gradient (the dump has no `loss` key), hence l2rel 3.7. A host
+   numpy D-SSIM+L1 gradient of the device image against the target is needed.
+3. Forward at 440 ms is 2.4x the whole backward; a sustained ms/view (step 4) and the 1-2k-step
+   loss curve (step 5) are not run.

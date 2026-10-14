@@ -1,0 +1,11 @@
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/4] Building CXX object CMakeFiles/blend_fwd_bench.dir/blend_fwd_bench.cpp.o
+[2/4] Linking CXX executable blend_fwd_bench
+[3/4] Building CXX object CMakeFiles/train_step.dir/train_step.cpp.o
+[4/4] Linking CXX executable train_step
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/bench/build
+ninja: no work to do.
