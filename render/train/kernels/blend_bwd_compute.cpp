@@ -380,8 +380,23 @@ inline void bwd_bodies(uint32_t mask) {
 
 #ifdef BWD_SKIPDEAD
 static_assert(NB == 16, "BWD_SKIPDEAD scans one 64-word T block per pair, 16 per ACC pack");
-inline volatile uint32_t* bwd_live_mb() {
-    return reinterpret_cast<volatile uint32_t*>(get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4);
+// MATH has no CB interfaces (cb_interface is undefined on TRISC1): UNPACK resets the mailbox
+// and hands its address over at kernel start.
+uint32_t g_live_mb;
+inline volatile uint32_t* bwd_live_mb() { return reinterpret_cast<volatile uint32_t*>(g_live_mb); }
+inline void bwd_live_init() {
+#ifdef TRISC_UNPACK
+    g_live_mb = get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4;
+    bwd_live_mb()[0] = ~0u;  // no tile tag yet (L1 keeps the last run's); PACK writes only after MATH commits
+    asm volatile("fence" ::: "memory");
+    ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, g_live_mb);
+#endif
+#ifdef TRISC_MATH
+    g_live_mb = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
+#endif
+#ifdef TRISC_PACK
+    g_live_mb = get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4;
+#endif
 }
 #ifdef TRISC_MATH
 // Dead-vector mask of tile t as last published by PACK (0 if none yet for this tile).
@@ -457,9 +472,8 @@ void kernel_main() {
     MATH((bwd_bodies_init<0>()));
     if (n_tiles == 0) return;
     cb_wait_front(CB_RAMP, 2);
-#if defined(BWD_SKIPDEAD) && defined(TRISC_MATH)
-    bwd_live_mb()[0] = ~0u;  // no tile tag yet (L1 keeps the last run's); PACK writes only after MATH commits
-    asm volatile("fence" ::: "memory");
+#ifdef BWD_SKIPDEAD
+    bwd_live_init();
 #endif
 #if defined(BWD_STATS) && defined(TRISC_MATH)
     for (uint32_t k = 0; k < ST_N; k++) g_st[k] = 0;
