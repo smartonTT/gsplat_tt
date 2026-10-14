@@ -42,3 +42,38 @@ Run #2 findings:
   within 2^-18). c = 1 and 0.5 test the split/pack/accumulate path with trivial products,
   c = 0.2734375 (5-bit mantissa) and 0.26596152 (the Gaussian's centre tap, full fp32) test the
   multiplier. Run t706diag (a02ca59c) on bh-49 p150.
+
+Run t706diag (a02ca59c, bh-49 p150a, the #687 measurement box; log in run 1983 `t706diag.log`, rc 0):
+
+| case | hi bits | R | error vs expected | verdict |
+|---|---|---|---|---|
+| dump64 | 9 | 1·I | 5.7e-7 (c²x) | PASS |
+| dump64 | 9 | 0.5·I | 5.7e-7 | PASS |
+| dump64 | 9 | 0.2734375·I (5-bit mantissa) | 7.2e-7 | PASS |
+| dump64 | 9 | 0.26596152·I (full fp32 centre tap) | 5.2e-6 | FAIL |
+| dump64 | 8 | 0.26596152·I | 1.1e-5 | FAIL |
+| dump64 | 10 | 1·I / 0.26596152·I | 5.0e-4 / 1.3e-3 | FAIL |
+| dump64 | 9 | Gaussian band (11 taps) | 2.9e-4 | FAIL |
+| syn | 9 | 1·I | 5.1e-7 | PASS |
+| syn | 9 | Gaussian band | 2.8e-4 | FAIL |
+
+Timing (p150, bh-49): split3 Gaussian filter at 1237x822, hi 9 bits: **0.209 ms/view b2b**
+(launch median 0.224 ms), 117 strips on 110 cores. p100 bh-33 run #2 was 0.212 (provisional).
+
+What this shows:
+- The split / pack / unpack / Dst path is exact to fp32 level (5e-7) whenever each output is a
+  single product with a short-mantissa weight. Hi 9 bits confirmed again (10 bits fails even at R = I).
+- A full-precision weight in a single product loses ~5e-6: the R operand also needs a hi/lo split
+  (or the weights rounded to 9+9 bits), but that is 50x smaller than the floor.
+- The 2.8e-4 floor appears only when an output sums several non-trivial products (the 11-tap band).
+  So the bias comes from the FPU's inner-product accumulation inside one matmul (partial sums
+  narrower than fp32), not from operand splitting or Dst accumulation.
+
+Next (not done in this task):
+1. Confirm with R = I + shift(I) (two exact taps): if that fails, accumulation is the cause.
+2. Fixes to try, cheapest first: (a) quantise the Gaussian weights to 9-bit hi + 9-bit lo and
+   split R too; (b) keep one non-zero tap per K-column group per matmul call so every partial sum
+   is a single product and the sum happens in fp32 Dst (more matmul calls; time it);
+   (c) judge the 2.8e-4 filter error by its effect on the D-SSIM loss and dL/dimage against the
+   T0 oracle, not on the filtered maps alone.
+3. Then the fused L1 + D-SSIM fwd + bwd kernel (not started).
