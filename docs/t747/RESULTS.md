@@ -55,10 +55,12 @@ Pair setup (+0.95 ms against #707) is the part of the regression left untouched.
 | sh3 | 1.03e-4 | 1.03e-4 | bit-identical |
 | s1 | 1.02e-3 | 1.02e-3 | bit-identical |
 | s2 | 1.57e-3 | 1.57e-3 | bit-identical |
-| hero (`--fast`, ties) | #728: 3.28e-3, 55,108 tie slots skipped, rel_err_all 0.0278 | HERO_CAND | |
+| hero (`--fast`, ties) | #728: 3.28e-3, 55,108 tie slots skipped, rel_err_all 0.0278 | 3.28e-3, 55,108 tie slots skipped, rel_err_all 0.0278 | all 9 per-term errors equal to #728's to full precision |
 
 Only the 7 padding floats per slot (never read) differ between runs and arms; the 9 output
-terms match bit for bit on all four small dumps.
+terms match bit for bit on all four small dumps. Hero (4,478,225 slots, run on the Mac against the
+f32 oracle, `results/check-hero-cand.json`): rel err, tie-skip count and every per-term error equal
+#728's (`docs/t685/results/check-hero-v2-p150-ties.json`, `dev_vs_f32`) to the last digit; pass.
 
 ## JIT check
 
