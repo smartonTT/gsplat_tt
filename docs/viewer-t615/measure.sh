@@ -5,6 +5,9 @@
 # one process opening both fails the firmware-bundle check, so 1 chip = TT_VISIBLE_DEVICES=0, AFR = 0,7.
 # The boards are unharvested (14x10 under ETH dispatch): both arms cap the grid at 12x10 as on bh-30.
 export VIEWER_GRID_X=12
+# Run 3 under ETH dispatch: 1-chip selftest 14.27 ms here (bh-30 ~8.3). Run 4 uses worker dispatch,
+# the config #582 benched on this host (8.395 / 4.226 ms/view), so page FPS compares to it.
+export VIEWER_DISPATCH=${VIEWER_DISPATCH:-worker}
 set -eo pipefail
 cd "$(dirname "$0")/../.."
 . docs/viewer-t615/env.sh
@@ -49,7 +52,7 @@ arm() {  # arm <label>
   python3 -c "import sys; sys.path.insert(0,'opt/viewer'); import deploy_and_measure as d; ok,m=d.wait_ready($LP,300); print('ready',ok,m); sys.exit(0 if ok else 5)"
   for i in 1 2 3; do
     echo "=== $(ts) sweep $L r$i"
-    "$PY" opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:$LP --no-decode --secs 23 --label "$L-r$i" > "$O/sweep-$L-r$i.txt" 2>&1
+    "$PY" opt/viewer/ws_sweep_t532.py --url ws://127.0.0.1:$LP --subprotocol viser-v1.0.27 --no-decode --secs 23 --label "$L-r$i" > "$O/sweep-$L-r$i.txt" 2>&1
     grep '^SWEEP ' "$O/sweep-$L-r$i.txt" | tail -1
   done
   ssh "${S[@]}" bh-50 "cat $VIEWER_DIR/viewer.log" > "$O/viewer-$L.log"
