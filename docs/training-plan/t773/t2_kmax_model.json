@@ -1,0 +1,24 @@
+{
+ "n_visible": 1809729,
+ "n_slots": 4490511,
+ "n_groups": 28278,
+ "rank_planes_sum_kmax": 972964,
+ "padding_factor_planes_over_meanK": 13.87,
+ "k_quantiles_50_90_99_999_max": [
+  1.0,
+  4.0,
+  6.0,
+  30.0,
+  1014.0
+ ],
+ "rows_with_k_gt": {
+  "16": 2990,
+  "64": 1402,
+  "256": 1252
+ },
+ "groups_with_kmax_gt_64": 889,
+ "planes_in_groups_kmax_gt_64": 787329,
+ "busiest_core_planes_contig": 34292,
+ "mean_core_planes": 8845.1,
+ "planes_if_rows_capped_at_16_plus_flat_tail": 191492
+}
