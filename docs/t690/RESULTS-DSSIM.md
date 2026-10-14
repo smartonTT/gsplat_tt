@@ -399,3 +399,26 @@ Next levers, largest first:
    unpacked again within the same step), part of the 0.37 ms unpack/pack cost.
 3. Fuse the loss into the end of the device rasterizer backward so the rendered image never goes
    through DRAM.
+
+## t753: wider strips (`LOSS_SSIM_K`) and a one-acquire V pass (`LOSS_SSIM_VF`)
+
+`LOSS_SSIM_K=K` (917aad58): one core walks strips of K adjacent tile columns; the reader reads each
+H row's K+2 tiles once (outer two as faces), so neighbour tiles are shared. Work is split in units
+of one row of a K-column group, balanced by tile count; K=1 is the exact t743 split. Host model:
+H-input reads per output tile 2.14 (K=1) -> 1.72 (K=2), 1.61 (K=3); extra halo H passes 1.07 ->
+1.14 / 1.21.
+
+A/B (bh-49 p150, 917aad58, syn 1237x822, 50 iters, 4 alternated rounds, 2026-10-14 09:40 PDT;
+log docs/t753/out-bh-49, run 2115):
+
+| arm | b2b ms/view (4 rounds) | median |
+|-----|------------------------|--------|
+| K=1 (t743) | 0.9582 0.9564 0.9546 0.9549 | 0.956 |
+| K=2 | 0.9449 0.9447 0.9446 0.9436 | 0.945 |
+| K=3 | 0.9228 0.9226 0.9222 0.9203 | 0.922 |
+| K=4 | 0.9198 0.9179 0.9194 0.9196 | 0.920 |
+
+Gradient md5 identical in all 16 runs (5e5be678...), loss 0.149902639 in all arms; T0 oracle 6/6
+PASS on K=2 (hero included); ab_jit_check JIT-HASH OK. K=4 is 0.036 ms/view (3.8 %) faster, very
+repeatable (round spread <= 0.004 ms) but below the task's 0.1 ms/view keep threshold. Of the
+~0.25 ms of exposed reads, the halo share was small: the rest is the per-tile x/y/constant reads.
