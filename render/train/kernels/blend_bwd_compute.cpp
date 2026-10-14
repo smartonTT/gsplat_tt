@@ -15,7 +15,6 @@
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "sfpi.h"
-#include "sfpu/ckernel_sfpu_exp.h"
 #include "sfpu/ckernel_sfpu_converter.h"
 #include "llk_math_eltwise_unary_sfpu.h"
 
@@ -42,6 +41,31 @@ inline void non_zeroing_pack_release() {
 #endif
 
 #ifdef TRISC_MATH
+// fp32-accurate exp for x in [-80, 0] (Juffa / tt-metal _sfpu_exp_fp32_accurate_<true>, inlined
+// here so the kernel does not depend on which ckernel_sfpu_exp.h the include path finds).
+// _sfpu_exp_21f_bf16_ (the forward's exp) has a degree-2 2^f poly, ~1.7e-3 relative error: the
+// first device run failed the T0 oracle on small slots with it (max abs err 5e-4 of scale).
+sfpi_inline sfpi::vFloat bwd_exp(sfpi::vFloat a) {
+    using namespace sfpi;
+    vFloat j = 1.442695f * a;
+    vInt i = float_to_int16(j, RoundMode::NearestEven);
+    j = int32_to_float(i, RoundMode::NearestEven);
+    vFloat f = j * -6.93145752e-1f + a;
+    f = j * -1.42860677e-6f + f;
+    vFloat r = 1.37805939e-3f;
+    r = r * f + 8.37312452e-3f;
+    r = r * f + 4.16695364e-2f;
+    r = r * f + 1.66664720e-1f;
+    r = r * f + 4.99999851e-1f;
+    i = abs(i);
+    vFloat y = r * f + 1.0f;
+    i = reinterpret<vInt>(copysgn(reinterpret<vFloat>(i), j));
+    r = y * f + 1.0f;
+    vInt e = exexp(r, ExponentMode::NoDebias);
+    e += i;
+    return setexp(r, e);
+}
+
 // One visited vector V of the current tile for the staged pair (emulate() body, same order).
 // Kept to <= 8 live vFloats: intermediates go through the ACC tile's scratch vectors.
 template <uint32_t V>
@@ -59,7 +83,9 @@ __attribute__((noinline)) void bwd_body() {
         vFloat ex = pw;
         v_if (pw > 0.0f) { ex = 0.0f; }
         v_endif;
-        vFloat w = ckernel::sfpu::_sfpu_exp_21f_bf16_<true>(ex);
+        v_if (ex < -80.0f) { ex = -80.0f; }  // exp(-80) is still a normal fp32; alpha < amin there
+        v_endif;
+        vFloat w = bwd_exp(ex);
         vFloat al = dst_reg[DR_S + S_OP] * w;
         vFloat ga = al;
         v_if (pw > 0.0f) { ga = 0.0f; }
