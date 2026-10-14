@@ -16,7 +16,8 @@ Device decomposition (docs/training-plan/T1-blend-backward.md section 4):
 File layout (little endian):
   tiles.u32  16 words per tile with pairs: tile_id, rec_start, rec_count, n_batches
   recs.u32   16 words per pair: A', B', C' (A' = -A/2, B' = -B, C' = -C/2), mx, my
-             (tile-local), opacity, r, g, b, A, B, C, vector mask, slot, 0, 0
+             (tile-local), opacity, r, g, b, P0, Lx, Ly (tile-centred power, #728:
+             blend_backward_ref.centred_power_coeffs), vector mask, slot, 0, 0
   planes.f32 5 tilized fp32 tiles per listed tile: T0, BH0, g0, g1, g2
   ramps.f32  2 tilized fp32 tiles: x = c + 0.5, y = r + 0.5
   meta.json  counts and the blend cfg bits
@@ -30,8 +31,9 @@ import sys
 
 import numpy as np
 
-from gsplat.blend_backward_ref import (BlendCfg, blend_backward, cov_diag_from_conic,
-                                       rel_error, tile_rects)
+from gsplat.blend_backward_ref import (BlendCfg, blend_backward, centred_power,
+                                       centred_power_coeffs, cov_diag_from_conic, rel_error,
+                                       tile_rects)
 
 TILE = 32
 BATCH = 16         # pairs per ACC pack (v2: 3 result vectors per 8 pairs, vectors 24..29)
@@ -166,7 +168,7 @@ def prep(means2d, conic, opacity, colors, order, valid, image, dL_dimage, cfg: B
     recs[:, 0], recs[:, 1], recs[:, 2] = vb(f32(-0.5) * con[g, 0]), vb(-con[g, 1]), vb(f32(-0.5) * con[g, 2])
     recs[:, 3], recs[:, 4], recs[:, 5] = vb(mx), vb(my), vb(op[g])
     recs[:, 6:9] = vb(col[g])
-    recs[:, 9:12] = vb(con[g])
+    recs[:, 9:12] = vb(np.stack(centred_power_coeffs(con[g, 0], con[g, 1], con[g, 2], mx, my)[3:], 1))
     recs[:, 12] = masks
     recs[:, 13] = (pl["P"][g] + pl["j"]).astype(np.uint32)
     tiles = np.stack([utid, start, cnt, -(-cnt // BATCH)], 1).astype(np.uint32)
@@ -226,10 +228,10 @@ def prep_loop(means2d, conic, opacity, colors, order, valid, image, dL_dimage, c
                 mask = int(sum(1 << V for V in np.nonzero(hit)[0]))
                 rx0, rx1, ry0, ry1 = rects[g]
                 j = (ty - ry0) * (rx1 - rx0 + 1) + (tx - rx0)
-                cA, cB, cC = con[g]
-                rec = [fbits(f32(-0.5) * cA), fbits(-cB), fbits(f32(-0.5) * cC), fbits(mx), fbits(my),
+                Af, Bf, Cf, P0, Lx, Ly = centred_power_coeffs(*con[g], mx, my)
+                rec = [fbits(Af), fbits(Bf), fbits(Cf), fbits(mx), fbits(my),
                        fbits(op[g]), fbits(col[g, 0]), fbits(col[g, 1]), fbits(col[g, 2]),
-                       fbits(cA), fbits(cB), fbits(cC), mask, int(P[g] + j), 0, 0]
+                       fbits(P0), fbits(Lx), fbits(Ly), mask, int(P[g] + j), 0, 0]
                 recs.append(rec)
     return {"tiles": np.asarray(tiles, np.uint32).reshape(-1, 4),
             "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS),
@@ -267,13 +269,14 @@ def emulate(p: dict, exp=np.exp) -> np.ndarray:
         T, BH, g0, g1, g2 = (pl[k][lanes].copy() for k in range(N_PLANES))
         for rec in p["recs"][start:start + cnt]:
             fr = rec[:12].view(f32)
-            Af, Bf, Cf, mx, my, op, cr, cgc, cb, A, B, C = fr
+            Af, Bf, Cf, mx, my, op, cr, cgc, cb, P0, Lx, Ly = fr
+            A, B, C = f32(-2) * Af, -Bf, f32(-2) * Cf
             acc = np.zeros((9, 32, 32), f32)
             for V in range(32):
                 if not (int(rec[12]) >> V) & 1:
                     continue
                 u, v = xr[V] - mx, yr[V] - my
-                pw = Af * (u * u) + Bf * (u * v) + Cf * (v * v)
+                pw = centred_power(Af, Bf, Cf, P0, Lx, Ly, xr[V] - f32(16), yr[V] - f32(16))
                 w = exp(np.minimum(pw, f32(0))).astype(f32)
                 al = op * w
                 ga = np.where(pw > 0, f32(0), al)
@@ -390,10 +393,9 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
     for k in range(int(cnt.max()) if nt else 0):
         n = int(np.searchsorted(-cnt, -k, side="left"))   # tiles with cnt > k
         g = pl["g"][start[:n] + k]
-        A, B, Cc = (con[g, i][:, None, None] for i in range(3))
-        u = xx - (m2[g, 0][:, None, None] - ox[:n])
-        v = yy - (m2[g, 1][:, None, None] - oy[:n])
-        pw = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + Cc * v * v)
+        cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)),
+                                  m2[g, 0][:, None, None] - ox[:n], m2[g, 1][:, None, None] - oy[:n])
+        pw = centred_power(*cf, xx - f32(16), yy - f32(16))
         al = np.minimum(op[g][:, None, None] * np.exp(np.minimum(pw, f32(0))), amax).astype(f32)
         Tn = T[:n] * (one - al)
         act = (al >= amin) & ~done[:n]
@@ -432,10 +434,10 @@ def ref_slots_fast(d, cfg) -> np.ndarray:
         n = int(np.searchsorted(-cnt, -k, side="left"))
         idx = start[:n] + k
         g = pl["g"][idx]
-        A, B, C = (con[g, i][:, None, None] for i in range(3))
-        u = xx - (m2[g, 0][:, None, None] - ox[:n])
-        v = yy - (m2[g, 1][:, None, None] - oy[:n])
-        power = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + C * v * v)
+        mxl, myl = m2[g, 0][:, None, None] - ox[:n], m2[g, 1][:, None, None] - oy[:n]
+        u, v = xx - mxl, yy - myl
+        cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)), mxl, myl)
+        power = centred_power(*cf, xx - f32(16), yy - f32(16))
         wgt = np.exp(np.minimum(power, f32(0.0))).astype(f32)
         raw = op[g][:, None, None] * wgt
         clamp = raw > amax
