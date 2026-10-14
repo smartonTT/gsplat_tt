@@ -1,4 +1,5 @@
-# T1 blend backward device bench (#693, docs/t685/DESIGN.md).
+# T1 blend backward device bench (#693, docs/t685/DESIGN.md) and the T0 blend forward
+# harness (#716, docs/t716).
 # Standalone target; does NOT build or link render_clean.
 #   export TT_METAL_HOME=/localdev/smarton/tt-metal
 #   cmake -G Ninja -S render/train -B render/train/build -DCMAKE_BUILD_TYPE=Release
@@ -19,3 +20,9 @@ add_executable(blend_bwd_bench blend_bwd_bench.cpp)
 target_compile_definitions(blend_bwd_bench PRIVATE
   "BWD_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
 gsplat_link_tt_metal(blend_bwd_bench)
+
+add_executable(blend_fwd_bench blend_fwd_bench.cpp)
+target_compile_definitions(blend_fwd_bench PRIVATE
+  "BWD_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\""
+  "FWD_COMPUTE_KERNEL=\"${CMAKE_CURRENT_SOURCE_DIR}/../kernels/compute/alpha_blend_compute_mb.cpp\"")
+gsplat_link_tt_metal(blend_fwd_bench)

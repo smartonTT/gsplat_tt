@@ -267,6 +267,8 @@ def main(argv=None) -> int:
     a.add_argument("npz")
     a.add_argument("out")
     a.add_argument("--emulate", action="store_true")
+    a.add_argument("--image", help="fp32 (H, W, 3) forward image to use in place of the oracle's "
+                   "(#716: the device forward from blend_forward_dev check --image-out)")
     c = sub.add_parser("check")
     c.add_argument("npz")
     c.add_argument("slots", help="device slots.f32 (16 floats per slot)")
@@ -274,8 +276,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     d, cfg = load_dump(args.npz)
     if args.cmd == "prep":
+        image = d["image"]
+        if args.image:
+            image = np.fromfile(args.image, f32).reshape(image.shape)
         p = prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
-                 d["image"], d["dL_dimage"], cfg)
+                 image, d["dL_dimage"], cfg)
         write(p, args.out)
         print(json.dumps({"n_tiles": len(p["tiles"]), "n_recs": len(p["recs"]), "n_slots": p["n_slots"]}))
         if args.emulate:
