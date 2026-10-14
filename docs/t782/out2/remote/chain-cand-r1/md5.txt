@@ -1,0 +1,5 @@
+4ea5c6982acc673a2aa0a047f26c55a7  tmp/t782/chain-cand-r1/grads.f32
+27e0856d2bfcf192b7e957239f09ad23  tmp/t782/chain-cand-r1/params_out.f32
+760766527aec53ce449555c5702e35ec  tmp/t782/chain-cand-r1/m_out.u16
+356015143e8409ae5c69ddf00dc3a2e2  tmp/t782/chain-cand-r1/v_out.u16
+slots9 md5 5857966c97c208449b441243c831c0aa

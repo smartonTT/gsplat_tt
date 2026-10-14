@@ -1,0 +1,1 @@
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 5, "grads_out": true, "t1_ms_first": 2491.0725, "t1_ms_min": 23.6654, "t1_ms_med": 23.6766, "t2_ms_first": 2016.8288, "t2_ms_min": 98.3756, "t2_ms_med": 98.3877, "chain_ms_min": 122.0758, "chain_ms_med": 122.0847, "host_repack_ms": 0}
