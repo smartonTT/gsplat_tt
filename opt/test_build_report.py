@@ -212,4 +212,5 @@ def test_split_2chip_line_and_g5_label():
     assert "2 chips (split), bh-50: 11.085" in line and "2 chips (AFR), bh-50: 6.643" in line
     assert "1.7&times; slower" in line and "42.85 dB" in line
     g5 = [r for r in b.PUBLISHED_GPU_ROWS if r["id"] == "G5"][0]
-    assert "unpruned" not in g5["scene"] and "5.56M" in g5["scene"]
+    assert "full unpruned model" in g5["scene"] and "likely smaller" not in g5["scene"]
+    assert "5.56M" not in g5["scene"] and "#627" in line and "#615" in line
