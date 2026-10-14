@@ -1525,6 +1525,14 @@ static SortDeviceContext* ensure_context() {
     if (!slot) {
         try {
             slot = std::make_unique<SortDeviceContext>(init_context());
+            // Task #684 (test only): GSPLAT_TT_TEST_PREGROW_TILE_CAP=1 starts with the
+            // grown bucket (kTileCapBig), as after a #284 overflow grow, to time its cost.
+            const char* pg = std::getenv("GSPLAT_TT_TEST_PREGROW_TILE_CAP");
+            if (pg != nullptr && pg[0] == '1' && sort_onelaunch_enabled()) {
+                g_ol_tile_cap = sort_onelaunch::kTileCapBig;
+                std::cerr << "[gsplat_tt::sort] bucket pre-grown to " << g_ol_tile_cap
+                          << " records (GSPLAT_TT_TEST_PREGROW_TILE_CAP)\n";
+            }
             // Task #365: tile stride coprime with the DRAM bank count (bucket_tile_cap).
             if (g_ol_tile_cap == sort_onelaunch::kTileCap) {
                 const uint32_t nb = static_cast<uint32_t>(slot->mesh_device->num_dram_channels());
