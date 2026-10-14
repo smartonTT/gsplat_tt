@@ -1,0 +1,1 @@
+{"loss": 0.04995099335955616, "oracle_loss": 0.04995065020171513, "grad_l2rel_vs_oracle": 1.6815211286541374e-05, "grad_finite": true, "host_ms": 11.226}
