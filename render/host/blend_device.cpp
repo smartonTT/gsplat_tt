@@ -342,6 +342,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (gsplat_tt::env_config::blend_late_claim()) {
         reader_defines["BLEND_LATE_CLAIM"] = "1";
     }
+    // Task #722 (B1'): heavy-tile units (fused program only; subtile_unit.h).
+    const unsigned int b1_mode = fused ? gsplat_tt::env_config::b1_mode() : 0u;
+    if (b1_mode != 0u) {
+        reader_defines["BLEND_B1"] = std::to_string(b1_mode);
+        reader_defines["BLEND_B1_MIN"] = std::to_string(gsplat_tt::env_config::b1_min()) + "u";
+        writer_defines["BLEND_B1"] = std::to_string(b1_mode);
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -475,6 +482,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             compute_defines["BLEND_SCHED"] = "0";
             compute_defines["BLEND_T_PERIOD"] = "0u";
         }
+    }
+    if (b1_mode != 0u) {
+        compute_defines["BLEND_B1"] = std::to_string(b1_mode);
     }
     if (fused) {
         compute_defines["BLEND_CB_BASE"] = std::to_string(mbf::kBlendCbBase);
@@ -946,6 +956,9 @@ static double process_frame_mb_devcull_resident(
                         const mbf::CoreArgs& ma = pend.cores.at(mbf::core_key(x, y));
                         reader_args.push_back(pend.flags_addr);  // arg 28
                         reader_args.push_back(pend.epoch);       // arg 29
+                        if (gsplat_tt::env_config::b1_mode() != 0u) {
+                            reader_args.push_back(num_tiles);    // arg 30 (BLEND_B1)
+                        }
                         std::vector<uint32_t> n = ma.n;
                         n.push_back(pend.flags_addr);  // mat arg 18
                         n.push_back(pend.epoch);       // mat arg 19

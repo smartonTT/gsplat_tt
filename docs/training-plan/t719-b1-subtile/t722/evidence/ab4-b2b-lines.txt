@@ -1,0 +1,36 @@
+=== md5-b0-p0-1M_s4 b889a6af 11:19:57 load=0.64
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.017 fps=124.74 ms_frame_median=8.017 pass_ms_frame=8.017,8.017,8.017,8.017,8.016,8.016 check_pass_ms_frame=8.036 raw_md5=e50cf545 gap_ms=0.00 render_ms_frame=8.017 xview_hits=1351 xview_misses=
+=== md5-b1-p0-1M_s4 b889a6af 11:20:32 load=1.03
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=5.440 fps=183.84 ms_frame_median=5.440 pass_ms_frame=5.440,5.438,5.439,5.440,5.441,5.439 check_pass_ms_frame=5.456 raw_md5=e50cf545 gap_ms=0.00 render_ms_frame=5.440 xview_hits=1351 xview_misses=
+=== md5-b2-p0-1M_s4 b889a6af 11:20:59 load=1.04
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=4.839 fps=206.65 ms_frame_median=4.839 pass_ms_frame=4.842,4.837,4.839,4.839,4.845,4.834 check_pass_ms_frame=4.852 raw_md5=e50cf545 gap_ms=0.00 render_ms_frame=4.839 xview_hits=1351 xview_misses=
+=== md5-b0-p0-3M_s2 b889a6af 11:21:33 load=0.95
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.891 fps=112.47 ms_frame_median=8.892 pass_ms_frame=8.892,8.893,8.894,8.892,8.892,8.886 check_pass_ms_frame=8.927 raw_md5=d56f6f98 gap_ms=0.00 render_ms_frame=8.891 xview_hits=1351 xview_misses=
+=== md5-b1-p0-3M_s2 b889a6af 11:22:05 load=1.15
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=6.816 fps=146.71 ms_frame_median=6.816 pass_ms_frame=6.816,6.813,6.826,6.820,6.816,6.808 check_pass_ms_frame=6.854 raw_md5=d56f6f98 gap_ms=0.00 render_ms_frame=6.816 xview_hits=1351 xview_misses=
+=== md5-b2-p0-3M_s2 b889a6af 11:22:26 load=1.44
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=6.686 fps=149.57 ms_frame_median=6.687 pass_ms_frame=6.681,6.689,6.688,6.686,6.688,6.683 check_pass_ms_frame=6.720 raw_md5=d56f6f98 gap_ms=0.00 render_ms_frame=6.686 xview_hits=1351 xview_misses=
+=== md5-b0-p0-full_s1 b889a6af 11:22:48 load=1.43
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.812 fps=113.48 ms_frame_median=8.812 pass_ms_frame=8.809,8.817,8.814,8.811,8.814,8.808 check_pass_ms_frame=8.864 raw_md5=87e8ad77 gap_ms=0.00 render_ms_frame=8.812 xview_hits=1351 xview_misses=
+=== md5-b1-p0-full_s1 b889a6af 11:23:29 load=1.19
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.401 fps=119.04 ms_frame_median=8.401 pass_ms_frame=8.405,8.399,8.396,8.403,8.404,8.397 check_pass_ms_frame=8.452 raw_md5=87e8ad77 gap_ms=0.00 render_ms_frame=8.401 xview_hits=1351 xview_misses=
+=== md5-b2-p0-full_s1 b889a6af 11:24:11 load=1.14
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.404 fps=118.99 ms_frame_median=8.404 pass_ms_frame=8.409,8.409,8.406,8.402,8.403,8.394 check_pass_ms_frame=8.452 raw_md5=87e8ad77 gap_ms=0.00 render_ms_frame=8.404 xview_hits=1351 xview_misses=
+=== grid-b0-pdefault-1M_s4 b889a6af 11:24:52 load=1.06
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=6.531 fps=153.11 ms_frame_median=6.531 pass_ms_frame=6.530,6.531,6.533,6.533,6.532,6.529 check_pass_ms_frame=6.548 raw_md5=b35dad8b gap_ms=0.00 render_ms_frame=6.531 xview_hits=1351 xview_misses=
+=== grid-b1-pdefault-1M_s4 b889a6af 11:25:24 load=1.26
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=4.954 fps=201.85 ms_frame_median=4.954 pass_ms_frame=4.955,4.954,4.955,4.956,4.954,4.952 check_pass_ms_frame=4.972 raw_md5=b35dad8b gap_ms=0.00 render_ms_frame=4.954 xview_hits=1351 xview_misses=
+=== grid-b2-pdefault-1M_s4 b889a6af 11:25:46 load=1.38
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=4.789 fps=208.81 ms_frame_median=4.790 pass_ms_frame=4.790,4.785,4.792,4.792,4.786,4.790 check_pass_ms_frame=4.806 raw_md5=b35dad8b gap_ms=0.00 render_ms_frame=4.789 xview_hits=1351 xview_misses=
+=== grid-b0-pdefault-3M_s2 b889a6af 11:26:07 load=1.66
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.357 fps=135.92 ms_frame_median=7.358 pass_ms_frame=7.358,7.358,7.357,7.356,7.359,7.354 check_pass_ms_frame=7.394 raw_md5=16ba349e gap_ms=0.00 render_ms_frame=7.357 xview_hits=1351 xview_misses=
+=== grid-b1-pdefault-3M_s2 b889a6af 11:26:28 load=1.56
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=6.389 fps=156.51 ms_frame_median=6.391 pass_ms_frame=6.389,6.394,6.390,6.393,6.393,6.379 check_pass_ms_frame=6.427 raw_md5=16ba349e gap_ms=0.00 render_ms_frame=6.389 xview_hits=1351 xview_misses=
+=== grid-b2-pdefault-3M_s2 b889a6af 11:26:54 load=1.58
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=6.329 fps=158.02 ms_frame_median=6.328 pass_ms_frame=6.328,6.328,6.327,6.332,6.330,6.326 check_pass_ms_frame=6.367 raw_md5=16ba349e gap_ms=0.00 render_ms_frame=6.329 xview_hits=1351 xview_misses=
+=== grid-b0-pdefault-full_s1 b889a6af 11:27:15 load=1.62
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=8.023 fps=124.64 ms_frame_median=8.024 pass_ms_frame=8.024,8.025,8.027,8.024,8.022,8.017 check_pass_ms_frame=8.075 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=8.023 xview_hits=1351 xview_misses=
+=== grid-b1-pdefault-full_s1 b889a6af 11:27:58 load=1.46
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.924 fps=126.20 ms_frame_median=7.925 pass_ms_frame=7.931,7.925,7.924,7.921,7.927,7.917 check_pass_ms_frame=7.974 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=7.924 xview_hits=1351 xview_misses=
+=== grid-b2-pdefault-full_s1 b889a6af 11:28:41 load=1.22
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.927 fps=126.15 ms_frame_median=7.929 pass_ms_frame=7.930,7.928,7.930,7.930,7.928,7.919 check_pass_ms_frame=7.981 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=7.927 xview_hits=1351 xview_misses=

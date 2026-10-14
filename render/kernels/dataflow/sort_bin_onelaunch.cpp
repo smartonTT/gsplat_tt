@@ -72,6 +72,10 @@
 #include "sort_bin_fp32.h"
 #include "sort_onelaunch_algo.h"
 #include "tile_window.h"
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+#include "subtile_route.h"
+#include "subtile_unit.h"
+#endif
 #if defined(OL_FILL_BULK) && OL_FILL_BULK == 2
 #include "api/debug/dprint.h"
 #endif
@@ -255,6 +259,45 @@ void kernel_main() {
     auto rowp = reinterpret_cast<volatile uint32_t*>(row_l1);
     auto h0p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + MOVER0_CB_OFFSET));
     auto h1p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H));
+
+#if defined(SORT_B1_ROUTE) && SORT_B1_ROUTE
+    // Task #738 (B1 full): a split tile's pairs go to its sub-tile buckets
+    // (ids in [b1_ntiles, num_tiles); here num_tiles counts every bucket id).
+    // Args 30 + num_cores .. +2 on every mover (the host pads the args of the
+    // cores without the coordinator list): plan table (DRAM, one u32 per screen
+    // tile, subtile_route::plan_word), screen tile count, 1 / contrib floor
+    // (fp32 bits). The table lands in CB SORT_B1_PLAN_CB (+ cbo). Fold, the
+    // OL ring and the TRISC writers are off in this mode (the host passes fold
+    // 0; the K2 rows count screen tiles only).
+    const uint32_t b1_arg0 = 30u + num_cores;
+    const uint32_t b1_plan_addr = get_arg_val<uint32_t>(b1_arg0);
+    const uint32_t b1_ntiles = get_arg_val<uint32_t>(b1_arg0 + 1u);
+    const float b1_inv_floor = subtile_route::float_of(get_arg_val<uint32_t>(b1_arg0 + 2u));
+    const uint32_t b1_plan_l1 = get_write_ptr(SORT_B1_PLAN_CB + cbo);
+    auto b1_plan = reinterpret_cast<volatile uint32_t*>(b1_plan_l1);
+    {
+        const InterleavedAddrGen<true> plan_gen{b1_plan_addr, PAGE_BYTES};
+        const uint32_t npg = (b1_ntiles + ELEMS_PER_PAGE - 1u) / ELEMS_PER_PAGE;
+        for (uint32_t q = 0; q < npg; q++)
+            noc_async_read(get_noc_addr(q, plan_gen), b1_plan_l1 + q * PAGE_BYTES, PAGE_BYTES);
+        noc_async_read_barrier();
+    }
+    // Targets of gaussian record words w (blendrec layout) in split tile t
+    // (plan word pw != 0): a bit per sub-tile.
+    auto b1_targets = [&](const volatile uint32_t* w, uint32_t t, uint32_t pw) -> uint32_t {
+        const uint32_t ox = ((t % tiles_x) + win_x0) * L1_TILE_SIZE;
+        const uint32_t oy = ((t / tiles_x) + win_y0) * L1_TILE_SIZE;
+        uint32_t q16;
+        if constexpr (EMIT_PUBOC != 0u) {
+            q16 = w[BW_OP] & 0xFFFFu;
+        } else {
+            q16 = sort_bin_fp32::to_unorm16(w[5]);
+        }
+        const uint32_t box = subtile_route::box_mask_global(w[0], w[1], w[2], w[3], w[4], ox, oy, q16, b1_inv_floor);
+        const uint32_t n = subtile_route::plan_n(pw);
+        return subtile_route::targets(box, n, [&](uint32_t k) { return subtile_unit::mask(subtile_unit::split_code(n, k)); });
+    };
+#endif
 
     if (P == 0xFFFFFFFFu) {
         // Early launch: the ta_pairs_P page lands in this mover's H row (the
