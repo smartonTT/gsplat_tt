@@ -97,57 +97,68 @@ inline void loss_pt() {
 #endif
 
 inline void wait3(uint32_t cb0, uint32_t a, uint32_t b, uint32_t c) {
-    cb_wait_front(cb0 + a, 1);
-    cb_wait_front(cb0 + b, 1);
-    cb_wait_front(cb0 + c, 1);
+    cb_wait_front(cb0 + a, SSIM_K);
+    cb_wait_front(cb0 + b, SSIM_K);
+    cb_wait_front(cb0 + c, SSIM_K);
 }
-inline void copy3(uint32_t cb0, uint32_t a, uint32_t b, uint32_t c, uint32_t d0) {
-    copy_tile(cb0 + a, 0, d0);
-    copy_tile(cb0 + b, 0, d0 + 1);
-    copy_tile(cb0 + c, 0, d0 + 2);
-}
-
-inline void h_pass(uint32_t q) {
-    cb_wait_front(CB_X, 3);
-    cb_wait_front(CB_Y, 3);
-    tile_regs_acquire();
-    copy_n(CB_X, 3, 0);
-    copy_n(CB_Y, 3, 4);
-    transpose_tiles(0x77);
-    MATH((h_sfpu()));
-    transpose_tiles(0x98);
-    cb_pop_front(CB_X, 3);
-    cb_pop_front(CB_Y, 3);
-    tile_regs_commit();
-    tile_regs_wait();
-    const uint32_t d4 = 4, d3 = 3, d7 = 7;
-    pack_more(CB_HX + q, 1, &d4);
-    pack_more(CB_HXX + q, 1, &d3);
-    pack_more(CB_HXY + q, 1, &d7);
-    release();
+inline void copy3(uint32_t cb0, uint32_t a, uint32_t b, uint32_t c, uint32_t k, uint32_t d0) {
+    copy_tile(cb0 + a, k, d0);
+    copy_tile(cb0 + b, k, d0 + 1);
+    copy_tile(cb0 + c, k, d0 + 2);
 }
 
-inline void push_zero(uint32_t q) {
+// H pass of one tile row of a kw-column strip: column k filters row pages k .. k+2 of CB_X / CB_Y
+// (SSIM_K + 2 per row) into page k of the slot q CBs (SSIM_K pages, one reserve / push per row).
+inline void h_row(uint32_t q, uint32_t kw) {
+    cb_wait_front(CB_X, SSIM_K + 2);
+    cb_wait_front(CB_Y, SSIM_K + 2);
+    cb_reserve_back(CB_HX + q, SSIM_K);
+    cb_reserve_back(CB_HXX + q, SSIM_K);
+    cb_reserve_back(CB_HXY + q, SSIM_K);
+    for (uint32_t k = 0; k < kw; k++) {
+        tile_regs_acquire();
+        copy_at(CB_X, k, 3, 0);
+        copy_at(CB_Y, k, 3, 4);
+        transpose_tiles(0x77);
+        MATH((h_sfpu()));
+        transpose_tiles(0x98);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile<true>(4, CB_HX + q, k);
+        pack_tile<true>(3, CB_HXX + q, k);
+        pack_tile<true>(7, CB_HXY + q, k);
+        release();
+    }
+    cb_pop_front(CB_X, SSIM_K + 2);
+    cb_pop_front(CB_Y, SSIM_K + 2);
+    cb_push_back(CB_HX + q, SSIM_K);
+    cb_push_back(CB_HXX + q, SSIM_K);
+    cb_push_back(CB_HXY + q, SSIM_K);
+}
+
+inline void push_zero(uint32_t q, uint32_t kw) {
     tile_regs_acquire();
     MATH((zero_tile<3>()));
     tile_regs_commit();
     tile_regs_wait();
-    const uint32_t d3 = 3;
-    pack_more(CB_HX + q, 1, &d3);
-    pack_more(CB_HXX + q, 1, &d3);
-    pack_more(CB_HXY + q, 1, &d3);
+    for (uint32_t cb : {CB_HX, CB_HXX, CB_HXY}) {
+        cb_reserve_back(cb + q, SSIM_K);
+        for (uint32_t k = 0; k < kw; k++) pack_tile<true>(3, cb + q, k);
+        cb_push_back(cb + q, SSIM_K);
+    }
     release();
 }
 
-inline void v_pass(uint32_t a, uint32_t b, uint32_t c) {
+// V pass of output column k (page k of the slots a, b, c = rows I-1, I, I+1).
+inline void v_pass(uint32_t a, uint32_t b, uint32_t c, uint32_t k) {
     wait3(CB_HX, a, b, c);
     wait3(CB_HXX, a, b, c);
     wait3(CB_HXY, a, b, c);
     // mu_x, E_xx
     tile_regs_acquire();
     copy_tile_to_dst_init_short(CB_HX + a);
-    copy3(CB_HX, a, b, c, 0);
-    copy3(CB_HXX, a, b, c, 4);
+    copy3(CB_HX, a, b, c, k, 0);
+    copy3(CB_HXX, a, b, c, k, 4);
     MATH((sfpu_begin(), vfilt_body<0, 3>(), vfilt_body<4, 7>(), sfpu_end()));
     const uint32_t m[2] = {3, 7};
     commit_pack(CB_M, 2, m);
@@ -157,7 +168,7 @@ inline void v_pass(uint32_t a, uint32_t b, uint32_t c) {
     cb_wait_front(CB_C2, 2);
     tile_regs_acquire();
     copy_tile_to_dst_init_short(CB_HXY + a);
-    copy3(CB_HXY, a, b, c, 0);
+    copy3(CB_HXY, a, b, c, k, 0);
     copy_n(CB_M, 2, 4);
     copy_n(CB_C2, 2, 6);
     MATH((sfpu_begin(), vfilt_body<0, 3>(), sfpu_end(), ssim_pt()));
@@ -182,16 +193,16 @@ inline void v_pass(uint32_t a, uint32_t b, uint32_t c) {
     commit_pack(CB_D, 3, dd);
     pack_more(CB_ACC, 1, &acc);
     release();
-    cb_pop_front(CB_HX + a, 1);
-    cb_pop_front(CB_HXX + a, 1);
-    cb_pop_front(CB_HXY + a, 1);
 }
 
-// Runtime args: t0, t1 (output tiles, t = strip * nh + row, strip = ch * nw + J), nh.
+// Runtime args: u0, u1 (work units u = (ch * ng + g) * nh + row of SSIM_K-column groups g, see
+// reader_ssim.cpp), nh, nw.
 void kernel_main() {
-    const uint32_t t0 = get_arg_val<uint32_t>(0);
-    const uint32_t t1 = get_arg_val<uint32_t>(1);
+    const uint32_t u0 = get_arg_val<uint32_t>(0);
+    const uint32_t u1 = get_arg_val<uint32_t>(1);
     const uint32_t nh = get_arg_val<uint32_t>(2);
+    const uint32_t nw = get_arg_val<uint32_t>(3);
+    const uint32_t ng = (nw + SSIM_K - 1) / SSIM_K;
     unary_op_init_common(CB_X, CB_D);
     {
         tile_regs_acquire();
@@ -200,24 +211,31 @@ void kernel_main() {
         commit_pack(CB_ACC, 1, &acc);
         release();
     }
-    for (uint32_t t = t0; t < t1;) {
-        const uint32_t r0 = t % nh, r1 = (t1 - t < nh - r0) ? r0 + (t1 - t) : nh;
-        t += r1 - r0;
+    for (uint32_t u = u0; u < u1;) {
+        const uint32_t r0 = u % nh, r1 = (u1 - u < nh - r0) ? r0 + (u1 - u) : nh;
+        const uint32_t j0 = (u / nh % ng) * SSIM_K, kw = nw - j0 < SSIM_K ? nw - j0 : SSIM_K;
+        u += r1 - r0;
         uint32_t q = 0;
         for (uint32_t i = r0; i <= r1 + 1; i++, q++) {
             const uint32_t row = i - 1;  // wraps for r0 = 0
             if (row < nh) {
-                h_pass(q % 3);
+                h_row(q % 3, kw);
             } else {
-                push_zero(q % 3);
+                push_zero(q % 3, kw);
             }
-            if (q >= 2) v_pass((q - 2) % 3, (q - 1) % 3, q % 3);
+            if (q >= 2) {
+                const uint32_t a = (q - 2) % 3;
+                for (uint32_t k = 0; k < kw; k++) v_pass(a, (q - 1) % 3, q % 3, k);
+                cb_pop_front(CB_HX + a, SSIM_K);
+                cb_pop_front(CB_HXX + a, SSIM_K);
+                cb_pop_front(CB_HXY + a, SSIM_K);
+            }
         }
         q--;
         for (uint32_t s : {(q - 1) % 3, q % 3}) {
-            cb_pop_front(CB_HX + s, 1);
-            cb_pop_front(CB_HXX + s, 1);
-            cb_pop_front(CB_HXY + s, 1);
+            cb_pop_front(CB_HX + s, SSIM_K);
+            cb_pop_front(CB_HXX + s, SSIM_K);
+            cb_pop_front(CB_HXY + s, SSIM_K);
         }
     }
     cb_wait_front(CB_ACC, 1);

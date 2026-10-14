@@ -426,7 +426,19 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
     // #743 LOSS_SSIM_CBD: reader input CBs hold this many rows / output tiles (default 2).
     const char* cbe = std::getenv("LOSS_SSIM_CBD");
     const uint32_t cbd = cbe && cbe[0] ? uint32_t(std::max(2, std::atoi(cbe))) : 2u;
-    std::fprintf(stderr, "[LOSS] ssim reader SSIM_RD=%d cbd=%u\n", int(rd), cbd);
+    // #753 LOSS_SSIM_K (default 1): each core walks strips of K adjacent tile columns (shared
+    // neighbour tiles in the H pass); work is split in units of one tile row of a K-column group.
+    const char* ke = std::getenv("LOSS_SSIM_K");
+    const uint32_t K = ke && ke[0] ? uint32_t(std::clamp(std::atoi(ke), 1, 8)) : 1u;
+    defs["SSIM_K"] = std::to_string(K);
+    const uint32_t ng = (nw + K - 1) / K, NU = 3 * ng * nh;
+    std::vector<uint32_t> ub(ncores + 1, NU);  // core c: units [ub[c], ub[c + 1]), split by tile count
+    for (uint32_t u = 0, c = 0, acc = 0; u < NU && c <= ncores; u++) {
+        while (c <= ncores && acc >= uint32_t(uint64_t(NT) * c / ncores)) ub[c++] = u;
+        acc += std::min(K, nw - (u / nh % ng) * K);
+    }
+    ub[0] = 0;
+    std::fprintf(stderr, "[LOSS] ssim reader SSIM_RD=%d cbd=%u K=%u units=%u\n", int(rd), cbd, K, NU);
     float wmf = float(-lam / n);
     uint32_t wm_bits;
     std::memcpy(&wm_bits, &wmf, 4);
@@ -435,12 +447,12 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         std::vector<std::pair<uint32_t, uint32_t>> cbs;
         if (bwd) {
-            cbs = {{0, 9 * cbd}, {1, 2 * cbd}, {16, 2}, {17, 2}};
+            cbs = {{0, 3 * (K + 2) * cbd}, {1, 2 * K * cbd}, {16, 2}, {17, 2}};
         } else {
-            cbs = {{0, 3 * cbd}, {1, 3 * cbd}, {2, 2 * cbd}, {3, 3 * cbd}, {16, 6}, {17, 2}, {18, 4}, {19, 1}, {20, 1}};
+            cbs = {{0, (K + 2) * cbd}, {1, (K + 2) * cbd}, {2, 2 * K * cbd}, {3, 3 * K * cbd}, {16, 6}, {17, 2}, {18, 4}, {19, 1}, {20, 1}};
             if (rd) cbs.push_back({4, 1});  // reader's constant wm tile (never pushed)
         }
-        for (uint32_t q = 6; q < 15; q++) cbs.push_back({q, 1});
+        for (uint32_t q = 6; q < 15; q++) cbs.push_back({q, K});
         for (auto [id, pages] : cbs) {
             add_cb(prog, cores, id, pages);
             if (id != 16 && id != 20) u2d[id] = UnpackToDestMode::UnpackToDestFp32;
@@ -448,10 +460,10 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
         std::vector<uint32_t> ct_r, ct_w;
         for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_r);
         for (int i = 0; i < (bwd ? 1 : 2); i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_w);
-        std::map<std::string, std::string> rdefs;
+        std::map<std::string, std::string> rdefs{{"SSIM_K", std::to_string(K)}};
         if (bwd) rdefs["SSIM_BWD"] = "1";
         if (rd) rdefs["SSIM_RD"] = "1";
-        std::map<std::string, std::string> wdefs;
+        std::map<std::string, std::string> wdefs{{"SSIM_K", std::to_string(K)}};
         if (const char* a = std::getenv("LOSS_SSIM_DMABL"); a && a[0] && std::string(a) != "0") {
             rdefs["SSIM_DMABL"] = wdefs["SSIM_DMABL"] = a;  // #743 timing ablation only
             if (!bwd) std::fprintf(stderr, "[LOSS] SSIM_DMABL=%s (timing ablation, results invalid)\n", a);
@@ -470,7 +482,7 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
                                                .math_approx_mode = false, .defines = defs});
         for (uint32_t cy = 0, c = 0; cy < grid.y; cy++)
             for (uint32_t cx = 0; cx < grid.x; cx++, c++) {
-                const uint32_t t0 = uint32_t(uint64_t(NT) * c / ncores), t1 = uint32_t(uint64_t(NT) * (c + 1) / ncores);
+                const uint32_t t0 = ub[c], t1 = ub[c + 1];  // work units (#753)
                 const CoreCoord cc{cx, cy};
                 if (bwd) {
                     SetRuntimeArgs(prog, kr, cc, {uint32_t(bd->address()), uint32_t(bx->address()),
@@ -482,7 +494,7 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
                                                   L.H / TS, L.W / TS});
                     SetRuntimeArgs(prog, kw, cc, {uint32_t(bd->address()), uint32_t(bs->address()), t0, t1, nh, nw, c});
                 }
-                SetRuntimeArgs(prog, kcmp, cc, {t0, t1, nh});
+                SetRuntimeArgs(prog, kcmp, cc, {t0, t1, nh, nw});
             }
         distributed::MeshWorkload wl;
         wl.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(prog));

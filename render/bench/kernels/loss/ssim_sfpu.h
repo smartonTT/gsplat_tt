@@ -25,6 +25,10 @@
 #ifndef SSIM_ABL
 #define SSIM_ABL 0
 #endif
+// Task #753: strip width in tile columns (reader_ssim.cpp); host LOSS_SSIM_K.
+#ifndef SSIM_K
+#define SSIM_K 1
+#endif
 
 #ifdef TRISC_MATH
 #ifndef SF_G0
@@ -137,6 +141,12 @@ inline void zero_tile() {
 inline void copy_n(uint32_t cb, uint32_t n, uint32_t d0) {
     copy_tile_to_dst_init_short(cb);
     for (uint32_t k = 0; k < n; k++) copy_tile(cb, k, d0 + k);
+}
+
+// Copy front pages i0 .. i0+n-1 of cb to dest d0.. (no pop).
+inline void copy_at(uint32_t cb, uint32_t i0, uint32_t n, uint32_t d0) {
+    copy_tile_to_dst_init_short(cb);
+    for (uint32_t k = 0; k < n; k++) copy_tile(cb, i0 + k, d0 + k);
 }
 
 inline void transpose_tiles(uint32_t mask) {
