@@ -126,7 +126,8 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_T_RB, TILE_BF16, 2, DataFormat::Float16_b);
     add_cb(prog, cores, CB_MB_COUNTS, 128, 64, DataFormat::UInt32);
     add_cb(prog, cores, CB_CORE_TILES, SMALL, 1, DataFormat::UInt32);
-    add_cb(prog, cores, CB_DA_RING, SMALL, 1 + 64, DataFormat::UInt32);
+    // Train-mode decode-ahead ring: 64 B header + 64 slots of 128 B (#724, blend_train::da_slot_bytes).
+    add_cb(prog, cores, CB_DA_RING, SMALL, 1 + 64 * 2, DataFormat::UInt32);
     add_cb(prog, cores, CB_BUCKET_BULK, SMALL, BULK_REC_SLOT, DataFormat::Float32);
     add_cb(prog, cores, CB_TRAIN_OPC, 32, BULK_REC_SLOT, DataFormat::Float32);  // 16 B x 2 * BULK_REC_SLOT
     add_cb(prog, cores, CB_COLOR_OUT, TILE_BF16, 6, DataFormat::Float16_b);
