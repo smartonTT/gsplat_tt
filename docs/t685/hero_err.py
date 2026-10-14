@@ -7,8 +7,8 @@ import sys
 
 import numpy as np
 
-from gsplat.blend_backward_dev import (TILE, _sweep_tiles, load_dump, ref_slots_fast,
-                                       tile_rects_vec)
+from gsplat.blend_backward_dev import (TILE, _sweep_tiles, load_dump, pair_alive, pair_cull_on,
+                                       ref_slots_fast, tile_rects_vec)
 
 f32 = np.float32
 NAMES = ["dmx", "dmy", "dA", "dB", "dC", "dop", "dr", "dg", "db"]
@@ -26,8 +26,9 @@ def main(npz, slots_path, out, ref_path=None):
     ref = ref.astype(np.float64)
     H, W = d["image"].shape[:2]
     rects = tile_rects_vec(d["means2d"], d["valid"], d["conic"], H, W, TILE)
+    live = pair_alive(d["means2d"], d["conic"], d["opacity"], cfg, H, W) if pair_cull_on() else None
     pl, utid, start, cnt, *_ = _sweep_tiles(np.asarray(d["means2d"], f32), np.asarray(d["conic"], f32),
-                                            rects, d["order"], H, W)
+                                            rects, d["order"], H, W, live)   # #803 cull as the prep
     slot = pl["P"][pl["g"]] + pl["j"]                     # slot of each list entry
     tcount = np.zeros(dev.shape[0], np.int64)
     ttile = np.full(dev.shape[0], -1, np.int64)

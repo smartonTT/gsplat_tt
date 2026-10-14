@@ -16,7 +16,7 @@ non positive-definite conics are always kept. `pair_lists(...)["kept"]` maps cul
 to the uncut numbering.
 
 ## Tests (tests/unit/test_train_pair_cull.py, numpy only)
-On a random scene (31% of pairs dropped) and both T0 oracle dumps (sh0, sh3), cull on vs off:
+On a random scene (56% of pairs dropped; the 64x64 dumps drop 3 of 74) and both T0 oracle dumps (sh0, sh3), cull on vs off:
 forward image bit-equal; kept T1 slots (fp32 and fp64 refs) and tie flags bit-equal, dropped
 slots exactly zero; per-Gaussian slot sums bit-equal; T2 grads and Adam params bit-equal (sh0);
 device-kernel emulator on the culled lists vs culled reference < 1e-4. Brute force over every
