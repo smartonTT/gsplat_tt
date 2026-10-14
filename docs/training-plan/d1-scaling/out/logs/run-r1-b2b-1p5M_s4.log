@@ -1,0 +1,301 @@
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=171
+[run] warmup (hero='_DSC8680', 309x205, scene=bicycle)
+2026-10-14 07:47:47.293 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:47.293 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:47.295 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:47.295 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:47.295 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:47.296 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:47.296 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-14 07:47:47.297 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-14 07:47:47.297 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:47.297 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:47.299 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:47.299 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:47.299 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:47.299 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:47.299 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-14 07:47:47.300 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-14 07:47:47.300 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-14 07:47:47.339 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-14 07:47:47.339 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-14 07:47:47.339 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-14 07:47:47.339 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-14 07:47:47.340 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-14 07:47:47.340 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-14 07:47:47.341 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-14 07:47:48.395 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-14 07:47:48.395 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-14 07:47:48.395 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:48.395 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:48.396 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:48.396 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:48.396 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:48.397 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:48.397 | warning  |          Always | Unknown motherboard 'PRO X870-P WIFI (MS-7E47)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-14 07:47:48.397 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-14 07:47:48.397 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:48.397 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:48.397 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-14 07:47:48.397 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:48.397 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:48.397 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 07:47:48.397 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 07:47:48.397 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 07:47:48.397 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 07:47:48.397 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 07:47:48.397 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 07:47:48.401 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/gstt2-sync/tmp/ttm-eth12/tt_metal/pre-compiled/2674056940313099667/ (build_env_manager.cpp:257)
+[DEV] device 0 (card 0), dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[run] opacity prune: kept 1500000 of 1500000 gaussians (pfwc cores 120)
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 1.8 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 70 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 70 row_pages 5 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 5 tiles 70)
+[SUBCHUNK] tiles_split=30 total_subchunks=117 max_subchunks_per_tile=4 payload_pages=10055
+[SORT] stage=ONELAUNCH P=641615 P_kept=641615 num_tiles=70 max_tile_n=27578 onelaunch=0.07 layout=0.03 pub_host=0.05 total=0.19ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[run] timing 169 views (warmup excluded)
+[SUBCHUNK] tiles_split=30 total_subchunks=117 max_subchunks_per_tile=4 payload_pages=10055
+[SORT] stage=ONELAUNCH P=641615 P_kept=641615 num_tiles=70 max_tile_n=27578 onelaunch=0.03 layout=0.01 pub_host=0.02 total=0.07ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=120/120 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[SUBCHUNK] tiles_split=20 total_subchunks=94 max_subchunks_per_tile=3 payload_pages=6688
+[SORT] stage=ONELAUNCH P=425686 P_kept=425686 num_tiles=70 max_tile_n=21013 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[B4A] fold: view K2 from the previous blend (2 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[SUBCHUNK] tiles_split=28 total_subchunks=101 max_subchunks_per_tile=3 payload_pages=8030
+[SORT] stage=ONELAUNCH P=511612 P_kept=511612 num_tiles=70 max_tile_n=18853 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[gsplat_tt::sort] tile 43 holds 47744 (padded) records > bucket capacity 32832; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (47744 records): bucket grown to 65472, retrying the view at contrib floor 1/255
+[SUBCHUNK] tiles_split=31 total_subchunks=137 max_subchunks_per_tile=6 payload_pages=13431
+[SORT] stage=ONELAUNCH P=857453 P_kept=857453 num_tiles=70 max_tile_n=46858 onelaunch=0.03 layout=0.01 pub_host=0.03 total=0.07ms
+OUT_RING new pinned slot (slots=5 grows=4 replaced=0)
+[SUBCHUNK] tiles_split=29 total_subchunks=128 max_subchunks_per_tile=6 payload_pages=11914
+[SORT] stage=ONELAUNCH P=760291 P_kept=760291 num_tiles=70 max_tile_n=43066 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=6 grows=5 replaced=0)
+[SUBCHUNK] tiles_split=27 total_subchunks=113 max_subchunks_per_tile=5 payload_pages=10526
+[SORT] stage=ONELAUNCH P=671566 P_kept=671566 num_tiles=70 max_tile_n=34081 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=7 grows=6 replaced=0)
+[SUBCHUNK] tiles_split=31 total_subchunks=120 max_subchunks_per_tile=5 payload_pages=11109
+[SORT] stage=ONELAUNCH P=708564 P_kept=708564 num_tiles=70 max_tile_n=37713 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=8 grows=7 replaced=0)
+[SUBCHUNK] tiles_split=31 total_subchunks=133 max_subchunks_per_tile=5 payload_pages=12186
+[SORT] stage=ONELAUNCH P=777666 P_kept=777666 num_tiles=70 max_tile_n=35801 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=9 grows=8 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=89 max_subchunks_per_tile=2 payload_pages=6468
+[SORT] stage=ONELAUNCH P=411759 P_kept=411759 num_tiles=70 max_tile_n=15015 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=10 grows=9 replaced=0)
+[SUBCHUNK] tiles_split=34 total_subchunks=132 max_subchunks_per_tile=5 payload_pages=11786
+[SORT] stage=ONELAUNCH P=752150 P_kept=752150 num_tiles=70 max_tile_n=39974 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=11 grows=10 replaced=0)
+[SUBCHUNK] tiles_split=33 total_subchunks=130 max_subchunks_per_tile=5 payload_pages=11744
+[SORT] stage=ONELAUNCH P=749547 P_kept=749547 num_tiles=70 max_tile_n=37503 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=12 grows=11 replaced=0)
+[SUBCHUNK] tiles_split=33 total_subchunks=134 max_subchunks_per_tile=6 payload_pages=12003
+[SORT] stage=ONELAUNCH P=766272 P_kept=766272 num_tiles=70 max_tile_n=41259 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=13 grows=12 replaced=0)
+[SUBCHUNK] tiles_split=23 total_subchunks=94 max_subchunks_per_tile=3 payload_pages=7084
+[SORT] stage=ONELAUNCH P=451340 P_kept=451340 num_tiles=70 max_tile_n=19136 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=14 grows=13 replaced=0)
+[SUBCHUNK] tiles_split=28 total_subchunks=127 max_subchunks_per_tile=5 payload_pages=11811
+[SORT] stage=ONELAUNCH P=753790 P_kept=753790 num_tiles=70 max_tile_n=35954 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=15 grows=14 replaced=0)
+[SUBCHUNK] tiles_split=38 total_subchunks=144 max_subchunks_per_tile=6 payload_pages=13597
+[SORT] stage=ONELAUNCH P=868037 P_kept=868037 num_tiles=70 max_tile_n=46187 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=16 grows=15 replaced=0)
+[SUBCHUNK] tiles_split=36 total_subchunks=139 max_subchunks_per_tile=5 payload_pages=13209
+[SORT] stage=ONELAUNCH P=842914 P_kept=842914 num_tiles=70 max_tile_n=39557 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=17 grows=16 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=90 max_subchunks_per_tile=3 payload_pages=6605
+[SORT] stage=ONELAUNCH P=420640 P_kept=420640 num_tiles=70 max_tile_n=17522 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=18 grows=17 replaced=0)
+[SUBCHUNK] tiles_split=24 total_subchunks=98 max_subchunks_per_tile=3 payload_pages=7196
+[SORT] stage=ONELAUNCH P=458055 P_kept=458055 num_tiles=70 max_tile_n=21962 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=19 grows=18 replaced=0)
+[SUBCHUNK] tiles_split=35 total_subchunks=157 max_subchunks_per_tile=7 payload_pages=14833
+[SORT] stage=ONELAUNCH P=947283 P_kept=947283 num_tiles=70 max_tile_n=51167 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=20 grows=19 replaced=0)
+[SUBCHUNK] tiles_split=15 total_subchunks=86 max_subchunks_per_tile=3 payload_pages=5402
+[SORT] stage=ONELAUNCH P=343776 P_kept=343776 num_tiles=70 max_tile_n=19616 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=21 grows=20 replaced=0)
+[SUBCHUNK] tiles_split=18 total_subchunks=92 max_subchunks_per_tile=3 payload_pages=6337
+[SORT] stage=ONELAUNCH P=403317 P_kept=403317 num_tiles=70 max_tile_n=21165 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=22 grows=21 replaced=0)
+[SUBCHUNK] tiles_split=38 total_subchunks=159 max_subchunks_per_tile=7 payload_pages=15560
+[SORT] stage=ONELAUNCH P=993771 P_kept=993771 num_tiles=70 max_tile_n=54608 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=23 grows=22 replaced=0)
+[SUBCHUNK] tiles_split=22 total_subchunks=93 max_subchunks_per_tile=3 payload_pages=6774
+[SORT] stage=ONELAUNCH P=431517 P_kept=431517 num_tiles=70 max_tile_n=16603 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=24 grows=23 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=94 max_subchunks_per_tile=3 payload_pages=7649
+[SORT] stage=ONELAUNCH P=487367 P_kept=487367 num_tiles=70 max_tile_n=23045 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=25 grows=24 replaced=0)
+[SUBCHUNK] tiles_split=33 total_subchunks=131 max_subchunks_per_tile=6 payload_pages=11686
+[SORT] stage=ONELAUNCH P=745735 P_kept=745735 num_tiles=70 max_tile_n=46080 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=26 grows=25 replaced=0)
+[SUBCHUNK] tiles_split=25 total_subchunks=113 max_subchunks_per_tile=6 payload_pages=9574
+[SORT] stage=ONELAUNCH P=610569 P_kept=610569 num_tiles=70 max_tile_n=42499 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=27 grows=26 replaced=0)
+[SUBCHUNK] tiles_split=25 total_subchunks=116 max_subchunks_per_tile=5 payload_pages=10365
+[SORT] stage=ONELAUNCH P=661555 P_kept=661555 num_tiles=70 max_tile_n=35258 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=28 grows=27 replaced=0)
+[SUBCHUNK] tiles_split=27 total_subchunks=121 max_subchunks_per_tile=6 payload_pages=10611
+[SORT] stage=ONELAUNCH P=676663 P_kept=676663 num_tiles=70 max_tile_n=41170 onelaunch=0.06 layout=0.01 pub_host=0.03 total=0.10ms
+OUT_RING new pinned slot (slots=29 grows=28 replaced=0)
+[SUBCHUNK] tiles_split=29 total_subchunks=128 max_subchunks_per_tile=6 payload_pages=11668
+[SORT] stage=ONELAUNCH P=744557 P_kept=744557 num_tiles=70 max_tile_n=44256 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.11ms
+OUT_RING new pinned slot (slots=30 grows=29 replaced=0)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=120/120 ran=1
+[SUBCHUNK] tiles_split=21 total_subchunks=97 max_subchunks_per_tile=3 payload_pages=7482
+[SORT] stage=ONELAUNCH P=476558 P_kept=476558 num_tiles=70 max_tile_n=20711 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=31 grows=30 replaced=0)
+[B4A] fold: view K2 from the previous blend (30 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+[SUBCHUNK] tiles_split=16 total_subchunks=88 max_subchunks_per_tile=3 payload_pages=6683
+[SORT] stage=ONELAUNCH P=425476 P_kept=425476 num_tiles=70 max_tile_n=20592 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=32 grows=31 replaced=0)
+[SUBCHUNK] tiles_split=28 total_subchunks=128 max_subchunks_per_tile=6 payload_pages=11984
+[SORT] stage=ONELAUNCH P=764795 P_kept=764795 num_tiles=70 max_tile_n=48434 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=33 grows=32 replaced=0)
+[SUBCHUNK] tiles_split=30 total_subchunks=128 max_subchunks_per_tile=7 payload_pages=11648
+[SORT] stage=ONELAUNCH P=743162 P_kept=743162 num_tiles=70 max_tile_n=56490 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=34 grows=33 replaced=0)
+[SUBCHUNK] tiles_split=28 total_subchunks=128 max_subchunks_per_tile=7 payload_pages=11995
+[SORT] stage=ONELAUNCH P=765472 P_kept=765472 num_tiles=70 max_tile_n=56880 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.11ms
+OUT_RING new pinned slot (slots=35 grows=34 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=113 max_subchunks_per_tile=7 payload_pages=9721
+[SORT] stage=ONELAUNCH P=619625 P_kept=619625 num_tiles=70 max_tile_n=54159 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=36 grows=35 replaced=0)
+[SUBCHUNK] tiles_split=32 total_subchunks=134 max_subchunks_per_tile=7 payload_pages=12379
+[SORT] stage=ONELAUNCH P=790126 P_kept=790126 num_tiles=70 max_tile_n=49224 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.11ms
+OUT_RING new pinned slot (slots=37 grows=36 replaced=0)
+[SUBCHUNK] tiles_split=23 total_subchunks=112 max_subchunks_per_tile=6 payload_pages=9846
+[SORT] stage=ONELAUNCH P=627971 P_kept=627971 num_tiles=70 max_tile_n=48813 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=38 grows=37 replaced=0)
+[SUBCHUNK] tiles_split=30 total_subchunks=134 max_subchunks_per_tile=6 payload_pages=12664
+[SORT] stage=ONELAUNCH P=808356 P_kept=808356 num_tiles=70 max_tile_n=47350 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=39 grows=38 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=112 max_subchunks_per_tile=7 payload_pages=10225
+[SORT] stage=ONELAUNCH P=652154 P_kept=652154 num_tiles=70 max_tile_n=55811 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=40 grows=39 replaced=0)
+[gsplat_tt::sort] tile 35 holds 68320 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (68320 records > 65472): retrying the view at contrib floor 1/119 (was 1/255)
+[gsplat_tt::sort] tile 35 holds 67008 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (67008 records > 65472): retrying the view at contrib floor 1/60 (was 1/119)
+[gsplat_tt::sort] tile 35 holds 65520 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (65520 records > 65472): retrying the view at contrib floor 1/30 (was 1/60)
+[SUBCHUNK] tiles_split=24 total_subchunks=127 max_subchunks_per_tile=8 payload_pages=11383
+[SORT] stage=ONELAUNCH P=726565 P_kept=726565 num_tiles=70 max_tile_n=63047 onelaunch=0.09 layout=0.01 pub_host=0.03 total=0.13ms
+OUT_RING new pinned slot (slots=41 grows=40 replaced=0)
+[gsplat_tt::sort] tile 46 holds 65904 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (65904 records > 65472): retrying the view at contrib floor 1/127 (was 1/255)
+[SUBCHUNK] tiles_split=30 total_subchunks=144 max_subchunks_per_tile=8 payload_pages=13567
+[SORT] stage=ONELAUNCH P=865941 P_kept=865941 num_tiles=70 max_tile_n=64083 onelaunch=0.07 layout=0.02 pub_host=0.05 total=0.14ms
+OUT_RING new pinned slot (slots=42 grows=41 replaced=0)
+[SUBCHUNK] tiles_split=14 total_subchunks=98 max_subchunks_per_tile=7 payload_pages=8420
+[SORT] stage=ONELAUNCH P=536715 P_kept=536715 num_tiles=70 max_tile_n=57080 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=43 grows=42 replaced=0)
+[SUBCHUNK] tiles_split=8 total_subchunks=79 max_subchunks_per_tile=3 payload_pages=4944
+[SORT] stage=ONELAUNCH P=314157 P_kept=314157 num_tiles=70 max_tile_n=19958 onelaunch=0.05 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=44 grows=43 replaced=0)
+[SUBCHUNK] tiles_split=12 total_subchunks=89 max_subchunks_per_tile=5 payload_pages=6982
+[SORT] stage=ONELAUNCH P=444890 P_kept=444890 num_tiles=70 max_tile_n=38901 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=45 grows=44 replaced=0)
+[SUBCHUNK] tiles_split=35 total_subchunks=148 max_subchunks_per_tile=7 payload_pages=14189
+[SORT] stage=ONELAUNCH P=905698 P_kept=905698 num_tiles=70 max_tile_n=52160 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=46 grows=45 replaced=0)
+[SUBCHUNK] tiles_split=24 total_subchunks=105 max_subchunks_per_tile=5 payload_pages=8932
+[SORT] stage=ONELAUNCH P=569358 P_kept=569358 num_tiles=70 max_tile_n=36604 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=47 grows=46 replaced=0)
+[SUBCHUNK] tiles_split=19 total_subchunks=97 max_subchunks_per_tile=3 payload_pages=7978
+[SORT] stage=ONELAUNCH P=508676 P_kept=508676 num_tiles=70 max_tile_n=23675 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=48 grows=47 replaced=0)
+[SUBCHUNK] tiles_split=11 total_subchunks=83 max_subchunks_per_tile=3 payload_pages=5399
+[SORT] stage=ONELAUNCH P=343340 P_kept=343340 num_tiles=70 max_tile_n=17546 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=49 grows=48 replaced=0)
+[SUBCHUNK] tiles_split=2 total_subchunks=72 max_subchunks_per_tile=2 payload_pages=3690
+[SORT] stage=ONELAUNCH P=234086 P_kept=234086 num_tiles=70 max_tile_n=9007 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=50 grows=49 replaced=0)
+[SUBCHUNK] tiles_split=20 total_subchunks=100 max_subchunks_per_tile=4 payload_pages=8628
+[SORT] stage=ONELAUNCH P=549959 P_kept=549959 num_tiles=70 max_tile_n=31028 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=51 grows=50 replaced=0)
+[SUBCHUNK] tiles_split=30 total_subchunks=128 max_subchunks_per_tile=5 payload_pages=11759
+[SORT] stage=ONELAUNCH P=750579 P_kept=750579 num_tiles=70 max_tile_n=33728 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=52 grows=51 replaced=0)
+[SUBCHUNK] tiles_split=36 total_subchunks=138 max_subchunks_per_tile=5 payload_pages=12944
+[SORT] stage=ONELAUNCH P=826230 P_kept=826230 num_tiles=70 max_tile_n=38971 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=53 grows=52 replaced=0)
+[SUBCHUNK] tiles_split=25 total_subchunks=105 max_subchunks_per_tile=3 payload_pages=8412
+[SORT] stage=ONELAUNCH P=536183 P_kept=536183 num_tiles=70 max_tile_n=21038 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=54 grows=53 replaced=0)
+[SUBCHUNK] tiles_split=30 total_subchunks=151 max_subchunks_per_tile=6 payload_pages=15339
+[SORT] stage=ONELAUNCH P=979881 P_kept=979881 num_tiles=70 max_tile_n=44138 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=55 grows=54 replaced=0)
+[SUBCHUNK] tiles_split=13 total_subchunks=84 max_subchunks_per_tile=3 payload_pages=5192
+[SORT] stage=ONELAUNCH P=330196 P_kept=330196 num_tiles=70 max_tile_n=21723 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=56 grows=55 replaced=0)
+[SUBCHUNK] tiles_split=10 total_subchunks=87 max_subchunks_per_tile=5 payload_pages=6602
+[SORT] stage=ONELAUNCH P=420374 P_kept=420374 num_tiles=70 max_tile_n=35235 onelaunch=0.06 layout=0.01 pub_host=0.02 total=0.09ms
+OUT_RING new pinned slot (slots=57 grows=56 replaced=0)
+[gsplat_tt::sort] tile 25 holds 66592 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (66592 records > 65472): retrying the view at contrib floor 1/127 (was 1/255)
+[gsplat_tt::sort] tile 25 holds 65712 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (65712 records > 65472): retrying the view at contrib floor 1/64 (was 1/127)
+[SUBCHUNK] tiles_split=27 total_subchunks=124 max_subchunks_per_tile=8 payload_pages=10916
+[SORT] stage=ONELAUNCH P=696229 P_kept=696229 num_tiles=70 max_tile_n=63767 onelaunch=0.09 layout=0.02 pub_host=0.04 total=0.15ms
+OUT_RING new pinned slot (slots=58 grows=57 replaced=0)
+[SUBCHUNK] tiles_split=25 total_subchunks=128 max_subchunks_per_tile=8 payload_pages=11589
+[SORT] stage=ONELAUNCH P=739304 P_kept=739304 num_tiles=70 max_tile_n=59941 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=59 grows=58 replaced=0)
+[gsplat_tt::sort] tile 25 holds 78048 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (78048 records > 65472): retrying the view at contrib floor 1/66 (was 1/255)
+[gsplat_tt::sort] tile 25 holds 75456 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (75456 records > 65472): retrying the view at contrib floor 1/26 (was 1/66)
+[gsplat_tt::sort] tile 25 holds 73504 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (73504 records > 65472): retrying the view at contrib floor 1/13 (was 1/26)
+[gsplat_tt::sort] tile 25 holds 71888 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (71888 records > 65472): retrying the view at contrib floor 1/7 (was 1/13)
+[gsplat_tt::sort] tile 25 holds 70320 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (70320 records > 65472): retrying the view at contrib floor 1/3 (was 1/7)
+[gsplat_tt::sort] tile 25 holds 68752 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (68752 records > 65472): retrying the view at contrib floor 1/2 (was 1/3)
+[gsplat_tt::sort] tile 25 holds 67776 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 977, in main
+    _main()
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 744, in _main
+    rc = _back_to_back(args, clean_pipeline, gauss, cam, order, K, H, W,
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 421, in _back_to_back
+    imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
+  File "/localdev/smarton/gstt2-sync/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 170, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: render_clean: device sort failed; single-path TT, no CPU fallback

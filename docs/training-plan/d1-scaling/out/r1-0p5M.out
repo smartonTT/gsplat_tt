@@ -1,0 +1,36 @@
+[ttw 2026-10-14T00:48:42-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T00:48:42-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-14T00:48:42-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T00:48:42-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T00:48:42-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T00:48:42-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T00:48:42-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T00:48:42-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T00:48:42-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T00:48:42-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T00:48:42-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T00:48:42-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=e515eb2a bin=7f442ac3b98c0722 t691 3702fbb5 D1 sweep (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t691-r1-0p5M  timeout=560s  worry=600s  ts=2026-10-14T00:48:43-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/docs/training-plan/d1-scaling/remote.sh 1 b2b 0p5M_s1 0p5M_s2 0p5M_s4
+-----------------------------------------
+=== r1-b2b-0p5M_s1 3702fbb5 07:48:45 load=1.35
+run rc=0
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=2.437 fps=410.29 ms_frame_median=2.437 pass_ms_frame=2.433,2.442,2.437,2.434,2.440,2.438 check_pass_ms_frame=2.948 raw_md5=72d0bd69 gap_ms=0.00 render_ms_frame=2.437 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t691-r1-b2b-0p5M_s1
+TTW_TIMING b2b_ms_frame=2.437
+TTW_TIMING b2b_ms_frame_median=2.437
+=== r1-b2b-0p5M_s2 3702fbb5 07:49:05 load=1.53
+run rc=0
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=2.560 fps=390.66 ms_frame_median=2.560 pass_ms_frame=2.559,2.560,2.561,2.560,2.561,2.558 check_pass_ms_frame=2.602 raw_md5=0f235e4b gap_ms=0.00 render_ms_frame=2.560 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t691-r1-b2b-0p5M_s2
+TTW_TIMING b2b_ms_frame=2.560
+TTW_TIMING b2b_ms_frame_median=2.560
+=== r1-b2b-0p5M_s4 3702fbb5 07:49:14 load=1.45
+run rc=0
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=4.330 fps=230.93 ms_frame_median=4.330 pass_ms_frame=4.330,4.331,4.331,4.330,4.330,4.329 check_pass_ms_frame=4.345 raw_md5=1d015fb6 gap_ms=0.00 render_ms_frame=4.330 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t691-r1-b2b-0p5M_s4
+TTW_TIMING b2b_ms_frame=4.330
+TTW_TIMING b2b_ms_frame_median=4.330
+=== done 1 b2b 07:49:23
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/worktrees/t691/tmp/ttw-state/logs/t691-r1-0p5M-20261014-004842.log

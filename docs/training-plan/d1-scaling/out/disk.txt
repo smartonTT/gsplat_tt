@@ -1,0 +1,2 @@
+103M	/localdev/smarton/gstt2-sync/tmp/d1
+/dev/mapper/ubuntu--vg-ubuntu--lv  913G  503G  364G  59% /localdev/smarton
