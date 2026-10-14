@@ -89,6 +89,12 @@ static_assert(TRAIN_OPC_BATCH >= 1u && TRAIN_OPC_BATCH * 64u <= 128u * 1024u, "s
 #ifndef T727_DIAG
 #define T727_DIAG 0
 #endif
+// Task #730: 1 = the writer (BRISC, NoC0) runs the gather; the reader only
+// queues {slab L1 address, record count} on CB_OPC_REQ.
+#ifndef TRAIN_OPC_WRITER
+#define TRAIN_OPC_WRITER 0
+#endif
+constexpr uint32_t CB_OPC_REQ = BLEND_CB_BASE + 14;
 #endif
 constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
@@ -479,6 +485,17 @@ void kernel_main() {
                 // Task #717: rec[7] is the scene index in train mode; fetch its
                 // fp32 op/colour (64 B DRAM page = 4 entries) and pack it at g * 16.
                 DeviceZoneScopedN("rd_train_opc");
+#if TRAIN_OPC_WRITER
+                // The slab reads above are barriered; the writer gathers into
+                // CB_TRAIN_OPC from these records (the slot stays until compute pops it).
+                cb_reserve_back(CB_OPC_REQ, 1);
+                auto req = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_OPC_REQ));
+                req[0] = buck;
+                req[1] = L_sub;
+                mb_cb_commit_fence();
+                cb_push_back(CB_OPC_REQ, 1);
+                (void)train_opc_addr;
+#else
                 invalidate_l1_cache();
                 cb_reserve_back(CB_TRAIN_OPC, BULK_REC_SLOT);
                 const uint32_t side = get_write_ptr(CB_TRAIN_OPC);
@@ -533,6 +550,7 @@ void kernel_main() {
 #endif
                 mb_cb_commit_fence();
                 cb_push_back(CB_TRAIN_OPC, BULK_REC_SLOT);
+#endif  // TRAIN_OPC_WRITER
             }
 #endif
             mb_cb_commit_fence();

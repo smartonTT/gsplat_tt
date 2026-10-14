@@ -183,6 +183,80 @@ void kernel_main() {
     };
     BLEND_WRITER_PRE(poll);
 #endif
+#if defined(BLEND_TRAIN) && BLEND_TRAIN && defined(TRAIN_OPC_WRITER) && TRAIN_OPC_WRITER
+    // Task #730: the reader queues {slab L1 address, record count} per bulk
+    // slab on CB_OPC_REQ; this RISC gathers each record's fp32 [op, r, g, b]
+    // (rec[7] = scene index, 64 B DRAM pages of 4 entries) into CB_TRAIN_OPC at
+    // g * 16, the same bytes the reader's #717 gather wrote. The slab slot stays
+    // valid until compute pops it, which it does only after this push.
+    constexpr uint32_t CB_TRAIN_OPC = BLEND_CB_BASE + 9;
+    constexpr uint32_t CB_OPC_REQ = BLEND_CB_BASE + 14;
+    constexpr uint32_t OPC_SLOT = 4096u;                 // BULK_REC_SLOT (bucket fit 8192)
+    constexpr uint32_t OPC_STAGE = 128u * 1024u;         // DRAM page staging
+#ifndef TRAIN_OPC_BATCH
+#define TRAIN_OPC_BATCH 64u
+#endif
+    static_assert(TRAIN_OPC_BATCH >= 1u && TRAIN_OPC_BATCH * 64u <= 128u * 1024u, "staging overflows the slot");
+    const InterleavedAddrGen<true> opc_gen{get_arg_val<uint32_t>(11), 64u};
+    auto serve = [&]() -> bool {
+        if (!cb_pages_available_at_front(CB_OPC_REQ, 1) ||
+            !cb_pages_reservable_at_back(CB_TRAIN_OPC, OPC_SLOT)) {
+            return false;
+        }
+        invalidate_l1_cache();
+        auto req = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_OPC_REQ));
+        auto recs = reinterpret_cast<volatile uint32_t*>(req[0]);
+        const uint32_t n_rec = req[1];
+        cb_reserve_back(CB_TRAIN_OPC, OPC_SLOT);
+        const uint32_t side = get_write_ptr(CB_TRAIN_OPC);
+        auto dst = reinterpret_cast<volatile uint32_t*>(side);
+        auto stg = reinterpret_cast<volatile uint32_t*>(side + OPC_STAGE);
+        uint32_t g0 = 0;
+        while (g0 < n_rec) {
+            const uint32_t g1 = (n_rec - g0 > TRAIN_OPC_BATCH) ? g0 + TRAIN_OPC_BATCH : n_rec;
+            for (uint32_t g = g0; g < g1; ++g) {
+                noc_async_read(get_noc_addr(recs[g * 8u + 7u] >> 2, opc_gen),
+                               side + OPC_STAGE + (g - g0) * 64u, 64u);
+            }
+            noc_async_read_barrier();
+            invalidate_l1_cache();
+            for (uint32_t g = g0; g < g1; ++g) {
+                const uint32_t s = (g - g0) * 16u + (recs[g * 8u + 7u] & 3u) * 4u;
+                dst[g * 4u + 0u] = stg[s + 0u];
+                dst[g * 4u + 1u] = stg[s + 1u];
+                dst[g * 4u + 2u] = stg[s + 2u];
+                dst[g * 4u + 3u] = stg[s + 3u];
+            }
+            g0 = g1;
+        }
+        asm volatile("fence" ::: "memory");
+        cb_push_back(CB_TRAIN_OPC, OPC_SLOT);
+        cb_pop_front(CB_OPC_REQ, 1);
+        return true;
+    };
+    // Never block on one queue: a tile's colour waits on gathers still queued.
+    // Write a tile only when its id and all 3 colour tiles are there.
+    while (!ended) {
+        if (serve()) {
+            continue;
+        }
+        if (!cb_pages_available_at_front(CB_TILE_Q, 1)) {
+            continue;
+        }
+        const uint32_t screen_tile =
+            reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
+        if (screen_tile == 0xFFFFFFFFu) {
+            cb_pop_front(CB_TILE_Q, 1);
+            ended = true;
+            break;
+        }
+        if (!cb_pages_available_at_front(CB_COLOR_OUT, 3)) {
+            continue;
+        }
+        cb_pop_front(CB_TILE_Q, 1);
+        write_tile(screen_tile);
+    }
+#endif
     while (!ended) {
         cb_wait_front(CB_TILE_Q, 1);
         const uint32_t screen_tile =

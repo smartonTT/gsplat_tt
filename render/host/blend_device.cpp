@@ -256,6 +256,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     cb_cfg(CB_T_RB, TILE_BYTES_BF16, 2, DataFormat::Float16_b);
     if (gsplat_tt::blend_train::enabled()) {
         cb_cfg(gsplat_tt::blend_train::kCb, gsplat_tt::blend_train::kTileBytes, 4, DataFormat::Float32);
+        if (gsplat_tt::blend_train::opc_on_writer()) {
+            // Task #730: reader -> writer gather requests (2 slab slots in flight).
+            cb_cfg(gsplat_tt::blend_train::kOpcReqCb, 16, 4, DataFormat::UInt32);
+        }
     }
 
     // Resident devcull reader scratch CBs.
@@ -344,6 +348,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         const char* opc_skip = std::getenv("GSPLAT_TT_TRAIN_OPC_SKIPDEAD");
         if (opc_skip != nullptr && opc_skip[0] == '1') {
             reader_defines["TRAIN_OPC_SKIP_DEAD"] = "1";
+        }
+        if (gsplat_tt::blend_train::opc_on_writer()) {
+            reader_defines["TRAIN_OPC_WRITER"] = "1";
+            writer_defines["TRAIN_OPC_WRITER"] = "1";
+            if (opc_batch != nullptr && opc_batch[0] != '\0') {
+                writer_defines["TRAIN_OPC_BATCH"] = reader_defines["TRAIN_OPC_BATCH"];
+            }
         }
         const char* t727_diag = std::getenv("GSPLAT_TT_T727_DIAG");
         if (t727_diag != nullptr && (t727_diag[0] == '1' || t727_diag[0] == '2')) {
@@ -1029,6 +1040,10 @@ static double process_frame_mb_devcull_resident(
                         writer_args.resize(9, 0u);
                         writer_args.push_back(static_cast<uint32_t>(ctx.res_train->address()));
                         writer_args.push_back(image_tiles_x);
+                        if (gsplat_tt::blend_train::opc_on_writer()) {
+                            writer_args.resize(gsplat_tt::blend_train::kOpcWriterArg, 0u);
+                            writer_args.push_back(train_opc_addr);
+                        }
                     }
                     SetRuntimeArgs(program, ctx.writer, core, writer_args);
                     core_index++;

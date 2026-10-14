@@ -47,6 +47,21 @@ constexpr uint32_t kOpcBytes = 16u;                   // fp32 op, r, g, b
 constexpr uint32_t kOpcPageBytes = 64u;               // 4 entries per DRAM page
 constexpr uint32_t kOpcReaderArg = 28u;               // reader runtime arg index
 
+// Task #730: GSPLAT_TT_TRAIN_OPC_WRITER=1 moves that gather from the blend
+// reader (NCRISC, NoC1, on the slab critical path) to the blend writer (BRISC,
+// NoC0, idle between tiles). Same DRAM bytes, same CB_TRAIN_OPC layout. The
+// reader queues {slab L1 address, record count} on CB kOpcReqCb; the writer
+// gets the scene_train_opc address as runtime arg kOpcWriterArg.
+inline bool opc_on_writer() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_TRAIN_OPC_WRITER");
+        return e != nullptr && e[0] == '1';
+    }();
+    return enabled() && on;
+}
+constexpr uint32_t kOpcReqCb = 14;
+constexpr uint32_t kOpcWriterArg = 11u;
+
 // Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
 // DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
 // and marker kind in the last two words. Flag off keeps 64 B slots.
