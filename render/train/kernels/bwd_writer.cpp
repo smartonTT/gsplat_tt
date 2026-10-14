@@ -2,8 +2,11 @@
 // to NB pairs of a tile (blend_bwd_compute.cpp: pair i -> column i % 8 of vectors
 // 24 + 3 (i / 8) + {0, 1, 2}, already lane-reduced and finished). Per pair it gathers the 9
 // floats into a 64 B staging page and writes it to DRAM slot page rec[13] (P[g] + j).
-// Runtime args: out, tiles, recs DRAM addresses, first tile, tile count.
-// Compile args: TensorAccessorArgs(out, tiles, recs).
+// Runtime args: out, tiles, recs DRAM addresses, first tile, tile count[, stats address, core].
+// Compile args: TensorAccessorArgs(out, tiles, recs[, stats]).
+// BWD_STATS (#707): after the last tile one more CB_OUT tile holds the compute's counters
+// (vector 2k / 2k + 1 = low / high 16 bits of counter k, all lanes); lane 0 of the first
+// ST_WORDS vectors goes to 128 B page `core` of the stats buffer.
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
@@ -12,6 +15,7 @@ namespace {
 constexpr uint32_t CB_OUT = 16, CB_WS = 17, SMALL = 64, NB = 16, REC_WORDS = 16;
 // Packed-tile element of SFPU vector V, row j, column k (blend_backward_dev.vector_lanes).
 constexpr uint32_t lane(uint32_t V, uint32_t j, uint32_t k) { return 64 * (V >> 1) + 16 * j + 2 * k + (V & 1); }
+constexpr uint32_t ST_PAGE = 128, ST_WORDS = 22;
 }  // namespace
 
 void kernel_main() {
@@ -64,5 +68,17 @@ void kernel_main() {
             cb_pop_front(CB_OUT, 1);
         }
     }
+#ifdef BWD_STATS
+    if (nt != 0) {
+        constexpr auto st_args = TensorAccessorArgs<recs_args.next_compile_time_args_offset()>();
+        const auto st = TensorAccessor(st_args, get_arg_val<uint32_t>(5), ST_PAGE);
+        noc_async_writes_flushed();
+        cb_wait_front(CB_OUT, 1);
+        const volatile uint32_t* o = reinterpret_cast<const volatile uint32_t*>(get_read_ptr(CB_OUT));
+        for (uint32_t v = 0; v < ST_WORDS; v++) stg[v] = o[lane(v, 0, 0)];
+        noc_async_write(stg_l1, get_noc_addr(get_arg_val<uint32_t>(6), st), ST_PAGE);
+        cb_pop_front(CB_OUT, 1);
+    }
+#endif
     noc_async_write_barrier();
 }

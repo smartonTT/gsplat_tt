@@ -1,0 +1,3 @@
+MISSING alpha_blend_compute_mb: off=[] on=['1915234001442905807']
+MISSING writer_alpha_blend: off=[] on=['1745087671397032483']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
