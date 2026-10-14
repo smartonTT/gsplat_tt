@@ -35,8 +35,8 @@ constexpr uint32_t CT0 = TG + 20, CT1 = TG + 26;  // 3 each, stride 2 (g2d strea
 
 // Constants (t2_dev.consts order).
 enum : uint32_t {
-    R0 = 0, T0C = 9, FX = 12, FY, CX, CY, WW, HH, NEAR, LOWPASS, SS0, B1 = 25, OMB1, B2, OMB2,
-    ISQ, EPS
+    CR0 = 0, T0C = 9, FX = 12, FY, CX, CY, WW, HH, NEAR, LOWPASS, SS0, B1 = 25, OMB1, B2, OMB2,
+    ISQ, CEPS
 };
 float g_c[NCONST];
 sfpi_inline vFloat K(uint32_t i) { return vFloat(g_c[i]); }
@@ -165,9 +165,9 @@ __attribute__((noinline)) void t2_body() {
     // ---- forward: camera, J, cov3d, cov2d, conic, visibility
     {
         vFloat m0 = dst_reg[TP + 0], m1 = dst_reg[TP + 2], m2 = dst_reg[TP + 4];
-        dst_reg[S(X)] = K(R0 + 0) * m0 + K(R0 + 1) * m1 + K(R0 + 2) * m2 + K(T0C + 0);
-        dst_reg[S(Y)] = K(R0 + 3) * m0 + K(R0 + 4) * m1 + K(R0 + 5) * m2 + K(T0C + 1);
-        vFloat z = K(R0 + 6) * m0 + K(R0 + 7) * m1 + K(R0 + 8) * m2 + K(T0C + 2);
+        dst_reg[S(X)] = K(CR0 + 0) * m0 + K(CR0 + 1) * m1 + K(CR0 + 2) * m2 + K(T0C + 0);
+        dst_reg[S(Y)] = K(CR0 + 3) * m0 + K(CR0 + 4) * m1 + K(CR0 + 5) * m2 + K(T0C + 1);
+        vFloat z = K(CR0 + 6) * m0 + K(CR0 + 7) * m1 + K(CR0 + 8) * m2 + K(T0C + 2);
         vFloat val = 0.0f;
         vFloat zz = 1.0f;
         v_if(z > K(NEAR)) {
@@ -189,8 +189,8 @@ __attribute__((noinline)) void t2_body() {
     t2_cov<S(C3)>();
 #pragma GCC unroll 3
     for (uint32_t k = 0; k < 3; k++) {
-        dst_reg[S(TT0 + k)] = dst_reg[S(J00)] * K(R0 + k) + dst_reg[S(J02)] * K(R0 + 6 + k);
-        dst_reg[TT1[k]] = dst_reg[S(J11)] * K(R0 + 3 + k) + dst_reg[S(J12)] * K(R0 + 6 + k);
+        dst_reg[S(TT0 + k)] = dst_reg[S(J00)] * K(CR0 + k) + dst_reg[S(J02)] * K(CR0 + 6 + k);
+        dst_reg[TT1[k]] = dst_reg[S(J11)] * K(CR0 + 3 + k) + dst_reg[S(J12)] * K(CR0 + 6 + k);
     }
 #pragma GCC unroll 3
     for (uint32_t i = 0; i < 3; i++) {
@@ -246,11 +246,11 @@ __attribute__((noinline)) void t2_body() {
     }
     {
         vFloat d0 = dst_reg[CT0 + 0], d1 = dst_reg[CT0 + 2], d2 = dst_reg[CT0 + 4];
-        dst_reg[S(C3 + 2)] = d0 * K(R0 + 0) + d1 * K(R0 + 1) + d2 * K(R0 + 2);
-        dst_reg[S(C3 + 3)] = d0 * K(R0 + 6) + d1 * K(R0 + 7) + d2 * K(R0 + 8);
+        dst_reg[S(C3 + 2)] = d0 * K(CR0 + 0) + d1 * K(CR0 + 1) + d2 * K(CR0 + 2);
+        dst_reg[S(C3 + 3)] = d0 * K(CR0 + 6) + d1 * K(CR0 + 7) + d2 * K(CR0 + 8);
         vFloat e0 = dst_reg[CT1 + 0], e1 = dst_reg[CT1 + 2], e2 = dst_reg[CT1 + 4];
-        dst_reg[S(C3 + 4)] = e0 * K(R0 + 3) + e1 * K(R0 + 4) + e2 * K(R0 + 5);
-        dst_reg[S(C3 + 5)] = e0 * K(R0 + 6) + e1 * K(R0 + 7) + e2 * K(R0 + 8);
+        dst_reg[S(C3 + 4)] = e0 * K(CR0 + 3) + e1 * K(CR0 + 4) + e2 * K(CR0 + 5);
+        dst_reg[S(C3 + 5)] = e0 * K(CR0 + 6) + e1 * K(CR0 + 7) + e2 * K(CR0 + 8);
     }
     // means: gx gy gz parked in A_ B_ C_ (free now)
     {
@@ -278,7 +278,7 @@ __attribute__((noinline)) void t2_body() {
     }
 #pragma GCC unroll 3
     for (uint32_t k = 0; k < 3; k++) {
-        dst_reg[TK + 2 * k] = K(R0 + k) * dst_reg[S(A_)] + K(R0 + 3 + k) * dst_reg[S(B_)] + K(R0 + 6 + k) * dst_reg[S(C_)];
+        dst_reg[TK + 2 * k] = K(CR0 + k) * dst_reg[S(A_)] + K(CR0 + 3 + k) * dst_reg[S(B_)] + K(CR0 + 6 + k) * dst_reg[S(C_)];
     }
     // G3 (6 unique) into X Y IZ J00 J02 J11 (free now): G3[i,k] = ga T0i T0k + hb (T0i T1k + T1i T0k) + gc T1i T1k
     constexpr uint32_t G3S[6] = {S(X), S(Y), S(IZ), S(J00), S(J02), S(J11)};
@@ -331,7 +331,7 @@ __attribute__((noinline)) void t2_body() {
     }
     // opacity, SH0
     {
-        vFloat op = t2_recip(1.0f + t2_exp(-dst_reg[TP + 20]));
+        vFloat op = t2_recip(1.0f + t2_exp(-vFloat(dst_reg[TP + 20])));
         dst_reg[TK + 20] = dst_reg[TG + 10] * op * (1.0f - op);
     }
 #pragma GCC unroll 3
@@ -359,7 +359,7 @@ __attribute__((noinline)) void t2_body() {
         }
         v_endif;
         v_if(vis > 0.5f) {
-            vFloat den = t2_sqrt(dst_reg[TV + 2 * s]) * K(ISQ) + K(EPS);
+            vFloat den = t2_sqrt(dst_reg[TV + 2 * s]) * K(ISQ) + K(CEPS);
             dst_reg[TP + 2 * s] = dst_reg[TP + 2 * s] - K(SS0 + grp[s]) * (dst_reg[TM + 2 * s] * t2_recip(den));
             dst_reg[TM + 2 * s] = t2_bf16(dst_reg[TM + 2 * s]);
             dst_reg[TV + 2 * s] = t2_bf16(dst_reg[TV + 2 * s]);
@@ -367,11 +367,11 @@ __attribute__((noinline)) void t2_body() {
         v_endif;
     }
     // ---- pfwc epilogue from the updated params (into the g2d tile)
-    dst_reg[TG + 0] = dst_reg[TP + 0];
-    dst_reg[TG + 2] = dst_reg[TP + 2];
-    dst_reg[TG + 4] = dst_reg[TP + 4];
+    dst_reg[TG + 0] = vFloat(dst_reg[TP + 0]);
+    dst_reg[TG + 2] = vFloat(dst_reg[TP + 2]);
+    dst_reg[TG + 4] = vFloat(dst_reg[TP + 4]);
     t2_cov<TG + 6>();
-    dst_reg[TG + 18] = t2_recip(1.0f + t2_exp(-dst_reg[TP + 20]));
+    dst_reg[TG + 18] = t2_recip(1.0f + t2_exp(-vFloat(dst_reg[TP + 20])));
 #pragma GCC unroll 3
     for (uint32_t c = 0; c < 3; c++) {
         constexpr float SH_C0 = 0.28209479177387814f;
@@ -387,7 +387,7 @@ __attribute__((noinline)) void t2_body() {
 // Rank plane (tile 4) into the g2d accumulator (tile 3): 9 streams, both parities.
 inline void t2_add_plane() {
 #pragma GCC unroll 18
-    for (uint32_t v = 0; v < 18; v++) dst_reg[TG + v] = dst_reg[TG + v] + dst_reg[TK + v];
+    for (uint32_t v = 0; v < 18; v++) dst_reg[TG + v] = vFloat(dst_reg[TG + v]) + vFloat(dst_reg[TK + v]);
 }
 }  // namespace
 #endif
