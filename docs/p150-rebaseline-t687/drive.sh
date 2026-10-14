@@ -34,6 +34,9 @@ echo "=== drive t687 $sha on $H:$T $(TZ=America/Los_Angeles date)"
 $SSH "$H" "tt-smi -ls 2>&1 | head -20" > "$O/tt-smi.txt" 2>&1; grep -iE 'p150|p100|blackhole' "$O/tt-smi.txt" | head -4
 opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 3; }
 tail -2 "$O/sync.log"
+# best-iter-229 predates the #667 camera files: ship them (from this tree, f3428e9b) next to it.
+scp -q -o BatchMode=yes benchmarks/cameras_train_nn.json benchmarks/cameras_train_shuffled.json \
+  benchmarks/cameras_test.json benchmarks/cameras_orbit_1237.json "$H:$T/benchmarks/" || exit 3
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t687 $sha p150 re-baseline ($H)"
 $SSH "$H" "rm -rf $T/tmp/t687 /localdev/smarton/.cache/ttmc-t687-*; mkdir -p $T/tmp/t687"
 scp -q -o BatchMode=yes "$D/remote.sh" "$H:$T/tmp/t687-remote.sh.tmp" && $SSH "$H" "mv $T/tmp/t687-remote.sh.tmp $T/tmp/t687-remote.sh" || exit 3
@@ -53,6 +56,13 @@ grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot.out"; echo "shot rc=$
 [ $s = 0 ] || rc=5
 fi
 # Each devrun step stays under 500 s (the 600 s device ceiling).
+if [ "${NN_ONLY:-0}" = 1 ]; then   # rerun only the train-NN column (warm-up + 4 rounds)
+step n0 500 0 nn
+step n1 500 1 nn
+step n2 500 2 nn
+step n3 500 3 nn
+step n4 500 4 nn
+else
 step w0 500 0 orbit nn
 step r1 500 1 orbit nn
 step r2 500 2 nn orbit
@@ -61,7 +71,10 @@ step r4 500 4 nn orbit
 step l1 300 5 lat-orbit
 step l2 300 6 lat-orbit
 step l3 300 7 lat-orbit
+fi
 $SSH "$H" "cd /localdev/smarton/.cache && for a in ttmc-t687-*; do find \$a -maxdepth 6 -path '*/kernels/*' -type d > $T/tmp/t687/jit-\${a#ttmc-t687-}.txt; done"
+# On a p150a the eth-dispatch overlay keeps its JIT cache in $T/tmp/ttm-eth12-cache, not ~/.cache.
+$SSH "$H" "find $T/tmp/ttm-eth12-cache -maxdepth 8 -path '*/kernels/*' -type d > $T/tmp/t687/jit-eth12.txt 2>/dev/null; wc -l < $T/tmp/t687/jit-eth12.txt"
 scp -q -o BatchMode=yes "$H:$T/tmp/t687/*.*" "$O/" || rc=4
 $SSH "$H" "du -sxh $T /localdev/smarton/.cache 2>/dev/null; df -h /localdev/smarton | tail -1" > "$O/disk.txt" 2>&1; cat "$O/disk.txt"
 echo "=== drive t687 done rc=$rc $(TZ=America/Los_Angeles date)"
