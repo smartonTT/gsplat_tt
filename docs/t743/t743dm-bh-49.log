@@ -1,0 +1,54 @@
+SSH_PREFLIGHT=ok
+=== t743 HEAD=f23e1f7aec4af1ba715e4aa256b7a0d01c2ebdaa to bh-49:/localdev/smarton/gstt2-sync mesh=P150 arms='base:LOSS_SSIM_ABL=0 nord:LOSS_SSIM_DMABL=1 nowr:LOSS_SSIM_DMABL=2 nodm:LOSS_SSIM_DMABL=3 floornodm:LOSS_SSIM_ABL=15,LOSS_SSIM_DMABL=3' check='' Wed Oct 14 08:33:05 PDT 2026
+sync rc=0
+[sync_remote] f23e1f7aec4af1ba715e4aa256b7a0d01c2ebdaa from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t743: 1162 files, 65102376 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 6 of 1164 files, 41672 bytes (tar)
+[sync_remote] sha=f23e1f7aec4af1ba715e4aa256b7a0d01c2ebdaa so_md5=3f19c57ec21c809ca4c673ace30abebd 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+prep syn (822, 1237, 3)
+[ORACLE] hero skipped: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t707/tmp/t707/hero.npz or /Users/smarton/dev/gsplat_tt/scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG missing
+build+prep rc=0
+round 1 base rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3099 fwd_b2b_ms=0.6664 launch_ms_med=1.3387 launch_ms_min=1.3184 iters=50
+round 1 nord rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7000 fwd_b2b_ms=0.4024 launch_ms_med=0.7106 launch_ms_min=0.7083 iters=50
+round 1 nowr rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3148 fwd_b2b_ms=0.6634 launch_ms_med=1.3411 launch_ms_min=1.3176 iters=50
+round 1 nodm rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7026 fwd_b2b_ms=0.4008 launch_ms_med=0.7070 launch_ms_min=0.7067 iters=50
+round 1 floornodm rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=0.3676 fwd_b2b_ms=0.1489 launch_ms_med=0.3796 launch_ms_min=0.3792 iters=50
+round 2 base rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3093 fwd_b2b_ms=0.6639 launch_ms_med=1.3189 launch_ms_min=1.3004 iters=50
+round 2 nord rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7002 fwd_b2b_ms=0.4024 launch_ms_med=0.7095 launch_ms_min=0.7086 iters=50
+round 2 nowr rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3113 fwd_b2b_ms=0.6665 launch_ms_med=1.3291 launch_ms_min=1.3043 iters=50
+round 2 nodm rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.6980 fwd_b2b_ms=0.4008 launch_ms_med=0.7070 launch_ms_min=0.7067 iters=50
+round 2 floornodm rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=0.3639 fwd_b2b_ms=0.1488 launch_ms_med=0.3795 launch_ms_min=0.3792 iters=50
+timing done
+pull rc=0
+remote cleanup rc=0
+A/A ssim_fwd_compute: same hashes ['14767535707262322691'] in base and nord
+A/A ssim_bwd_compute: same hashes ['2102512295792033469'] in base and nord
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+ab_jit_check rc=1
+-- base
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3099 fwd_b2b_ms=0.6664 launch_ms_med=1.3387 launch_ms_min=1.3184 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3093 fwd_b2b_ms=0.6639 launch_ms_med=1.3189 launch_ms_min=1.3004 iters=50
+-- nord
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7000 fwd_b2b_ms=0.4024 launch_ms_med=0.7106 launch_ms_min=0.7083 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7002 fwd_b2b_ms=0.4024 launch_ms_med=0.7095 launch_ms_min=0.7086 iters=50
+-- nowr
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3148 fwd_b2b_ms=0.6634 launch_ms_med=1.3411 launch_ms_min=1.3176 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3113 fwd_b2b_ms=0.6665 launch_ms_med=1.3291 launch_ms_min=1.3043 iters=50
+-- nodm
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.7026 fwd_b2b_ms=0.4008 launch_ms_med=0.7070 launch_ms_min=0.7067 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=-0.0927187801 b2b_ms=0.6980 fwd_b2b_ms=0.4008 launch_ms_med=0.7070 launch_ms_min=0.7067 iters=50
+-- floornodm
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=0.3676 fwd_b2b_ms=0.1489 launch_ms_med=0.3796 launch_ms_min=0.3792 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.2 b2b_ms=0.3639 fwd_b2b_ms=0.1488 launch_ms_med=0.3795 launch_ms_min=0.3792 iters=50
+=== done Wed Oct 14 08:35:39 PDT 2026

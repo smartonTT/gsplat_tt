@@ -1,0 +1,11 @@
+{
+ "n_tiles": 1014,
+ "n_recs": 4478225,
+ "n_slots": 4478225,
+ "H": 822,
+ "W": 1237,
+ "alpha_max_bits": 1065185444,
+ "alpha_min_bits": 998277249,
+ "t_min_bits": 953267991,
+ "n_vectors": 30459432
+}

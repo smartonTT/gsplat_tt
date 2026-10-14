@@ -21,8 +21,21 @@ target_compile_definitions(blend_bwd_bench PRIVATE
   "BWD_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
 gsplat_link_tt_metal(blend_bwd_bench)
 
+# T2 param pass bench (#697): t2_bench <in_dir> <out_dir> [n_cores] [reps] [grads]
+add_executable(t2_bench t2_bench.cpp)
+target_compile_definitions(t2_bench PRIVATE
+  "T2_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
+gsplat_link_tt_metal(t2_bench)
+
 add_executable(blend_fwd_bench blend_fwd_bench.cpp)
 target_compile_definitions(blend_fwd_bench PRIVATE
   "BWD_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\""
   "FWD_COMPUTE_KERNEL=\"${CMAKE_CURRENT_SOURCE_DIR}/../kernels/compute/alpha_blend_compute_mb.cpp\"")
 gsplat_link_tt_metal(blend_fwd_bench)
+
+# On-device training step chain (#748): T1 -> T2 (gather) + Adam on shared buffers.
+#   train_step <dir> <out_dir> [n_cores] [reps] [grads]
+add_executable(train_step train_step.cpp)
+target_compile_definitions(train_step PRIVATE
+  "TRAIN_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
+gsplat_link_tt_metal(train_step)
