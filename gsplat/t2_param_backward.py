@@ -61,37 +61,39 @@ def segment_reduce(slots: np.ndarray, P: np.ndarray, counts: np.ndarray) -> np.n
     return acc
 
 
-def _cam(w2c, K):
-    R = np.asarray(w2c, f32)[:3, :3]
-    t = np.asarray(w2c, f32)[:3, 3]
-    Kf = np.asarray(K, f32)
+def _cam(w2c, K, ft=f32):
+    R = np.asarray(w2c, ft)[:3, :3]
+    t = np.asarray(w2c, ft)[:3, 3]
+    Kf = np.asarray(K, ft)
     return R, t, Kf[0, 0], Kf[1, 1], Kf[0, 2], Kf[1, 2]
 
 
 def _quat_rot(q):
     """Unit quaternion (w, x, y, z) lanes -> 9 rotation-matrix lanes (row major)."""
     w, x, y, z = q
-    two, one = f32(2), f32(1)
+    ft = q[0].dtype.type
+    two, one = ft(2), ft(1)
     return [one - two * (y * y + z * z), two * (x * y - w * z), two * (x * z + w * y),
             two * (x * y + w * z), one - two * (x * x + z * z), two * (y * z - w * x),
             two * (x * z - w * y), two * (y * z + w * x), one - two * (x * x + y * y)]
 
 
 def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
-                  lowpass: float = 0.3) -> dict:
-    """Per-Gaussian projection forward (fp32 lanes), the values the backward reuses."""
-    R, t, fx, fy, cx, cy = _cam(w2c, K)
-    m = np.asarray(params["means"], f32)
+                  lowpass: float = 0.3, ft=f32) -> dict:
+    """Per-Gaussian projection forward (fp32 lanes; ft=np.float64 for the conditioning
+    check), the values the backward reuses."""
+    R, t, fx, fy, cx, cy = _cam(w2c, K, ft)
+    m = np.asarray(params["means"], ft)
     pc = [R[i, 0] * m[:, 0] + R[i, 1] * m[:, 1] + R[i, 2] * m[:, 2] + t[i] for i in range(3)]
     x, y, z = pc
-    valid = z > f32(near)
-    iz = f32(1) / np.where(valid, z, f32(1))
+    valid = z > ft(near)
+    iz = ft(1) / np.where(valid, z, ft(1))
     mx, my = fx * x * iz + cx, fy * y * iz + cy
-    q = np.asarray(params["quats"], f32)
-    qinv = f32(1) / np.sqrt((q * q).sum(1, dtype=f32))
+    q = np.asarray(params["quats"], ft)
+    qinv = ft(1) / np.sqrt((q * q).sum(1, dtype=ft))
     qn = [q[:, i] * qinv for i in range(4)]
     Rq = _quat_rot(qn)
-    s = np.exp(np.asarray(params["log_scales"], f32))
+    s = np.exp(np.asarray(params["log_scales"], ft))
     M = [Rq[3 * i + j] * s[:, j] for i in range(3) for j in range(3)]       # row major
     C3 = {(i, k): M[3 * i] * M[3 * k] + M[3 * i + 1] * M[3 * k + 1] + M[3 * i + 2] * M[3 * k + 2]
           for i in range(3) for k in range(i, 3)}
@@ -102,44 +104,45 @@ def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
     T1 = [j11 * R[1, k] + j12 * R[2, k] for k in range(3)]
     CT0 = [c3(i, 0) * T0[0] + c3(i, 1) * T0[1] + c3(i, 2) * T0[2] for i in range(3)]
     CT1 = [c3(i, 0) * T1[0] + c3(i, 1) * T1[1] + c3(i, 2) * T1[2] for i in range(3)]
-    a = T0[0] * CT0[0] + T0[1] * CT0[1] + T0[2] * CT0[2] + f32(lowpass)
+    a = T0[0] * CT0[0] + T0[1] * CT0[1] + T0[2] * CT0[2] + ft(lowpass)
     b = T1[0] * CT0[0] + T1[1] * CT0[1] + T1[2] * CT0[2]
-    c = T1[0] * CT1[0] + T1[1] * CT1[1] + T1[2] * CT1[2] + f32(lowpass)
-    idet = f32(1) / (a * c - b * b)
+    c = T1[0] * CT1[0] + T1[1] * CT1[1] + T1[2] * CT1[2] + ft(lowpass)
+    idet = ft(1) / (a * c - b * b)
     A, B, Cc = c * idet, -b * idet, a * idet
-    rx = np.ceil(f32(3) * np.sqrt(np.maximum(a, f32(0))))
-    ry = np.ceil(f32(3) * np.sqrt(np.maximum(c, f32(0))))
+    rx = np.ceil(ft(3) * np.sqrt(np.maximum(a, ft(0))))
+    ry = np.ceil(ft(3) * np.sqrt(np.maximum(c, ft(0))))
     visible = valid & (mx + rx > 0) & (mx - rx < W) & (my + ry > 0) & (my - ry < H)
-    ol = np.asarray(params["opacity_logits"], f32)
-    op = f32(1) / (f32(1) + np.exp(-ol))
-    raw = SH_C0 * np.asarray(params["sh"], f32)[:, 0] + f32(0.5)
+    ol = np.asarray(params["opacity_logits"], ft)
+    op = ft(1) / (ft(1) + np.exp(-ol))
+    raw = SH_C0 * np.asarray(params["sh"], ft)[:, 0] + ft(0.5)
     return dict(R=R, fx=fx, fy=fy, x=x, y=y, z=z, iz=iz, valid=valid, visible=visible,
                 qn=qn, qinv=qinv, Rq=Rq, s=s, M=M, c3=c3, T0=T0, T1=T1, A=A, B=B, C=Cc,
                 op=op, raw=raw, mx=mx, my=my, j00=j00, j02=j02, j11=j11, j12=j12)
 
 
 def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: int,
-                            near: float = 0.2, lowpass: float = 0.3) -> tuple[dict, np.ndarray]:
+                            near: float = 0.2, lowpass: float = 0.3,
+                            ft=f32) -> tuple[dict, np.ndarray]:
     """g2d (N, 9) = (dmx, dmy, dA, dB, dC, dopacity, dr, dg, db) -> optimizer-space grads
     (fp32, same shapes as params; sh bands >= 1 get zero) and the visibility mask."""
-    F = forward_lanes(params, w2c, K, H, W, near, lowpass)
-    g = np.asarray(g2d, f32)
+    F = forward_lanes(params, w2c, K, H, W, near, lowpass, ft)
+    g = np.asarray(g2d, ft)
     gmx, gmy, gA, gB, gC, gop = (g[:, i] for i in range(6))
     A, B, C = F["A"], F["B"], F["C"]
     # conic = inv(cov2d): dSigma = -Q G Q, b appears twice in Sigma.
     ga = -(A * A * gA + A * B * gB + B * B * gC)
     gc = -(B * B * gA + B * C * gB + C * C * gC)
-    gb = -(f32(2) * A * B * gA + (A * C + B * B) * gB + f32(2) * B * C * gC)
+    gb = -(ft(2) * A * B * gA + (A * C + B * B) * gB + ft(2) * B * C * gC)
     T0, T1, c3, R = F["T0"], F["T1"], F["c3"], F["R"]
-    hb = f32(0.5) * gb
+    hb = ft(0.5) * gb
     # dL/dcov3d = T^T Gs T (full symmetric), Gs = [[ga, gb/2], [gb/2, gc]].
     G3 = {(i, k): ga * T0[i] * T0[k] + hb * (T0[i] * T1[k] + T1[i] * T0[k]) + gc * T1[i] * T1[k]
           for i in range(3) for k in range(3)}
     # dL/dT = 2 Gs T C3.
     TC0 = [T0[0] * c3(0, k) + T0[1] * c3(1, k) + T0[2] * c3(2, k) for k in range(3)]
     TC1 = [T1[0] * c3(0, k) + T1[1] * c3(1, k) + T1[2] * c3(2, k) for k in range(3)]
-    dT0 = [f32(2) * (ga * TC0[k] + hb * TC1[k]) for k in range(3)]
-    dT1 = [f32(2) * (hb * TC0[k] + gc * TC1[k]) for k in range(3)]
+    dT0 = [ft(2) * (ga * TC0[k] + hb * TC1[k]) for k in range(3)]
+    dT1 = [ft(2) * (hb * TC0[k] + gc * TC1[k]) for k in range(3)]
     gj00 = dT0[0] * R[0, 0] + dT0[1] * R[0, 1] + dT0[2] * R[0, 2]
     gj02 = dT0[0] * R[2, 0] + dT0[1] * R[2, 1] + dT0[2] * R[2, 2]
     gj11 = dT1[0] * R[1, 0] + dT1[1] * R[1, 1] + dT1[2] * R[1, 2]
@@ -149,20 +152,20 @@ def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: in
     gx = gmx * fx * iz - gj02 * fx * iz2
     gy = gmy * fy * iz - gj12 * fy * iz2
     gz = (-(gmx * fx * x + gmy * fy * y + gj00 * fx + gj11 * fy) * iz2
-          + f32(2) * (gj02 * fx * x + gj12 * fy * y) * iz2 * iz)
+          + ft(2) * (gj02 * fx * x + gj12 * fy * y) * iz2 * iz)
     v = F["valid"]
-    gx, gy, gz = (np.where(v, a, f32(0)) for a in (gx, gy, gz))
+    gx, gy, gz = (np.where(v, a, ft(0)) for a in (gx, gy, gz))
     gmeans = np.stack([R[0, k] * gx + R[1, k] * gy + R[2, k] * gz for k in range(3)], 1)
     # cov3d = M M^T: dM = 2 G3 M; M = Rq diag(s).
     M, s, Rq = F["M"], F["s"], F["Rq"]
-    dM = [f32(2) * (G3[(i, 0)] * M[j] + G3[(i, 1)] * M[3 + j] + G3[(i, 2)] * M[6 + j])
+    dM = [ft(2) * (G3[(i, 0)] * M[j] + G3[(i, 1)] * M[3 + j] + G3[(i, 2)] * M[6 + j])
           for i in range(3) for j in range(3)]
     gls = np.stack([(dM[j] * Rq[j] + dM[3 + j] * Rq[3 + j] + dM[6 + j] * Rq[6 + j]) * s[:, j]
                     for j in range(3)], 1)
     gR = [dM[3 * i + j] * s[:, j] for i in range(3) for j in range(3)]
     w, qx, qy, qz = F["qn"]
     g00, g01, g02, g10, g11, g12, g20, g21, g22 = gR
-    two = f32(2)
+    two = ft(2)
     gqn = [two * (-qz * g01 + qy * g02 + qz * g10 - qx * g12 - qy * g20 + qx * g21),
            two * (qy * g01 + qz * g02 + qy * g10 - two * qx * g11 - w * g12 + qz * g20
                   + w * g21 - two * qx * g22),
@@ -173,17 +176,18 @@ def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: in
     dot = w * gqn[0] + qx * gqn[1] + qy * gqn[2] + qz * gqn[3]
     gq = np.stack([(gqn[i] - F["qn"][i] * dot) * F["qinv"] for i in range(4)], 1)
     op = F["op"]
-    gol = gop * op * (f32(1) - op)
+    gol = gop * op * (ft(1) - op)
     raw = F["raw"]
-    keep = (raw >= f32(0)) & (raw <= f32(1))
-    gsh = np.zeros_like(np.asarray(params["sh"], f32))
-    gsh[:, 0] = np.where(keep, SH_C0 * g[:, 6:9], f32(0))
+    # 3DGS/gsplat training colour: max(SH + 0.5, 0), no upper clamp (decision 2026-10-14, #763).
+    keep = raw >= ft(0)
+    gsh = np.zeros_like(np.asarray(params["sh"], ft))
+    gsh[:, 0] = np.where(keep, SH_C0 * g[:, 6:9], ft(0))
     grads = {"means": gmeans, "log_scales": gls, "quats": gq, "opacity_logits": gol, "sh": gsh}
     # A row with no slots has exactly zero grads (the device writes 0); without this a degenerate
     # cov2d (det 0, idet inf; 4 rows of the #750 hero view) turns 0 * inf into NaN.
     zero = ~(g != 0).any(1)
     if zero.any():
-        grads = {k: np.where(zero.reshape((-1,) + (1,) * (a.ndim - 1)), f32(0), a).astype(f32)
+        grads = {k: np.where(zero.reshape((-1,) + (1,) * (a.ndim - 1)), ft(0), a).astype(ft)
                  for k, a in grads.items()}
     return grads, F["visible"]
 
@@ -225,7 +229,7 @@ def pfwc_inputs(params: dict) -> dict:
     m = np.asarray(params["means"], f32)
     N = m.shape[0]
     c3 = F["c3"]
-    col = np.clip(F["raw"], f32(0), f32(1))
+    col = np.maximum(F["raw"], f32(0))      # training colour: lower clamp only (3DGS/gsplat)
     vals = [m[:, 0], m[:, 1], m[:, 2], c3(0, 0), c3(0, 1), c3(0, 2), c3(1, 1), c3(1, 2),
             c3(2, 2), F["op"], col[:, 0], col[:, 1], col[:, 2]]
     pad = -(-N // ELEMS_PER_TILE) * ELEMS_PER_TILE

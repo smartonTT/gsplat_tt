@@ -46,3 +46,69 @@ def test_synth_meta_and_vis(tmp_path):
     assert np.array_equal(bits, vis)
     mp = np.fromfile(tmp_path / "meta.u32", np.uint32).reshape(-1, 128)
     assert mp[0, 64:].sum() == s["counts"][:64].sum() and mp[1, 0] == s["P"][64]
+
+
+# Two rows of the #750 hero view (bicycle hero camera): row 0 is #953138, a Gaussian just past
+# the near plane (z 0.2015) centred ~195,000 px off screen, whose dL/dconic (~1e8) cancels to
+# grads ~1e-7 of its terms, so fp32 misses fp64 by ~1e5 relative; row 1 (#640834) is benign.
+HERO_W2C = [[0.6356840663395591, 0.1589352827320079, -0.7554107119341765, 0.0027671256602394287],
+            [-0.03804422066319288, 0.9838365806164537, 0.17498062725643193, -1.102439129716195],
+            [0.7710112872559866, -0.08249338484885188, 0.6314558071472983, 3.8377925032777758],
+            [0.0, 0.0, 0.0, 1.0]]
+HERO_K = [[1162.8465213241284, 0.0, 618.5], [0.0, 1157.5291863156094, 410.99999999999994],
+          [0.0, 0.0, 1.0]]
+HERO_ROWS = {
+    "means": [[-23.77781105041504, -21.425249099731445, 20.475194931030273],
+              [-3.6363065242767334, -6.114758014678955, -2.1075148582458496]],
+    "log_scales": [[-2.398000955581665, -3.972705125808716, -4.724484443664551],
+                   [-0.5200343132019043, -2.3588762283325195, -0.6450792551040649]],
+    "quats": [[1.0368211269378662, 0.1601843237876892, -0.3653588891029358, 0.0006356520461849868],
+              [0.8616774082183838, 0.32618674635887146, -0.040493592619895935, -0.16532443463802338]],
+    "opacity_logits": [7.530975818634033, 5.720972537994385],
+    "sh": [[[1.994084358215332, 1.9625657796859741, 2.056088447570801]],
+           [[1.7820647954940796, 1.7748156785964966, 1.7688229084014893]]]}
+HERO_G2D = [[-1.3742380815529032e-06, 3.020265921804821e-06, -144248880.0, -149485200.0,
+             -38727888.0, 0.007512468844652176, 0.0039655668660998344, 0.004284481517970562,
+             0.0037393090315163136],
+            [-5.9459043910692344e-08, 2.780670804725105e-08, -132886.609375, -1109902.625,
+             -2318514.25, 0.0027354091871529818, 0.0009180696797557175, 0.0020090085454285145,
+             0.005766487680375576]]
+
+
+def test_fp32_ill_rows_flags_near_plane_off_screen_row(tmp_path):
+    f = np.float32
+    p = {k: np.asarray(v, f) for k, v in HERO_ROWS.items()}
+    np.savez(tmp_path / "ref_in.npz", w2c=np.asarray(HERO_W2C, f), K=np.asarray(HERO_K, f),
+             H=822, W=1237, **{f"p_{k}": v for k, v in p.items()})
+    g2d = np.asarray(HERO_G2D, f)
+    grads, _ = t2.projection_backward_sh0(p, g2d, np.asarray(HERO_W2C, f), np.asarray(HERO_K, f),
+                                          822, 1237)
+    ref = {"g2d": g2d, "grads": {**grads, "sh": grads["sh"][:, :1, :]}}
+    ill, x = td.fp32_ill_rows(tmp_path, ref, 1e-2)
+    assert ill.tolist() == [True, False]
+    assert x["e32"]["means"][0] > 1e3 and x["e32"]["means"][1] <= 1e-2
+
+
+def test_check_gates_well_rows_and_reports_ill_rows(tmp_path, monkeypatch):
+    # A device that misses the reference only on fp32-ill rows passes (rows reported); one that
+    # misses it on a well-conditioned row fails.
+    td.prep_dump("benchmarks/train_oracle/t0_sh0_64x64_n50.npz", tmp_path / "in")
+    _emulate(tmp_path / "in", tmp_path / "out")
+    meta = json.loads((tmp_path / "in" / "meta.json").read_text())
+    N, ng = meta["n"], meta["n_groups"]
+    gp = tmp_path / "out" / "grads.f32"
+    cols = td.from_pages(np.fromfile(gp, np.float32).reshape(ng, 1024), N, 14)
+    real = td.fp32_ill_rows
+    monkeypatch.setattr(td, "fp32_ill_rows", lambda i, r, b: (
+        (lambda ill, x: (np.arange(N) == 3, x))(*real(i, r, b))))
+    bad = cols.copy()
+    bad[3, 0:3] *= -50.0
+    td.to_pages(bad, ng).astype(np.float32).tofile(gp)
+    rep = td.check(tmp_path / "in", tmp_path / "out")
+    assert rep["pass"] and rep["fp32_ill_rows"] == 1 and rep["ill"]["means"]["dev_vs_f64"] > 1
+    assert rep["grads_all_rows"]["means"] > 1
+    assert (tmp_path / "out" / "t2_rows.npz").exists()
+    bad = cols.copy()
+    bad[4, 0:3] *= -50.0
+    td.to_pages(bad, ng).astype(np.float32).tofile(gp)
+    assert not td.check(tmp_path / "in", tmp_path / "out")["pass"]

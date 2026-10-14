@@ -347,9 +347,8 @@ __attribute__((noinline)) void t2_body() {
         constexpr float SH_C0 = 0.28209479177387814f;
         vFloat raw = SH_C0 * dst_reg[TP + 22 + 2 * c] + 0.5f;
         vFloat g = SH_C0 * dst_reg[TG + 12 + 2 * c];
+        // 3DGS/gsplat training colour max(SH + 0.5, 0): no upper clamp (#763 decision).
         v_if(raw < 0.0f) { g = 0.0f; }
-        v_endif;
-        v_if(raw > 1.0f) { g = 0.0f; }
         v_endif;
         dst_reg[TK + 22 + 2 * c] = g;
     }
@@ -385,8 +384,6 @@ __attribute__((noinline)) void t2_body() {
         constexpr float SH_C0 = 0.28209479177387814f;
         vFloat raw = SH_C0 * dst_reg[TP + 22 + 2 * c] + 0.5f;
         v_if(raw < 0.0f) { raw = 0.0f; }
-        v_endif;
-        v_if(raw > 1.0f) { raw = 1.0f; }
         v_endif;
         dst_reg[TG + 20 + 2 * c] = raw;
     }

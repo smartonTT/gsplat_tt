@@ -14,6 +14,7 @@ rev=${1:?rev}
 TP=${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}
 H=${H:-$(python3 -c "import json;print(json.load(open('$TP/harness/project.json'))['device']['hosts']['p100'])")}
 T=${T:-/localdev/smarton/gstt2-sync}
+[ -n "$H" ] || { echo "=== no p100 host: set H= or device.hosts.p100 in $TP/harness/project.json"; exit 2; }
 D=docs/train-step; O=$D/out
 if [ "${2:-}" != --locked ]; then exec ttp lock p100 -- "$PWD/$D/drive.sh" "$rev" --locked; fi
 case "$H" in bh-30|*bh-30.*) echo "=== refusing the viewer box $H"; exit 2 ;; esac
@@ -52,7 +53,7 @@ if [ $brc = 0 ]; then
       timeout 2400 "${SSH[@]}" "$ENV && cd tmp/t748/hero && mkdir -p out && (timeout ${RUN_TIMEOUT:-600} ../../../render/train/build/train_step in-hero out ${CORES:-110} ${REPS:-5} grads > out/run.log 2>&1; rc=\$?; tail -20 out/run.log; \
         if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > out/reset.log 2>&1; echo \"reset rc=\$?\"; exit \$rc; fi; \
         cd ../../.. && nice -n 19 python3 -m gsplat.train_step_dev check tmp/t748/hero/hero_check.npz tmp/t748/hero/in-hero tmp/t748/hero/out > tmp/t748/hero/out/check.json 2> tmp/t748/hero/check.log; echo \"CHECK hero rc=\$?\"; cat tmp/t748/hero/out/check.json; tail -20 tmp/t748/hero/check.log); \
-        rc=\$?; mkdir -p tmp/t748/out-hero && cp tmp/t748/hero/out/*.json tmp/t748/hero/out/run.log tmp/t748/hero/check.log tmp/t748/out-hero/ 2>/dev/null; rm -rf tmp/t748/hero; exit \$rc"
+        rc=\$?; mkdir -p tmp/t748/out-hero && cp tmp/t748/hero/out/*.json tmp/t748/hero/out/t2_rows.npz tmp/t748/hero/out/run.log tmp/t748/hero/check.log tmp/t748/out-hero/ 2>/dev/null; rm -rf tmp/t748/hero; exit \$rc"
       echo "run hero rc=$?"; continue
     fi
     timeout 900 "${SSH[@]}" "$ENV && rm -rf tmp/t748/in-$n tmp/t748/out-$n && mkdir -p tmp/t748/out-$n \

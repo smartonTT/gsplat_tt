@@ -113,3 +113,31 @@ and 0.086 ms (T1+T2). Not a ms/view number yet.
 4. Sustained NN-ordered multi-view timing (benchmarks/cameras_train_*.json), then the short
    training run with the loss curve.
 5. T2 FPU reduce with an on-device block-float split (#740), replacing the gather reduce.
+
+## #770: colour convention and the hero T2 mismatch
+
+**Colour convention (decision 2026-10-14, review #763).** The trainer follows 3DGS/gsplat:
+training colour = max(SH + 0.5, 0), with no upper clamp. SH colour gradients are masked only
+where raw < 0. This holds in `gsplat/train_oracle.py`, `gsplat/t2_param_backward.py` (grads and
+pfwc colour) and `render/train/kernels/t2g_compute.cpp` / `t2_compute.cpp` (grad mask and pfwc
+epilogue) together. The renderer's display clamp to [0, 1] is unchanged. The sh3 crop dump was
+regenerated (it had 2 colours >= 1); the sh0 dump is bit-identical. `t2sh_compute` (higher SH
+bands) is on the t751/t756 branches, not here, and still needs the same change.
+
+**Root cause of the #750 hero T2 FAIL (means 2454, log_scales 52.6, quats 9.6).** It is not the
+degenerate-cov2d rows: the reference has no non-finite row that has slots, and the 4 degenerate
+rows have no slots and are zeroed on both sides. The misses are about 64-81 of 1.8M rows:
+Gaussians just past the near plane (z 0.20-0.23) whose centres are 4,000-195,000 px off
+screen. For them dL/dconic is ~1e8 against a conic of ~2e-5, and dL/dcov2d = -Q G Q cancels to
+~1e-7 of its terms. fp32 cannot give these grads in any order of operations: the host fp32
+reference itself misses the fp64 evaluation of the same math by 3.6e5 (means), 3.7e6
+(log_scales) and 2e4 (quats). Example row 953138: fp32 dL/dmeans [450, -47, 367], fp64
+[-0.13, 0.014, -0.11]. The same happens in any fp32 trainer (3DGS/gsplat CUDA included). On the
+other rows fp32 vs fp64 is ~1e-3 L2.
+
+**Gate.** `t2_dev.check` now evaluates the reference math in fp64 (`ft=np.float64`) and marks a
+row "fp32-ill" when the fp32 reference misses fp64 by more than grad_bar/10. Grads, Adam, pfwc
+and moments are gated on the other rows. Ill rows are reported against fp64
+(`ill.*.dev_vs_f64`, `ref32_vs_f64`); the gate also needs their count <= max(16, N/10000) and
+the device finite on them. `grads_all_rows` keeps the ungated numbers. `out/t2_rows.npz` holds
+the ill rows plus the 256 worst gated rows (dev, ref32, ref64 grads and g2d) for debugging.

@@ -186,6 +186,39 @@ def reference(indir: Path) -> dict:
                       tuple(r["betas"]), float(r["eps"]))
 
 
+def row_err(a, ref, floor_frac: float = 1e-4) -> np.ndarray:
+    """Per-row max of t2.rel_error's terms (floor from the whole tensor's max)."""
+    a = np.asarray(a, np.float64).reshape(len(a), -1)
+    f = np.asarray(ref, np.float64).reshape(a.shape)
+    scale = np.abs(f).max() if f.size else 0.0
+    if scale == 0.0:
+        return np.abs(a).max(1)
+    return (np.abs(a - f) / np.maximum(np.abs(f), floor_frac * scale)).max(1)
+
+
+def fp32_ill_rows(indir: Path, ref: dict, bar: float) -> tuple[np.ndarray, dict]:
+    """Rows where fp32 cannot give the grads: the fp32 reference itself misses the fp64
+    evaluation of the same math (same g2d) by more than `bar` on any param.
+
+    #770: on the hero view these are ~64 of 1.8M rows, Gaussians just past the near plane
+    (z < 0.23) centred 4,000-195,000 px off screen. Their dL/dconic sums are ~1e8 against a
+    conic of ~1e-5, and dL/dcov2d = -Q G Q cancels to ~1e-7 of its terms, so any fp32 order
+    of operations (device, host, 3DGS/gsplat CUDA) gives a different answer there. The
+    gate compares the device to the fp32 reference on the other rows and reports these."""
+    r = np.load(indir / "ref_in.npz")
+    p64 = {k: np.asarray(r[f"p_{k}"], np.float64) for k in t2.PARAM_NAMES}
+    g64, _ = t2.projection_backward_sh0(p64, np.asarray(ref["g2d"], np.float64),
+                                        np.asarray(r["w2c"], np.float64),
+                                        np.asarray(r["K"], np.float64), int(r["H"]),
+                                        int(r["W"]), ft=np.float64)
+    g64 = {**g64, "sh": g64["sh"][:, :1, :]}
+    e32 = {k: row_err(ref["grads"][k], g64[k]) for k in t2.PARAM_NAMES}
+    ill = np.zeros(len(e32["means"]), bool)
+    for k in t2.PARAM_NAMES:
+        ill |= ~(e32[k] <= bar)
+    return ill, {"g64": g64, "e32": e32}
+
+
 def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     meta = json.loads((indir / "meta.json").read_text())
     N, ng = meta["n"], meta["n_groups"]
@@ -199,26 +232,61 @@ def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     m = from_cols(from_pages(bits_bf16(rd("m_out.u16", np.uint16)), N, STREAMS))
     v = from_cols(from_pages(bits_bf16(rd("v_out.u16", np.uint16)), N, STREAMS))
     rep = {"n": N, "n_slots": meta["n_slots"], "max_count": meta["max_count"]}
+    # Gate on the rows fp32 can resolve; the others (fp32_ill_rows) and everything Adam and
+    # pfwc derive from their grads are reported against the fp64 evaluation.
+    ill, x = fp32_ill_rows(indir, ref, grad_bar / 10)
+    ok = ~ill
+    rep["fp32_ill_rows"] = int(ill.sum())
+    rep["fp32_ill_rows_max"] = max(16, N // 10000)
+    gr = None
     if (outdir / "grads.f32").exists():
         gr = from_cols(from_pages(rd("grads.f32", f32), N, STREAMS))
-        rep["grads"] = {k: t2.rel_error(gr[k], ref["grads"][k]) for k in t2.PARAM_NAMES}
-    rep["adam"] = {f"{w}_{k}": t2.rel_error(a[k], ref[w][k])
+        rep["grads"] = {k: t2.rel_error(gr[k][ok], ref["grads"][k][ok]) for k in t2.PARAM_NAMES}
+        rep["grads_all_rows"] = {k: t2.rel_error(gr[k], ref["grads"][k]) for k in t2.PARAM_NAMES}
+        if ill.any():
+            # Device and fp32 reference against fp64 on the ill rows (per-row error, floor
+            # 1e-4 of the fp64 tensor's max): the device should be no worse than fp32 is.
+            rep["ill"] = {k: {"dev_vs_f64": float(row_err(gr[k], x["g64"][k])[ill].max()),
+                              "ref32_vs_f64": float(x["e32"][k][ill].max())}
+                          for k in t2.PARAM_NAMES}
+            rep["ill_dev_finite"] = bool(all(np.isfinite(gr[k][ill]).all()
+                                             for k in t2.PARAM_NAMES))
+    rep["adam"] = {f"{w}_{k}": t2.rel_error(a[k][ok], ref[w][k][ok])
                    for w, a in (("params", p), ("m", m), ("v", v)) for k in t2.PARAM_NAMES}
     pin = from_cols(param_cols({k: np.load(indir / "ref_in.npz")[f"p_{k}"]
                                 for k in t2.PARAM_NAMES}))
-    rep["adam"].update({f"delta_{k}": t2.rel_error(p[k] - pin[k], ref["params"][k] - pin[k])
+    rep["adam"].update({f"delta_{k}": t2.rel_error((p[k] - pin[k])[ok],
+                                                   (ref["params"][k] - pin[k])[ok])
                         for k in t2.PARAM_NAMES})
     pf = np.fromfile(outdir / "pfwc.f32", f32).reshape(13, ng * G)[:, :N]
-    rep["pfwc"] = {s: t2.rel_error(pf[i], ref["pfwc"][s][:N])
+    rep["pfwc"] = {s: t2.rel_error(pf[i][ok], ref["pfwc"][s][:N][ok])
                    for i, s in enumerate(t2.PFWC_STREAMS)}
-    rep["m_bits_equal"] = bool(all((bf16_bits(m[k]) == bf16_bits(ref["m"][k])).all()
+    rep["m_bits_equal"] = bool(all((bf16_bits(m[k][ok]) == bf16_bits(ref["m"][k][ok])).all()
                                    for k in t2.PARAM_NAMES))
     rep["worst_grad"] = max(rep.get("grads", {"-": 0.0}).values())
     rep["worst_adam"] = max(rep["adam"].values())
     rep["worst_pfwc"] = max(rep["pfwc"].values())
     rep["pass"] = bool(rep["worst_grad"] <= grad_bar and rep["worst_adam"] <= adam_bar
-                       and rep["worst_pfwc"] <= adam_bar)
+                       and rep["worst_pfwc"] <= adam_bar
+                       and rep["fp32_ill_rows"] <= rep["fp32_ill_rows_max"]
+                       and rep.get("ill_dev_finite", True))
+    if gr is not None:
+        _dump_rows(outdir / "t2_rows.npz", gr, ref, x["g64"], ill, ok)
     return rep
+
+
+def _dump_rows(path: Path, gr: dict, ref: dict, g64: dict, ill, ok, n_worst: int = 256):
+    """Small debug dump: the ill rows and the n_worst gated rows by device grad error."""
+    e = np.zeros(len(ill))
+    for k in t2.PARAM_NAMES:
+        e = np.maximum(e, np.where(ok, row_err(gr[k], ref["grads"][k]), 0.0))
+    rows = np.unique(np.concatenate([np.flatnonzero(ill), np.argsort(-e)[:n_worst]]))
+    out = {"rows": rows, "ill": ill[rows], "err": e[rows], "g2d": np.asarray(ref["g2d"])[rows]}
+    for k in t2.PARAM_NAMES:
+        out[f"dev_{k}"] = np.asarray(gr[k])[rows]
+        out[f"ref32_{k}"] = np.asarray(ref["grads"][k])[rows]
+        out[f"ref64_{k}"] = np.asarray(g64[k])[rows]
+    np.savez_compressed(path, **out)
 
 
 def main(argv=None) -> int:
