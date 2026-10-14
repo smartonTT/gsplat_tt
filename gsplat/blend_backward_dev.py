@@ -414,11 +414,19 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
                          "n_live_px": n_live}
 
 
-def ref_slots_fast(d, cfg, dt=f32) -> np.ndarray:
+TIE_RTOL = 4e-6   # ~32 fp32 ulp: a forward decision this close to its threshold may go either way
+
+
+def ref_slots_fast(d, cfg, dt=f32, ties=False):
     """blend_backward_ref.blend_backward's slots (same fp32 expressions, microblock and
     lane sum orders), vectorised across tiles for hero-size dumps (tested against it).
     dt=np.float64 (#728): the same math in float64 on the fp32 inputs (plain power polynomial
-    in absolute pixel coordinates), the exact gradient the fp32 forms approximate."""
+    in absolute pixel coordinates), the exact gradient the fp32 forms approximate.
+    ties=True (#728) also returns a per-slot bool: the pair, or an earlier pair at one of its
+    pixels, made a forward decision (alpha >= alpha_min, clamp at alpha_max, T (1 - alpha) <
+    t_min) within TIE_RTOL of its threshold. Those decisions are discontinuities of the forward:
+    any fp32 evaluation order may take the other side (the hero's one failing slot is a T_min
+    stop 9.7e-8 above t_min), so the slot has two valid values and the check skips it."""
     img, gimg = np.asarray(d["image"], dt), np.asarray(d["dL_dimage"], dt)
     H, W = img.shape[:2]
     m2, con, op, col = (np.asarray(d[k], dt) for k in ("means2d", "conic", "opacity", "colors"))
@@ -432,6 +440,9 @@ def ref_slots_fast(d, cfg, dt=f32) -> np.ndarray:
     T = np.ones((nt, TILE, TILE), dt)
     s_acc = np.zeros((nt, TILE, TILE), dt)
     amax, amin, tmin, one = dt(cfg.alpha_max), dt(cfg.alpha_min), dt(cfg.t_min), dt(1)
+    taint = np.zeros((nt, TILE, TILE), bool)
+    tie = np.zeros(slots.shape[0], bool)
+    near = lambda q, th: np.abs(q / th - one) < TIE_RTOL  # noqa: E731
     for k in range(int(cnt.max()) if nt else 0):
         n = int(np.searchsorted(-cnt, -k, side="left"))
         idx = start[:n] + k
@@ -450,6 +461,10 @@ def ref_slots_fast(d, cfg, dt=f32) -> np.ndarray:
         alpha = np.where(clamp, amax, raw).astype(dt)
         Tk = T[:n]
         live = alive[:n] & (alpha >= amin)
+        if ties:
+            taint[:n] |= alive[:n] & (near(alpha, amin) | near(raw, amax)
+                                      | (live & near(Tk * (one - alpha), tmin)))
+            tie[pl["P"][g] + pl["j"][idx]] = (taint[:n] & (alpha >= amin * (one - TIE_RTOL))).any((1, 2))
         stop = live & (Tk * (one - alpha) < tmin)
         live &= ~stop
         alive[:n] &= ~stop
@@ -475,11 +490,18 @@ def ref_slots_fast(d, cfg, dt=f32) -> np.ndarray:
         slots[pl["P"][g] + pl["j"][idx]] = np.stack(
             [Ac * Su + Bc * Sv, Bc * Su + Cc * Sv, dt(-0.5) * Suu, -Suv, dt(-0.5) * Svv,
              s[:, 0], s[:, 1], s[:, 2], s[:, 3]], 1)
-    return slots
+    return (slots, tie) if ties else slots
 
 
-def compare_slots(dev: np.ndarray, ref: np.ndarray) -> dict:
-    rep = {"rel_err": rel_error(dev.astype(np.float64), ref.astype(np.float64))}
+def compare_slots(dev: np.ndarray, ref: np.ndarray, skip=None) -> dict:
+    """skip: bool per slot (ref_slots_fast ties), left out of rel_err and per_term; the
+    error over all slots is still reported as rel_err_all."""
+    rep = {}
+    if skip is not None and skip.any():
+        rep["rel_err_all"] = rel_error(dev.astype(np.float64), ref.astype(np.float64))
+        rep["tie_slots"] = int(skip.sum())
+        dev, ref = dev[~skip], ref[~skip]
+    rep["rel_err"] = rel_error(dev.astype(np.float64), ref.astype(np.float64))
     names = ["dmx", "dmy", "dA", "dB", "dC", "dop", "dr", "dg", "db"]
     rep["per_term"] = {n: rel_error(dev[:, k].astype(np.float64), ref[:, k].astype(np.float64))
                        for k, n in enumerate(names)}
@@ -514,7 +536,7 @@ def main(argv=None) -> int:
             print(json.dumps({"emulate_vs_ref": compare_slots(emulate(p), ref_slots(d, cfg))}))
         return 0
     dev = np.fromfile(args.slots, f32).reshape(-1, 16)[:, :9]
-    rep = compare_slots(dev, (ref_slots_fast if args.fast else ref_slots)(d, cfg))
+    rep = compare_slots(dev, *ref_slots_fast(d, cfg, ties=True)) if args.fast else compare_slots(dev, ref_slots(d, cfg))
     rep["pass"] = bool(rep["rel_err"] <= args.bar)
     print(json.dumps({"npz": os.path.basename(args.npz), **rep}))
     return 0 if rep["pass"] else 1
