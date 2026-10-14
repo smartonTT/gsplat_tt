@@ -1,0 +1,15 @@
+== off vs on
+MISSING alpha_blend_compute_mb: off=[] on=['17142308563619997176']
+MISSING reader_alpha_blend_mb_devcull: off=[] on=['15630090622801204332']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1
+== on0 vs on
+OK alpha_blend_compute_mb: on0=['13828478194243216661'] on=['17142308563619997176']
+OK reader_alpha_blend_mb_devcull: on0=['2905790431091428284'] on=['15630090622801204332']
+JIT-HASH OK
+rc=0
+== off vs on0
+MISSING alpha_blend_compute_mb: off=[] on0=['13828478194243216661']
+MISSING reader_alpha_blend_mb_devcull: off=[] on0=['2905790431091428284']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1

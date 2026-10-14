@@ -302,11 +302,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     // The ring CB exists only when the knob is on: 64 B header + 64 slots of 64 B
     // (DA_SLOTS / DA_SLOT_BYTES in alpha_blend_compute_mb.cpp).
     const char* blend_da_env = std::getenv("GSPLAT_TT_BLEND_DECODE_AHEAD");
+    // Task #724: train mode decodes ahead too, with fp32 op/colour words in 128 B
+    // slots (64 B header + 64 slots = 1 + 128 pages of 64 B).
     const std::string blend_da =
         (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
     if (blend_da != "0") {
         constexpr uint32_t CB_DA_RING = 10;
-        cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
+        cb_cfg(CB_DA_RING, 64, 1u + 64u * (gsplat_tt::blend_train::da_slot_bytes() / 64u), DataFormat::UInt32);
     }
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
@@ -332,6 +334,21 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     }
     if (gsplat_tt::blend_train::enabled()) {
         writer_defines["BLEND_TRAIN"] = "1";
+        reader_defines["BLEND_TRAIN"] = "1";  // task #717: fp32 op/colour gather
+        // Task #727: gather knobs (reads per barrier, skip mask-0 records) and
+        // diagnostics (GSPLAT_TT_T727_DIAG 1/2: output wrong, timing attribution only).
+        const char* opc_batch = std::getenv("GSPLAT_TT_TRAIN_OPC_BATCH");
+        if (opc_batch != nullptr && opc_batch[0] != '\0') {
+            reader_defines["TRAIN_OPC_BATCH"] = std::to_string(std::strtoul(opc_batch, nullptr, 10)) + "u";
+        }
+        const char* opc_skip = std::getenv("GSPLAT_TT_TRAIN_OPC_SKIPDEAD");
+        if (opc_skip != nullptr && opc_skip[0] == '1') {
+            reader_defines["TRAIN_OPC_SKIP_DEAD"] = "1";
+        }
+        const char* t727_diag = std::getenv("GSPLAT_TT_T727_DIAG");
+        if (t727_diag != nullptr && (t727_diag[0] == '1' || t727_diag[0] == '2')) {
+            reader_defines["T727_DIAG"] = std::string(1, t727_diag[0]);
+        }
     }
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";
@@ -474,6 +491,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             compute_defines["BLEND_TRAIN"] = "1";
             compute_defines["BLEND_SCHED"] = "0";
             compute_defines["BLEND_T_PERIOD"] = "0u";
+            // Task #717: fp32 op/colour from the reader's side CB, not UNORM16.
+            compute_defines["BLEND_SFPU_UNORM"] = "0";
         }
     }
     if (fused) {
@@ -903,6 +922,15 @@ static double process_frame_mb_devcull_resident(
     const uint32_t num_cores = static_cast<uint32_t>(ctx.all_cores.num_cores());
     const CoreCoord ctr_core =
         ctx.mesh_device->worker_core_from_logical_core(ctx.all_cores.ranges()[0].start_coord);
+    uint32_t train_opc_addr = 0u;
+    if (gsplat_tt::blend_train::enabled()) {
+        auto buf_opc = ds::get_buffer("scene_train_opc");
+        if (!buf_opc || fz) {
+            throw std::runtime_error(
+                "[gsplat_tt::blend] GSPLAT_TT_BLEND_TRAIN: no scene_train_opc buffer (task #717)");
+        }
+        train_opc_addr = static_cast<uint32_t>(buf_opc->address());
+    }
     const auto t_rt0 = std::chrono::steady_clock::now();
     {
         GSPLAT_HOST_ZONE("host_blend_setup");
@@ -940,6 +968,11 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(static_cast<uint32_t>(ctr_core.x));  // arg 25
                     reader_args.push_back(static_cast<uint32_t>(ctr_core.y));  // arg 26
                     reader_args.push_back(fz ? ctx.fz_claim_sem : ctx.claim_sem);  // arg 27
+                    if (train_opc_addr != 0u) {
+                        // Task #717: fp32 op/colour per scene index (arg 28, not fused).
+                        reader_args.resize(gsplat_tt::blend_train::kOpcReaderArg, 0u);
+                        reader_args.push_back(train_opc_addr);
+                    }
                     if (fz) {
                         // Mat args first, blend args from the kDmRtaBase /
                         // kCpRtaBase offsets, ready flags at reader args 28/29.

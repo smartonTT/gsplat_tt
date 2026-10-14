@@ -1,0 +1,12 @@
+## off vs on (spec gate)
+MISSING alpha_blend_compute_mb: off=[] on=['13828478194243216661']
+MISSING writer_alpha_blend: off=[] on=['13730502888695618250']
+MISSING reader_alpha_blend_mb_devcull: off=[] on=['2905790431091428284']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1
+## t708 on (12.923) vs t717 on: edited kernels must differ
+OK alpha_blend_compute_mb: t708on=['1915234001442905807'] t717on=['13828478194243216661']
+OK reader_alpha_blend_mb_devcull: t708on=['592305319428053193'] t717on=['2905790431091428284']
+OK writer_alpha_blend: t708on=['1745087671397032483'] t717on=['13730502888695618250']
+JIT-HASH OK
+rc=0

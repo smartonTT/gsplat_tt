@@ -14,6 +14,7 @@
 //     gather and no CPU-reference verify (those were removed for render_clean).
 
 #include "gather_visible.h"
+#include "blend_train.h"
 #include "device_state.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
@@ -218,6 +219,7 @@ struct GatherDeviceContext {
     // the scene has a NaN opacity / color (the device packs those).
     std::shared_ptr<distributed::MeshBuffer> buf_pub01;
     std::shared_ptr<distributed::MeshBuffer> buf_pub23;
+    std::shared_ptr<distributed::MeshBuffer> buf_train_opc;  // task #717: fp32 op,r,g,b (train)
     bool pub_ok = false;
     std::size_t scene_cached_bytes = 0;
     // Keyed by pointer, N and scene version (#671).
@@ -476,6 +478,7 @@ static void ensure_scene_uploaded(
         device_state::register_buffer("scene_opacities", ctx->buf_op);
         ctx->buf_pub01.reset();
         ctx->buf_pub23.reset();
+        ctx->buf_train_opc.reset();
     }
     const bool want_pub = gsplat_tt::env_config::emit_puboc() && gsplat_tt::puboc_pre_mode() == 1;
     if (want_pub && !ctx->buf_pub01) {
@@ -485,6 +488,21 @@ static void ensure_scene_uploaded(
         ctx->pub_ok = false;
         device_state::register_buffer("scene_puboc01", nullptr);
         device_state::register_buffer("scene_puboc23", nullptr);
+    }
+    // Task #717: train mode keeps op/colour in fp32 (side buffer, read by the blend).
+    const bool train = gsplat_tt::blend_train::enabled();
+    if (train && !want_pub) {
+        throw std::runtime_error(
+            "[gsplat_tt::gather] GSPLAT_TT_BLEND_TRAIN needs the per-scene op/colour packs "
+            "(EMIT_PUBOC=1, PUBOC_PRE=1)");
+    }
+    if (train && !ctx->buf_train_opc) {
+        ctx->buf_train_opc = make_dram(
+            ctx->mesh_device.get(),
+            static_cast<std::size_t>(padded_n) * gsplat_tt::blend_train::kOpcBytes,
+            gsplat_tt::blend_train::kOpcPageBytes);
+        ctx->uploaded_colors.invalidate();
+        device_state::register_buffer("scene_train_opc", nullptr);
     }
     const uint64_t sv = scene_version::current();
     const bool hit = ctx->uploaded_colors.hit(colors, N, sv) &&
@@ -498,14 +516,15 @@ static void ensure_scene_uploaded(
     // The packs are the device's to_unorm16 (same integer code, bit-exact);
     // its NaN fallback is soft-float, so a NaN leaves the packing to the device.
     std::vector<uint32_t> p01(want_pub ? padded_n : 0, 0u), p23(want_pub ? padded_n : 0, 0u);
+    std::vector<float> opc(train ? static_cast<std::size_t>(padded_n) * 4u : 0u, 0.0f);
     {
         auto& pool = soa_pool();
         const std::size_t W = pool.size();
         const std::size_t chunk = (N + W - 1) / W;
         std::vector<uint8_t> nan_seen(W, 0);
         for (std::size_t w = 0; w < W; ++w) {
-            pool.submit([w, chunk, N, colors, opacities, want_pub, &cr, &cg, &cbv, &op, &p01,
-                         &p23, &nan_seen]() {
+            pool.submit([w, chunk, N, colors, opacities, want_pub, train, &cr, &cg, &cbv, &op,
+                         &p01, &p23, &opc, &nan_seen]() {
                 const std::size_t lo = std::min(w * chunk, N);
                 const std::size_t hi = std::min(lo + chunk, N);
                 for (std::size_t i = lo; i < hi; ++i) {
@@ -520,6 +539,19 @@ static void ensure_scene_uploaded(
                     std::memcpy(&b, &v, 4);
                     if (!sort_bin_fp32::unorm16(b, out)) nan_seen[w] = 1;
                 };
+                if (train) {
+                    for (std::size_t i = lo; i < hi; ++i) {
+                        uint32_t uo;
+                        u16(op[i], &uo);
+                        p01[i] = gsplat_tt::blend_train::cull_op16_from_nearest(uo);
+                        p23[i] = static_cast<uint32_t>(i);
+                        opc[i * 4 + 0] = op[i];
+                        opc[i * 4 + 1] = cr[i];
+                        opc[i * 4 + 2] = cg[i];
+                        opc[i * 4 + 3] = cbv[i];
+                    }
+                    return;
+                }
                 for (std::size_t i = lo; i < hi; ++i) {
                     uint32_t uo, ur, ug, ub;
                     u16(op[i], &uo);
@@ -541,12 +573,19 @@ static void ensure_scene_uploaded(
     if (ctx->pub_ok) {
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub01, p01, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub23, p23, false);
+    } else if (train) {
+        throw std::runtime_error(
+            "[gsplat_tt::gather] GSPLAT_TT_BLEND_TRAIN: scene has a NaN opacity");
     } else if (want_pub) {
         std::cerr << "[gsplat_tt::gather] scene has a NaN opacity / color: UNORM16 packs stay "
                      "on the device\n";
     }
     device_state::register_buffer("scene_puboc01", ctx->pub_ok ? ctx->buf_pub01 : nullptr);
     device_state::register_buffer("scene_puboc23", ctx->pub_ok ? ctx->buf_pub23 : nullptr);
+    if (train) {
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_train_opc, opc, false);
+        device_state::register_buffer("scene_train_opc", ctx->buf_train_opc);
+    }
     distributed::Finish(*ctx->cq);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (upload_ms) *upload_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

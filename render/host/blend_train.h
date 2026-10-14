@@ -37,4 +37,25 @@ constexpr uint32_t kCb = 17;                          // CB_TRAIN_OUT (fp32, 4 t
 constexpr uint32_t kTileBytes = 32u * 32u * 4u;
 constexpr uint32_t kPageBytes = 4u * kTileBytes;      // R, G, B, T
 
+// Task #717: lossless op/colour in train mode. The per-scene packs (#122) then
+// carry no UNORM16 colour: p01 = the cull's opacity code only (rounded UP, so
+// the microblock cull never drops what the fp32 opacity would keep), p23 = the
+// scene index. The blend reader follows rec[7] (scene index) to the fp32
+// [op, r, g, b] entry of the "scene_train_opc" buffer (16 B per gaussian, 64 B
+// DRAM pages) and hands those words to the compute bit for bit.
+constexpr uint32_t kOpcBytes = 16u;                   // fp32 op, r, g, b
+constexpr uint32_t kOpcPageBytes = 64u;               // 4 entries per DRAM page
+constexpr uint32_t kOpcReaderArg = 28u;               // reader runtime arg index
+
+// Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
+// DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
+// and marker kind in the last two words. Flag off keeps 64 B slots.
+inline uint32_t da_slot_bytes() { return enabled() ? 128u : 64u; }
+
+// Smallest UNORM16 code whose decode is >= v (v not NaN): the round-to-nearest
+// code (nearest) or the next one, saturating at 65535 (decode 1.0).
+inline uint32_t cull_op16_from_nearest(uint32_t nearest) {
+    return nearest >= 65535u ? 65535u : nearest + 1u;
+}
+
 }  // namespace gsplat_tt::blend_train

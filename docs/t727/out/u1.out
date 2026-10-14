@@ -1,0 +1,22 @@
+================ BUILD ID ================
+  cpp : #124 sha=5df7e221 bin=c9932cf0f5e462f5 t727 5df7e221 train opc gather profile + A/B (bh-49)
+  data: # sha=
+=========================================
+host=bh-49  tag=t727-u1  timeout=300s  worry=600s  ts=2026-10-14T03:49:59-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t727-remote.sh 6 dump dumpsdb
+-----------------------------------------
+=== r6-dump 5df7e221 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t727/train-v0-on.bin --dump-views t727-dump --view-range 0:1 10:50:02 load=1.14
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t727-on
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=30.9 p50_ms=30.9 min_ms=30.9 max_ms=30.9 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t727-r6-dump
+TTW_TIMING ms_view=30.909
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 10:50 /localdev/smarton/gstt2-sync/tmp/t727/train-v0-on.bin
+=== r6-dumpsdb 5df7e221 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_OPC_BATCH=2048 GSPLAT_TT_TRAIN_OPC_SKIPDEAD=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t727/train-v0-sdb.bin --dump-views t727-dumpsdb --view-range 0:1 10:50:06 load=1.14
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t727-sdb
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=30.2 p50_ms=30.2 min_ms=30.2 max_ms=30.2 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t727-r6-dumpsdb
+TTW_TIMING ms_view=30.180
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 10:50 /localdev/smarton/gstt2-sync/tmp/t727/train-v0-on.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 10:50 /localdev/smarton/gstt2-sync/tmp/t727/train-v0-sdb.bin
+=== done 6 10:50:09
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t727/tmp/ttw-state/logs/t727-u1-20261014-034959.log
