@@ -1,0 +1,7 @@
+[sync_remote] 3702fbb5e02beb142cd0edb39e87705ce4520c70 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t676: 1031 files, 63377745 bytes listed
+[sync_remote] synced bh-33:/localdev/smarton/gstt2-sync: sent 1032 of 1031 files, 63377925 bytes
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=3702fbb5e02beb142cd0edb39e87705ce4520c70 so_md5=6884b42ce3cc20500567cc9d58236984 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
