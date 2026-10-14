@@ -112,3 +112,74 @@ bypass; no scanning; push only to a new ttp/* branch; no PRs, no force pushes.
 
 SIZING model for B1: 1M s4 1.43; 3M s4 2.40; s2 1M/3M/6.13M 1.85/2.90/3.53 (modelled,
 not measured).
+
+## 7. B1 full (#738): corrected emit/sort design
+
+Status 2026-10-14 05:20 PDT (#738, branch ttp/t738-b1-full-per-sub-tile-emit-and-sort-to-fi,
+on top of #722's B1' at 8a9def98): routing header and unit test done
+(`render/kernels/dataflow/subtile_route.h`, `tests/unit/test_subtile_route.cpp`, PASS; a
+mutation that shrinks thr by 0.3 or makes ln_upper a lower bound fails it). No device code
+changed yet: no gate is met (3M s4 / 1.5M s4 / 6.13M s2 still overflow).
+
+### 7.1 Finding: the emit cannot go in pfwc_fuse.h
+§4 puts "emit (gid, sub_id) for every sub whose mask meets the record's microblock box" in
+the K2 (pfwc_fuse.h l.179, ~l.398). That does not fit the K2:
+- the pair index space is fixed before the K2 by the tile-box areas: pair p belongs to the
+  gaussian whose lofs prefix covers p, and p - lofs walks its tile box row by row. One
+  pair per (gaussian, tile); a gaussian cannot emit a variable number of extra pairs
+  without K1 counting them into lofs first;
+- the K2 sees only the packed tile box (vis_tile.h aabb), no conic, opacity or mean, so it
+  cannot compute a microblock box.
+
+The sort bin movers (sort_bin_onelaunch.cpp) can: process_batch already loads each
+gaussian's conic, mean and opacity (pack_invariants, ~l.650) next to its tile id. So the
+fan-out goes there: one pair in, one record per routed sub-tile out.
+
+### 7.2 Routing rule (done)
+`subtile_route::box_mask(A, B, C, mx, my, q16, 1/floor)` gives a microblock mask that
+contains every microblock the device cull can keep (thr = 2 ln(op/floor) + 0.05, upper
+bound of ln from the fp32 bits, squares only, no sqrt/log; degenerate records take the
+full mask). A record goes to sub k of a split tile iff `mask_of(k) & box != 0`
+(`subtile_route::targets`). The test checks it against the exact boxmin cull on 20k random
+records (box is 2.2x the kept microblocks on that sample) and that every microblock gets
+the same cull-kept records in parent order from its sub list. mx, my are relative to the
+PARENT tile origin, as pack_rec writes them.
+
+### 7.3 Sub-tile shapes: use B1' unit codes, not 8x8
+#722's blend already handles units (parent, code), code = quarter 1..4 (16x16) or band
+5..20 (16x4) (`subtile_unit.h`), with the mask, live-mask and sub-region writer done. So
+the host plan should split a heavy tile into 4 quarters or 16 bands with
+`subtile_unit::split_code(n, k)`, not subtile_split.h's 8x8 eighths; then sub id
+first_id + k is unit (parent, split_code(n, k)) and B1b needs no new writer.
+
+### 7.4 Remaining steps (each is its own run)
+1. **Sort bin (B1 route mode, compile define SORT_B1_ROUTE)**: force the plain path (fold
+   off: the K2's per-tile rows cannot hold sub counts; ring_on off; TRISC writers `town`
+   off). Plan table in L1 (one DRAM page read at start): per tile `first_id | n << 16`
+   (0 = unsplit), per sub id its unit mask. Count step (l.370-405): for a kept pair whose
+   tile is split, read its blendrec (brec_now, cached per gid; pairs are gid-major) and do
+   `hp[id]++` per target; others `hp[t]++`. Rows and totals over num_ids
+   (row_pages = round16(num_ids) / 16). Emit (process_batch, non-ring branch ~l.858): per
+   target `c = curp[id]++`, `slot = id * tile_cap + c`, `pack_rec(..., parent)` (pack_rec
+   already takes the tile whose origin it subtracts). q16 = `inv_opr & 0xFFFF`.
+2. **Host (sort_device.cpp)**: bucket buffer num_ids * tile_cap * 32 B (l.2189, l.3568),
+   row stride, num_tiles arg -> num_ids for the sort, materialize and tile_ranges; plan
+   upload; `GSPLAT_TT_B1_ROUTE=1` env switch (default off keeps today's path bit for bit).
+3. **Materialize / cull** (sort_subchunk_materialize.cpp, mat_cull_compute.cpp): iterate
+   num_ids buckets; AND word3 with the unit mask (or leave it to the blend's unit mask, as
+   B1' does).
+4. **Blend reader** (reader_alpha_blend_mb_devcull.cpp l.247-415): in route mode, claim
+   over num_ids, take (parent, code) from the uploaded id table instead of the on-device
+   heavy detection; ids < num_tiles are code 0.
+5. **Plan source (render.cpp ~l.537 retry loop)**: view N uses view N-1's per-id totals
+   (a split parent's total = sum of its subs); on overflow, re-plan with the view's own
+   totals and re-run (before growing the floor). First view: plan from its own totals
+   after one overflow, as overflow_retry does today.
+6. Gates as in the #738 spec: s4 3M, s4 1.5M, s2 6.13M run; md5 at BLEND_T_PERIOD=0 equal
+   to B1=0 at s4 1M, s2 3M, s1; b2b via t722/drive.sh; ab_jit_check on both arms; s1
+   hero + diff + visual check.
+
+Cost note: the count step's blendrec reads for split-tile pairs are new DRAM traffic
+(one 64 B page per gaussian run, the same reads the emit already makes). If they show up
+in the sort time, keep the route mask per pair in a scratch plane from the count to the
+emit.
