@@ -455,7 +455,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         // Task #646: EXP1 bodies with the 4 pad NOPs filled by their own loads
         // (bit-identical reorder; 0 = the iter-227 order, for A/B).
         compute_defines["BLEND_SWAP_FILL"] = env_or("GSPLAT_TT_BLEND_SWAP_FILL", "1");
-        compute_defines["BLEND_DWALK"] = env_or("GSPLAT_TT_BLEND_DWALK", "0");  // #664
+        compute_defines["BLEND_DWALK"] = env_or("GSPLAT_TT_BLEND_DWALK", "1");  // #664, default on since iter 230
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
     }
     if (fused) {

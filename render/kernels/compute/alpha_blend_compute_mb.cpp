@@ -998,7 +998,7 @@ template <uint32_t IX>
 // fill_tile zero fill at tile start) records its own ops into slots 0-3.
 inline void blend_sched_record() {
 #if BLEND_DWALK
-    blend_dwalk_addrmods();  // per tile: tile init (copy_tile) sets ADDR_MOD 0/2/3
+    blend_dwalk_addrmods();  // per subchunk: tile init (copy_tile) sets ADDR_MOD 0/2/3
     lltt::record<lltt::NoExec>(0, 13);
     bs_front();
     lltt::record<lltt::NoExec>(13, 18);
