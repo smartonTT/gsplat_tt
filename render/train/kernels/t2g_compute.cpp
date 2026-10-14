@@ -7,6 +7,10 @@
 // Per group: Dst tile 0 params, 1 m, 2 v, 3 g2d (then pfwc out), 4 rank plane (then grads),
 // 5-7 scratch. The body uses even vectors only; it runs once, dst_reg++, once more (lanes 32-63).
 // Runtime args: group count, then NCONST fp32 constants (bits, t2_dev.consts order).
+// T2_SH (#751, sh_degree > 0): after the reduce, tile 4 holds the t2sh pre pass aux page
+// (t2_dev.py: d raw_c / d mean_k, keep, dir); dL/dmeans gains the view-direction term
+// sum_c dcolor_c J_c, dL/dsh0 uses the full-colour clamp mask, grads stream 14 = visible flag
+// (the t2sh post pass gates its sparse Adam on it). The pfwc colour stays band 0.
 #include <cstdint>
 
 #include "api/compute/common.h"
@@ -20,7 +24,7 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 
 namespace {
-constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4;
+constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_AUX = 7;
 constexpr uint32_t CB_PO = 16, CB_MO = 17, CB_VO = 18, CB_FO = 19, CB_GO = 20;
 constexpr uint32_t NCONST = 31;
 }  // namespace
@@ -280,7 +284,15 @@ __attribute__((noinline)) void t2_body() {
     }
 #pragma GCC unroll 3
     for (uint32_t k = 0; k < 3; k++) {
+#ifdef T2_SH
+        // aux stream 3 c + k is read before stream k is overwritten (k ascending).
+        vFloat dir = dst_reg[TG + 12] * dst_reg[TK + 2 * k];
+        dir = dir + dst_reg[TG + 14] * dst_reg[TK + 6 + 2 * k];
+        dir = dir + dst_reg[TG + 16] * dst_reg[TK + 12 + 2 * k];
+        dst_reg[TK + 2 * k] = K(CR0 + k) * dst_reg[S(A_)] + K(CR0 + 3 + k) * dst_reg[S(B_)] + K(CR0 + 6 + k) * dst_reg[S(C_)] + dir;
+#else
         dst_reg[TK + 2 * k] = K(CR0 + k) * dst_reg[S(A_)] + K(CR0 + 3 + k) * dst_reg[S(B_)] + K(CR0 + 6 + k) * dst_reg[S(C_)];
+#endif
     }
     // G3 (6 unique) into X Y IZ J00 J02 J11 (free now): G3[i,k] = ga T0i T0k + hb (T0i T1k + T1i T0k) + gc T1i T1k
     constexpr uint32_t G3S[6] = {S(X), S(Y), S(IZ), S(J00), S(J02), S(J11)};
@@ -339,15 +351,25 @@ __attribute__((noinline)) void t2_body() {
 #pragma GCC unroll 3
     for (uint32_t c = 0; c < 3; c++) {
         constexpr float SH_C0 = 0.28209479177387814f;
-        vFloat raw = SH_C0 * dst_reg[TP + 22 + 2 * c] + 0.5f;
         vFloat g = SH_C0 * dst_reg[TG + 12 + 2 * c];
+#ifdef T2_SH
+        // full-colour clamp mask from the pre pass (aux stream 11 + c, in place)
+        v_if(dst_reg[TK + 22 + 2 * c] < 0.5f) { g = 0.0f; }
+        v_endif;
+#else
+        vFloat raw = SH_C0 * dst_reg[TP + 22 + 2 * c] + 0.5f;
         v_if(raw < 0.0f) { g = 0.0f; }
         v_endif;
         v_if(raw > 1.0f) { g = 0.0f; }
         v_endif;
+#endif
         dst_reg[TK + 22 + 2 * c] = g;
     }
+#ifdef T2_SH
+    dst_reg[TK + 28] = vFloat(dst_reg[S(VIS)]);
+#else
     dst_reg[TK + 28] = 0.0f;
+#endif
     dst_reg[TK + 30] = 0.0f;
     // ---- sparse Adam over the 14 param streams (visible lanes only)
     constexpr uint32_t grp[14] = {0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4};
@@ -433,6 +455,12 @@ void kernel_main() {
             MATH((t2_add_plane()));
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
         }
+#ifdef T2_SH
+        copy_tile_to_dst_init_short_with_dt(CB_K, CB_AUX);
+        cb_wait_front(CB_AUX, 1);
+        copy_tile(CB_AUX, 0, 4);
+        cb_pop_front(CB_AUX, 1);
+#endif
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((t2_body()));
         MATH((sfpi::dst_reg++));
