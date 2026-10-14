@@ -439,13 +439,19 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
         for (int i = 0; i < (bwd ? 1 : 2); i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_w);
         std::map<std::string, std::string> rdefs;
         if (bwd) rdefs["SSIM_BWD"] = "1";
+        std::map<std::string, std::string> wdefs;
+        if (const char* a = std::getenv("LOSS_SSIM_DMABL"); a && a[0] && std::string(a) != "0") {
+            rdefs["SSIM_DMABL"] = wdefs["SSIM_DMABL"] = a;  // #743 timing ablation only
+            if (!bwd) std::fprintf(stderr, "[LOSS] SSIM_DMABL=%s (timing ablation, results invalid)\n", a);
+        }
         auto kr = CreateKernel(prog, kd + "reader_ssim.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
                                                   .noc = NOC::RISCV_1_default, .compile_args = ct_r,
                                                   .defines = rdefs});
         auto kw = CreateKernel(prog, kd + (bwd ? "writer_filt.cpp" : "writer_ssim_fwd.cpp"), cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
-                                                  .noc = NOC::RISCV_0_default, .compile_args = ct_w});
+                                                  .noc = NOC::RISCV_0_default, .compile_args = ct_w,
+                                                  .defines = wdefs});
         auto kcmp = CreateKernel(prog, kd + (bwd ? "ssim_bwd_compute.cpp" : "ssim_fwd_compute.cpp"), cores,
                                  ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                                .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,

@@ -10,6 +10,11 @@
 #include <cstdint>
 #include "api/dataflow/dataflow_api.h"
 
+// #743 timing ablation: SSIM_DMABL bit 0 skips the DRAM reads (CB pages hold stale data).
+#if defined(SSIM_DMABL) && (SSIM_DMABL & 1)
+#define noc_async_read_tile(...) ((void)0)
+#endif
+
 template <typename A>
 inline void read3(const A& acc, uint32_t plane, uint32_t i, uint32_t j, uint32_t nh, uint32_t nw, uint32_t w,
                   uint32_t tb) {

@@ -24,7 +24,9 @@ void kernel_main() {
         const uint32_t sx = t / nh, i = t % nh, ch = sx / nw, j = sx % nw;
         cb_wait_front(CB_D, 3);
         const uint32_t r = get_read_ptr(CB_D);
+#if !(defined(SSIM_DMABL) && (SSIM_DMABL & 2))  // #743 timing ablation: skip the writes
         for (uint32_t m = 0; m < 3; m++) noc_async_write_tile(((m * 3 + ch) * nh + i) * nw + j, D, r + m * tb);
+#endif
         noc_async_writes_flushed();
         cb_pop_front(CB_D, 3);
     }
