@@ -176,3 +176,61 @@ Exact paths for the next task (sized only, none measured):
 3. Better conditioning as a complement: filter (x - c_T) with a per-tile constant c_T and add
    c_T back (G * c is known), which cuts the mu^2 / C2 amplification; still needs a filter far
    better than 1e-5 on real images.
+
+## t720: SFPU fp32 FMA separable filter (`LOSS_MODE=sfilt`)
+
+Kernel: `render/bench/kernels/loss/sfilt_compute.cpp` (11-tap H pass then V pass, fp32 FMA on the
+SFPU, zero padding, taps hoisted into LRegs: `SF_CMODE=1`), driven by `loss_bench.cpp`. Check:
+`opt/t720/sfilt_check.py` (device output vs fp64 filter, vs its bit model, and D-SSIM loss and
+dL/dimage vs the T0 oracle). Driver `docs/t720/drive.sh`; run log
+`docs/t720/run-23e60ae1-bh-49.log` (commit 23e60ae1, p150 bh-49, 2026-10-14 03:56 PDT).
+No per-tile conditioning was needed: the plain fp32 filter already sits at fp32 rounding.
+
+Filter error (device output, measured):
+
+| case | planes | l2rel vs fp64 | maxrel | bias | bit-match vs fused FMA model |
+|---|---|---|---|---|---|
+| dump64 (T0 dump, 64x64) | 24 | 3.90e-8 | 1.63e-7 | +6e-12 | 97.7% |
+| syncrop (256x384) | 24 | 3.76e-8 | 1.80e-7 | -3e-11 | 97.3% |
+| syn1 (1237x822) | 3 | 3.70e-8 | 1.80e-7 | -3e-11 | 99.2% |
+
+The FPU split3 filter was 2.9e-4 on the same dump64 planes, so this is about 7000x lower and
+unbiased. The device and the bit model have the same error against fp64 (3.9e-8 each); the
+remaining bit mismatches are last-bit FMA rounding differences (large ulp counts only near zero).
+
+T0 oracle (D-SSIM loss and dL/dimage with the filter's bit model, pass: grad l2rel <= 1e-4,
+|loss err| < 1e-5): **PASS** on all 4 cases.
+
+| case | loss err | dL/dimage l2rel | exact fp32 filter, same algorithm |
+|---|---|---|---|
+| dump64 | +9.7e-10 | 2.2e-7 | 1.8e-7 |
+| syncrop | -4.8e-8 | 8.1e-6 | 5.6e-6 |
+| bike_top (render vs _DSC8679) | +1.9e-8 | 1.2e-5 | 7.0e-6 |
+| bike_mid | -5.0e-9 | 2.2e-6 | 1.4e-6 |
+
+The FPU split3 filter failed the same oracle by orders of magnitude (t714).
+
+Timing (p150 bh-49, 1248x832 padded = 1237x822, 110 cores, b2b over 4 rounds, iters=50 each):
+
+| arm | planes | b2b ms/view (4 rounds) |
+|---|---|---|
+| FPU split3 filt (x, 3 ch) | 3 | 0.2089, 0.2089, 0.2090, 0.2091 |
+| SFPU sfilt (x, 3 ch) | 3 | 0.1831, 0.1829, 0.1821, 0.1819 |
+| SFPU sfilt, 5 forward maps | 15 | 0.8003, 0.7997, 0.7997, 0.7998 |
+| SFPU sfilt, per training step (x, x^2, xy + 3 backward maps; target maps cached) | 18 | 0.9533, 0.9532, 0.9542, 0.9531 |
+
+Same-workload comparison: SFPU 0.182 vs FPU 0.209 ms/view per 3-plane map. The 0.027 ms gap is
+under the spec's 0.1 ms noise line, so call them equal in speed; the SFPU one is exact. Cost is
+linear in planes (about 0.053 ms per 1237x822 plane).
+A/B: `opt/ab_jit_check.py` on both arms exits 1 as expected: each arm's compute kernel
+(filt_compute / sfilt_compute) exists only in its own arm, and the JIT hashes differ.
+
+Fit: a full training step's filtering is 0.95 ms/view, about half of the 2 ms upper target and
+almost all of the 1 ms lower one. It is exact, but too slow to leave as is. At ~22 FMAs per pixel
+per plane it runs about 0.43 TFMA/s on 110 cores, well under the SFPU's peak, so the kernel is
+bound by Dst load/store and tile movement, not FMAs.
+
+Next: (1) fused L1 + 0.2*(1-SSIM) forward+backward kernel built on this filter (the products,
+SSIM map and backward maps formed in the same pass, so the 18 planes never go to DRAM);
+(2) cut the per-plane cost (keep the H-pass result in Dst/LRegs for the V pass, fewer Dst
+round trips per tap, reuse loaded rows across the 6 maps of one channel).
