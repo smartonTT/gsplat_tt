@@ -38,8 +38,11 @@ def prep(dump: str, out: Path) -> dict:
     t1.write(p, str(out / "t1"))
     # T2's slot numbering and reference slots are T1's (3-sigma tile rectangles), not the
     # oracle's frozen-live rectangles: the device T2 reads exactly what the device T1 wrote.
-    bw = t1.blend_backward(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"],
-                           d["valid"], d["image"], d["dL_dimage"], cfg)
+    # #750: reference slots from ref_slots_fast (vectorised, hero-size), with the threshold-tie
+    # flags; both are kept in <dir>/ref_slots.npz for check (the hero takes minutes per call).
+    rs, tie = t1.ref_slots_fast(d, cfg, ties=True)
+    np.savez(out / "ref_slots.npz", slots=rs, tie=tie)
+    bw = {"slots": rs, "P": p["P"], "counts": p["counts"]}
     m2 = t2_dev.prep_dump(dump, out / "t2", bw)
     r = np.load(out / "t2" / "ref_in.npz")
     same = bool(np.array_equal(np.asarray(p["P"], np.int64), np.asarray(r["P"], np.int64))
@@ -49,7 +52,8 @@ def prep(dump: str, out: Path) -> dict:
                          f"n_slots {p['n_slots']} vs {m2['n_slots']})")
     (out / "t2" / "slots.f32").unlink(missing_ok=True)   # the device fills it from T1
     info = {"dump": str(dump), "n_tiles": len(p["tiles"]), "n_recs": len(p["recs"]),
-            "n_slots": p["n_slots"], "n_groups": m2["n_groups"], "n": m2["n"]}
+            "n_slots": p["n_slots"], "n_groups": m2["n_groups"], "n": m2["n"],
+            "tie_slots": int(tie.sum())}
     (out / "chain.json").write_text(json.dumps(info, indent=1))
     return info
 
@@ -61,11 +65,16 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     N, ng, ns = meta["n"], meta["n_groups"], meta["n_slots"]
     dev = np.fromfile(outdir / "slots.f32", f32).reshape(-1, 16)[:ns, :9]
     rep = {"dump": Path(dump).name}
-    s = t1.compare_slots(dev, t1.ref_slots(d, cfg))
+    r = np.load(indir / "ref_slots.npz")
+    s = t1.compare_slots(dev, r["slots"], r["tie"])
     s["nan_slots"] = int(np.isnan(dev).any(1).sum())
+    s["tie_slots"] = int(r["tie"].sum())
     s["pass"] = bool(s["rel_err"] <= slot_bar and s["nan_slots"] == 0)
     rep["t1"] = s
     rep["t2"] = t2_dev.check(indir / "t2", outdir, grad_bar, adam_bar)
+    if "grad_means" not in d.files:   # the hero dump has no autograd oracle (T0 needs one)
+        rep["pass"] = bool(s["pass"] and rep["t2"]["pass"])
+        return rep
     # Against the T0 oracle directly (autograd grads, bf16-moment Adam), SH band 0.
     rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
     band0 = lambda k, a: np.asarray(a)[:, :1, :] if k == "sh" else np.asarray(a)  # noqa: E731
