@@ -12,7 +12,7 @@
 [ttw 2026-10-14T01:28:08-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=530de93d bin=a414bdd44677c67a t708 530de93d forward train flag A/B (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t708-w0  timeout=500s  worry=600s  ts=2026-10-14T01:28:09-0700
 cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t708-remote.sh 0 off on
