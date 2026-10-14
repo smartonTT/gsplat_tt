@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #124 sha=0a572e51 bin=b0ef5a8b53cf33c9 t717 0a572e51 fp32 op/colour train mode A/B (bh-49)
+  data: # sha=
+=========================================
+host=bh-49  tag=t717-d1  timeout=300s  worry=600s  ts=2026-10-14T02:36:13-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t717-remote.sh 5 dump
+-----------------------------------------
+=== r5-dump 0a572e51 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t717/train-v0.bin --dump-views t717-dump --view-range 0:1 09:36:21 load=0.97
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t717-on
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=30.9 p50_ms=30.9 min_ms=30.9 max_ms=30.9 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t717-r5-dump
+TTW_TIMING ms_view=30.908
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 09:36 /localdev/smarton/gstt2-sync/tmp/t717/train-v0.bin
+-rw-rw-r-- 1 smarton smarton  1704948 Oct 14 09:36 /localdev/smarton/gstt2-sync/tmp/t717/view00_hero.png
+=== done 5 09:36:24
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t717/tmp/ttw-state/logs/t717-d1-20261014-023607.log
