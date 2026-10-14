@@ -61,3 +61,26 @@ bf16 exact). All terms one matmul sums share a grid, so alignment loses nothing;
 drops < 2^(E-23) per slot. Offline with exact sums (tmp model): sh0 grad 1.3e-4, sh3 3.5e-4, Adam
 delta exact. Host-only change (t2_bench.cpp; the T1 producer would emit the same pieces); the
 no-op transpose reconfig is reverted. Model test: tests/unit/test_t2_segmm.py::test_slot_split_shared_grid.
+
+### t726 run 5 (d2256866, block-float pieces) on bh-49 (p150a, 110 cores), 2026-10-14 04:30 PDT
+
+T0 oracle (python3 -m gsplat.t2_dev check, bars grad 1e-2, Adam 1e-3), both PASS, m bits equal:
+
+| dump | worst grad | worst Adam | worst pfwc |
+|---|---|---|---|
+| sh0 | 1.34e-4 (run 3: 1.17e-3; t697 gather 9.8e-5) | 2.23e-5 (run 3: 1.14e-3 FAIL) | 3.7e-5 |
+| sh3 | 3.80e-4 (run 3: 2.70e-3) | 8.8e-6 (run 3: 6.0e-4) | 1.0e-5 |
+
+These match the offline exact-sum model (sh0 1.3e-4, sh3 3.5e-4), so the remaining error is the
+split's own truncation, not the FPU.
+
+Synthetic timings (10 reps each, median ms; same session, separate JIT caches):
+
+| case | FPU segment matmul (d2256866) | t697 RISC gather (311181db) | speedup |
+|---|---|---|---|
+| SYN_K=8 | 6.13 (min 6.11) | 13.85 (min 13.85) | 2.26x |
+| SYN_K=1 | 2.73 (min 2.69) | 3.19 (min 3.16) | 1.17x |
+
+Both deltas (7.7 ms, 0.46 ms) are far above the ~0.1 ms noise bar. ab_jit_check: JIT-HASH OK
+(t2_compute hashes differ between arms, as expected). Logs: docs/t726/out/ (text outputs only).
+The block-float split is host-only and costs nothing on device (same 12 matmuls per window).
