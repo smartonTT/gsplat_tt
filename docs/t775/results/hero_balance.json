@@ -1,0 +1,139 @@
+{
+ "n_tiles": 1014,
+ "n_pairs": 4478225,
+ "n_bodies": 30459432,
+ "cores": 110,
+ "model": {
+  "tile": 53994.3,
+  "pair": 275.25,
+  "body": 200.32
+ },
+ "heaviest_tiles": [
+  {
+   "tile_id": 595,
+   "pairs": 22820,
+   "bodies": 106600
+  },
+  {
+   "tile_id": 596,
+   "pairs": 25069,
+   "bodies": 105953
+  },
+  {
+   "tile_id": 597,
+   "pairs": 22496,
+   "bodies": 92861
+  },
+  {
+   "tile_id": 481,
+   "pairs": 17648,
+   "bodies": 90361
+  },
+  {
+   "tile_id": 696,
+   "pairs": 18089,
+   "bodies": 83482
+  },
+  {
+   "tile_id": 599,
+   "pairs": 18044,
+   "bodies": 77704
+  },
+  {
+   "tile_id": 480,
+   "pairs": 15680,
+   "bodies": 77157
+  },
+  {
+   "tile_id": 557,
+   "pairs": 15012,
+   "bodies": 76268
+  },
+  {
+   "tile_id": 656,
+   "pairs": 16169,
+   "bodies": 76227
+  },
+  {
+   "tile_id": 519,
+   "pairs": 16320,
+   "bodies": 76007
+  }
+ ],
+ "ideal_ms": 49.76,
+ "contiguous_by_pairs": {
+  "busiest_bodies": 492267,
+  "mean_bodies": 276903.9,
+  "bodies_busiest_over_mean": 1.778,
+  "busiest_pairs": 52187,
+  "busiest_ms": 82.61,
+  "mean_ms": 49.76,
+  "mean_over_busiest": 0.602
+ },
+ "lpt": {
+  "busiest_bodies": 290991,
+  "mean_bodies": 276903.9,
+  "bodies_busiest_over_mean": 1.051,
+  "busiest_pairs": 44263,
+  "busiest_ms": 51.39,
+  "mean_ms": 49.76,
+  "mean_over_busiest": 0.968
+ },
+ "device_check": {
+  "stats": "docs/t747/results/stats-hero-cand.json",
+  "nt_np_nv_equal": true,
+  "model_vs_device_cycles_max_rel": 0.0091,
+  "device_busiest_ms": 82.6
+ },
+ "lpt_split_kmax2": {
+  "busiest_bodies": 283210,
+  "mean_bodies": 276903.9,
+  "bodies_busiest_over_mean": 1.023,
+  "busiest_pairs": 46640,
+  "busiest_ms": 50.09,
+  "mean_ms": 49.94,
+  "mean_over_busiest": 0.997,
+  "split_tiles": 81,
+  "ks": {
+   "2": 81
+  },
+  "part_rows": 1095,
+  "partial_slots": 80191,
+  "pairs_total": 4558416
+ },
+ "lpt_split_kmax4": {
+  "busiest_bodies": 283812,
+  "mean_bodies": 276903.9,
+  "bodies_busiest_over_mean": 1.025,
+  "busiest_pairs": 47573,
+  "busiest_ms": 50.05,
+  "mean_ms": 49.95,
+  "mean_over_busiest": 0.998,
+  "split_tiles": 75,
+  "ks": {
+   "2": 72,
+   "4": 3
+  },
+  "part_rows": 1095,
+  "partial_slots": 86855,
+  "pairs_total": 4565080
+ },
+ "lpt_split_kmax8": {
+  "busiest_bodies": 284387,
+  "mean_bodies": 276903.9,
+  "bodies_busiest_over_mean": 1.027,
+  "busiest_pairs": 47306,
+  "busiest_ms": 50.09,
+  "mean_ms": 49.95,
+  "mean_over_busiest": 0.997,
+  "split_tiles": 71,
+  "ks": {
+   "2": 68,
+   "4": 2,
+   "8": 1
+  },
+  "part_rows": 1095,
+  "partial_slots": 89935,
+  "pairs_total": 4568160
+ }
+}
