@@ -379,6 +379,12 @@ to all printed digits.
 | bike_top | +1.73e-8 | 1.15e-5 | 4.67e-5 | PASS |
 | bike_mid | -6.29e-9 | 2.11e-6 | 1.42e-5 | PASS |
 | syn | -6.02e-8 | 7.52e-6 | 2.91e-5 | PASS |
+| hero (_DSC8679) | +5.47e-9 | 1.80e-6 | 8.82e-6 | PASS |
+
+All 6 cases PASS. The hero row comes from a second run at be3f3837 (hero input rebuilt with
+`docs/t685/hero.py`, same view and md5s as t707; log `docs/t743/herochk-be3f3837-bh-49.log`,
+p150 bh-49, 2026-10-14 08:53-08:57 PDT, `[ORACLE] device overall PASS cases=6`; hero b2b 0.958 ms,
+syn 0.955 ms/view at iters=50, in line with the A/B).
 
 Where the remaining 0.954 ms goes (bound for the next step, from the ablations above): compute
 without any DRAM reads is 0.70 ms/view (t736 kernels), so the cheaper reader leaves about 0.25 ms
