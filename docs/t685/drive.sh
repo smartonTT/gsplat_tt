@@ -7,6 +7,11 @@
 # Restrictions: existing measurement reservation only (no ird reserve/extend/release), never
 # the viewer box bh-30, StrictHostKeyChecking=yes on every ssh. H defaults to bh-33 (p100):
 # timings from it are 'p100 (provisional)'.
+# #707: NPZS entry `hero` = tmp/t707/hero.npz (docs/t685/hero.py, built on the Mac), pushed into
+# the box's tmp/t707in by rsync from this worktree inside the same lock and checked here with
+# `check --fast`. Prep dirs live in tmp/t707in/<n> (removed at the end); the bench writes its
+# outputs (slots.f32, timing.json, stats.json, runs_ms.json) to tmp/t693/<n>, which is pulled.
+# BWD_STATS=0 builds the kernels without the stage counters.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
@@ -27,7 +32,7 @@ rsha=$(timeout 60 "${SSH[@]}" "sed -n 's/^sha=//p' $T/SYNC_STAMP")
 echo "STAMP remote=$rsha local=$sha $([ "$rsha" = "$sha" ] && echo MATCH || echo MISMATCH)"
 ENV="cd $T && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal \
   TT_METAL_ARCH_NAME=blackhole PYTHONDONTWRITEBYTECODE=1 TT_METAL_CACHE=/localdev/smarton/.cache/ttmc-t693 \
-  TT_METAL_OPERATION_TIMEOUT_SECONDS=${OP_TIMEOUT:-60} && source .venv/bin/activate"
+  TT_METAL_OPERATION_TIMEOUT_SECONDS=${OP_TIMEOUT:-60} BWD_STATS=${BWD_STATS:-1} && source .venv/bin/activate"
 # WATCH=1: tt-metal watcher (waypoints per RISC) with its log pulled back under out/remote/logs.
 [ "${WATCH:-0}" = 1 ] && ENV="$ENV && export TT_METAL_WATCHER=2 TT_METAL_LOGS_PATH=$T/tmp/t693/logs"
 if [ "${RESET_FIRST:-0}" = 1 ]; then echo "=== tt-smi -r first"; timeout 300 "${SSH[@]}" "$ENV && tt-smi -r > /dev/null 2>&1; echo reset rc=\$?"; fi
@@ -35,6 +40,12 @@ echo "=== build $(date +%T)"
 timeout 900 "${SSH[@]}" "$ENV && mkdir -p tmp/t693 && (cmake -G Ninja -S render/train -B render/train/build -DCMAKE_BUILD_TYPE=Release \
   && nice -n 19 cmake --build render/train/build -j 8) > tmp/t693/build.log 2>&1; rc=\$?; tail -25 tmp/t693/build.log; exit \$rc"
 brc=$?; echo "build rc=$brc"
+case " ${NPZS:-} " in *" hero "*)
+  echo "=== push tmp/t707/hero.npz $(date +%T)"
+  timeout 60 "${SSH[@]}" "mkdir -p $T/tmp/t707in" && \
+    timeout 900 rsync -t -e "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20" \
+      tmp/t707/hero.npz "$H:$T/tmp/t707in/hero.npz"; echo "push rc=$?" ;;
+esac
 if [ $brc = 0 ]; then
   for n in ${NPZS:-sh0 sh3}; do
     echo "=== run $n $(date +%T)"
@@ -43,19 +54,23 @@ if [ $brc = 0 ]; then
     case "$n" in
       *=*) nm=${n%%=*}; a=(${n#*=}); a=(${a//:/ }); src=tmp/t693/$nm.npz
            mk="PYTHONPATH=. python3 docs/t685/synth.py $src ${a[*]} &&" ;;
+      hero) nm=hero; src=tmp/t707in/hero.npz; mk= ;;
       *) nm=$n; src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz; mk= ;;
     esac; n=$nm
-    timeout 600 "${SSH[@]}" "$ENV && rm -rf tmp/t693/$n && mkdir -p tmp/t693 && $mk python3 -m gsplat.blend_backward_dev prep $src tmp/t693/$n \
-      && timeout ${RUN_TIMEOUT:-240} render/train/build/blend_bwd_bench tmp/t693/$n \${BWD_CORES:-} > tmp/t693/$n/run.log 2>&1; rc=\$?; tail -20 tmp/t693/$n/run.log; \
+    timeout 900 "${SSH[@]}" "$ENV && rm -rf tmp/t693/$n tmp/t707in/$n && mkdir -p tmp/t693/$n tmp/t707in && $mk python3 -m gsplat.blend_backward_dev prep $src tmp/t707in/$n \
+      && timeout ${RUN_TIMEOUT:-240} render/train/build/blend_bwd_bench tmp/t707in/$n \${BWD_CORES:-0} ${REPS:-6} tmp/t693/$n > tmp/t693/$n/run.log 2>&1; rc=\$?; tail -20 tmp/t693/$n/run.log; \
       if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > tmp/t693/$n/reset.log 2>&1; echo \"reset rc=\$?\"; fi; exit \$rc"
     echo "run $n rc=$?"
   done
 fi
+timeout 120 "${SSH[@]}" "rm -rf $T/tmp/t707in"; echo "rm t707in rc=$?"
 opt/sync_remote.sh --pull tmp/t693 "$O/remote" "$H" "$T"; echo "pull rc=$?"
 for n in ${NPZS:-sh0 sh3}; do
-  case "$n" in *=*) n=${n%%=*}; src=$O/remote/$n.npz ;; *) src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz ;; esac
+  fast=
+  case "$n" in *=*) n=${n%%=*}; src=$O/remote/$n.npz ;; hero) src=tmp/t707/hero.npz; fast=--fast ;;
+    *) src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz ;; esac
   f=$O/remote/$n/slots.f32
-  if [ -s "$f" ]; then python3 -m gsplat.blend_backward_dev check "$src" "$f" --bar 1e-2 | tee "$O/check-$n.json"
+  if [ -s "$f" ]; then python3 -m gsplat.blend_backward_dev check "$src" "$f" --bar 1e-2 $fast | tee "$O/check-$n.json"
   else echo "CHECK $n: no slots.f32"; fi
 done
 echo "=== done $(TZ=America/Los_Angeles date)"

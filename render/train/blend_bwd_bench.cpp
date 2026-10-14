@@ -3,7 +3,11 @@
 // reads back the slots the device finished (v2 #704: lane reduce + finish on device, 9 floats
 // per 64 B slot page) and writes slots.f32 (16 floats per slot, first 9 used) plus timing.json
 // for `blend_backward_dev check`.
-//   blend_bwd_bench <prep_dir> [n_cores] [reps]
+//   blend_bwd_bench <prep_dir> [n_cores] [reps] [out_dir]
+// #707: reps default 6 (first = JIT/warm-up; device_ms_med is the median of the rest).
+// BWD_STATS=1 (default; 0 = off) builds the kernels with in-kernel stage counters and writes
+// stats.json (per core: MATH wall-clock cycles per stage and counts, see blend_bwd_compute.cpp).
+// Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -80,9 +84,13 @@ int main(int argc, char** argv) {
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
     const CoreCoord grid = dev->compute_with_storage_grid_size();
-    uint32_t want = argc > 2 ? std::atoi(argv[2]) : grid.x * grid.y;
+    uint32_t want = argc > 2 && std::atoi(argv[2]) > 0 ? std::atoi(argv[2]) : grid.x * grid.y;
     want = std::max<uint32_t>(1, std::min<uint32_t>({want, grid.x * grid.y, std::max<uint32_t>(n_tiles, 1)}));
-    const int reps = argc > 3 ? std::atoi(argv[3]) : 5;
+    const int reps = argc > 3 && std::atoi(argv[3]) > 0 ? std::atoi(argv[3]) : 6;
+    const std::string odir = argc > 4 ? argv[4] : dir;
+    const char* st_env = std::getenv("BWD_STATS");
+    const bool stats = !(st_env && std::string(st_env) == "0");
+    constexpr uint32_t ST_PAGE = 128, ST_N = 11;
 
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
@@ -104,6 +112,7 @@ int main(int argc, char** argv) {
     auto b_planes = make_dram(dev.get(), uint64_t(n_tiles) * N_PLANES * TILE_B, TILE_B);
     auto b_ramps = make_dram(dev.get(), 2ull * TILE_B, TILE_B);
     auto b_out = make_dram(dev.get(), uint64_t(n_slots) * SMALL, SMALL);  // v2: 64 B slot pages
+    auto b_stats = make_dram(dev.get(), uint64_t(grid.x) * grid.y * ST_PAGE, ST_PAGE);
     distributed::EnqueueWriteMeshBuffer(*cq, b_tiles, tiles, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_recs, recs, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_planes, planes, true);
@@ -120,14 +129,17 @@ int main(int argc, char** argv) {
 
     std::vector<uint32_t> rct, wct;
     for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
-    for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
+    for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
+    std::map<std::string, std::string> sdef;
+    if (stats) sdef["BWD_STATS"] = "1";
     const std::string kd = BWD_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "bwd_reader.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
                                               .noc = NOC::RISCV_1_default, .compile_args = rct});
     auto kw = CreateKernel(prog, kd + "bwd_writer.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
-                                              .noc = NOC::RISCV_0_default, .compile_args = wct});
+                                              .noc = NOC::RISCV_0_default, .compile_args = wct,
+                                              .defines = sdef});
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_PLANE] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_RAMP] = UnpackToDestMode::UnpackToDestFp32;
@@ -136,6 +148,7 @@ int main(int argc, char** argv) {
         {"BWD_AMIN_BITS", std::to_string(meta_int(js, "alpha_min_bits")) + "u"},
         {"BWD_TMIN_BITS", std::to_string(meta_int(js, "t_min_bits")) + "u"},
     };
+    if (stats) cdef["BWD_STATS"] = "1";
     auto kc = CreateKernel(prog, kd + "blend_bwd_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
@@ -154,7 +167,8 @@ int main(int argc, char** argv) {
                            {uint32_t(b_tiles->address()), uint32_t(b_recs->address()),
                             uint32_t(b_planes->address()), uint32_t(b_ramps->address()), ta, nt});
             SetRuntimeArgs(prog, kw, CoreCoord{x, y},
-                           {uint32_t(b_out->address()), uint32_t(b_tiles->address()), uint32_t(b_recs->address()), ta, nt});
+                           {uint32_t(b_out->address()), uint32_t(b_tiles->address()), uint32_t(b_recs->address()), ta, nt,
+                            uint32_t(b_stats->address()), lin});
             (void)r0;
             SetRuntimeArgs(prog, kc, CoreCoord{x, y}, {nt});
         }
@@ -177,18 +191,43 @@ int main(int argc, char** argv) {
     slots.resize(size_t(n_slots) * 16, 0.0f);
     const double host_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
     {
-        std::ofstream f(dir + "/slots.f32", std::ios::binary);
+        std::ofstream f(odir + "/slots.f32", std::ios::binary);
         f.write(reinterpret_cast<const char*>(slots.data()), std::streamsize(slots.size() * 4));
     }
-    std::vector<double> s = ms;
+    // Median of the warm runs (all runs but the first, which includes the JIT build).
+    std::vector<double> s(ms.size() > 1 ? ms.begin() + 1 : ms.begin(), ms.end());
     std::sort(s.begin(), s.end());
+    const double med = s.size() % 2 ? s[s.size() / 2] : 0.5 * (s[s.size() / 2 - 1] + s[s.size() / 2]);
     char buf[512];
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"cores\": %u, \"max_core_recs\": %u, "
                   "\"device_ms_first\": %.4f, \"device_ms_min\": %.4f, \"device_ms_med\": %.4f, "
-                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"version\": \"v2\"}",
-                  n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], s[s.size() / 2], host_ms, ms.size());
-    std::ofstream(dir + "/timing.json") << buf << "\n";
+                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"version\": \"v2\"}",
+                  n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], med, host_ms, ms.size(), int(stats));
+    std::ofstream(odir + "/timing.json") << buf << "\n";
+    {
+        std::string all = "[";
+        for (double v : ms) all += (all.size() > 1 ? ", " : "") + std::to_string(v);
+        std::ofstream(odir + "/runs_ms.json") << all << "]\n";
+    }
+    if (stats) {
+        // Counter k = (w[2k] & 0x7FFFFF) | (w[2k + 1] & 0x7FFFFF) << 16 (exact-float halves, last run).
+        std::vector<uint32_t> sw;
+        distributed::EnqueueReadMeshBuffer(*cq, sw, b_stats, true);
+        std::ofstream f(odir + "/stats.json");
+        f << "{\"cols\": [\"core\", \"tot\", \"tile\", \"rec\", \"setup\", \"body\", \"fin\", \"pack\", \"nt\", \"np\", "
+             "\"nv\", \"mark\"], \"cores\": [";
+        bool first = true;
+        for (uint32_t c = 0; c < want; c++) {
+            if (t_beg[c + 1] == t_beg[c]) continue;
+            const uint32_t* w = sw.data() + size_t(c) * (ST_PAGE / 4);
+            f << (first ? "" : ", ") << "[" << c;
+            for (uint32_t k = 0; k < ST_N; k++) f << ", " << ((w[2 * k] & 0x7FFFFFu) | (w[2 * k + 1] & 0x7FFFFFu) << 16);
+            f << "]";
+            first = false;
+        }
+        f << "]}\n";
+    }
     std::printf("[BWD] %s\n", buf);
     dev->close();
     return 0;
