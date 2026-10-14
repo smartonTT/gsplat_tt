@@ -5,7 +5,7 @@
 #   remote.sh <round> <arm> ...   arms (orbit = benchmarks/cameras_v2.json, 30 views, b2b 20 passes):
 #     b230   $T2 defaults (best-iter-230)                aa    b230 again, same cache (A/A)
 #     new    $T defaults (BLEND_DWALK 1)                 base  $T with GSPLAT_TT_BLEND_DWALK=0
-#     nb230 / nnew   train NN cameras (169 views, 1237x822), b2b 6 passes
+#     nb230 / nnew / nbase   train NN cameras (169 views, 1237x822), b2b 6 passes
 #     lb230 / lnew   orbit latency (no --back-to-back, no --dump-views; secondary)
 set -u
 export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal
@@ -25,12 +25,12 @@ for arm in "$@"; do
   case $arm in
     b230|aa|nb230|lb230) tree=$T2; cache=$C/ttmc-t721-b230 ;;
     new|nnew|lnew) tree=$T; cache=$C/ttmc-t721-new ;;
-    base) tree=$T; cache=$C/ttmc-t721-base; env=(GSPLAT_TT_BLEND_DWALK=0) ;;
+    base|nbase) tree=$T; cache=$C/ttmc-t721-base; env=(GSPLAT_TT_BLEND_DWALK=0) ;;
     *) echo "bad arm $arm"; exit 2 ;;
   esac
   case $arm in
-    n*) cam=benchmarks/cameras_train_nn.json; args+=(--b2b-passes 6) ;;
-    l*) args=() ;;
+    nb230|nnew|nbase) cam=benchmarks/cameras_train_nn.json; args+=(--b2b-passes 6) ;;  # not n*: that matched 'new' (run 1 bug)
+    lb230|lnew) args=() ;;
   esac
   echo "=== $tag $(cut -c1-8 $tree/SHA) cams=$cam ${env[*]+${env[*]}} ${args[*]+${args[*]}} $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   ( cd "$tree" && source .venv/bin/activate && env ${env[@]+"${env[@]}"} GSPLAT_TT_ETH_CACHE=$cache \
@@ -45,7 +45,7 @@ for arm in "$@"; do
   fills=$(grep -rhoE "define BLEND_DWALK [01]" "$cache" 2>/dev/null | sort -u | tr '\n' ' ')
   echo "LEVER $tag cache_defines=[${fills}]"
   case $arm in
-    base) case "$fills" in *"DWALK 1"*|"") echo "BASE_NOT_OFF $tag"; fail=1 ;; esac ;;
+    base|nbase) case "$fills" in *"DWALK 1"*|"") echo "BASE_NOT_OFF $tag"; fail=1 ;; esac ;;
     new|nnew|lnew) case "$fills" in *"DWALK 0"*|"") echo "INERT $tag"; fail=1 ;; esac ;;
     *) [ -z "$fills" ] || { echo "B230_HAS_DWALK $tag"; fail=1; } ;;
   esac

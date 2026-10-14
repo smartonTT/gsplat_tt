@@ -64,15 +64,15 @@ grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot.out"; echo "shot rc=$
 fi
 # Each devrun step stays under 500 s (the 600 s device ceiling).
 step w0 500 0 b230 new base
-step w1 500 0 nb230 nnew
+step w1 500 0 nb230 nnew nbase
 step r1o 500 1 b230 new base aa
-step r1n 500 1 nb230 nnew
+step r1n 500 1 nb230 nnew nbase
 step r2o 500 2 aa base new b230
-step r2n 500 2 nnew nb230
+step r2n 500 2 nnew nbase nb230
 step r3o 500 3 new aa b230 base
-step r3n 500 3 nb230 nnew
+step r3n 500 3 nbase nb230 nnew
 step r4o 500 4 base b230 aa new
-step r4n 500 4 nnew nb230
+step r4n 500 4 nnew nb230 nbase
 step lat 500 5 lb230 lnew lb230 lnew
 for a in b230 new base; do
   $SSH "$H" "find /localdev/smarton/.cache/ttmc-t721-$a -maxdepth 8 -path '*/kernels/*' -type d" > "$O/jit-$a.txt" || rc=4

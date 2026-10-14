@@ -1,0 +1,35 @@
+[ttw 2026-10-14T02:49:23-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T02:49:23-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-14T02:49:23-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T02:49:23-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T02:49:23-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T02:49:23-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T02:49:24-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T02:49:24-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T02:49:24-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T02:49:24-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T02:49:24-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T02:49:24-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=f4b7d9b5 bin=e34a61be3031c271 t721 f4b7d9b5 BLEND_DWALK default on, iter 231 (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t721-r3n  timeout=500s  worry=600s  ts=2026-10-14T02:49:26-0700
+cmd: T=/localdev/smarton/gstt2-sync T2=/localdev/smarton/gstt2-b230 MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t721-remote.sh 3 nb230 nnew
+-----------------------------------------
+=== r3-nb230 3702fbb5 cams=benchmarks/cameras_train_nn.json  --back-to-back --b2b-passes 6 09:49:29 load=1.37
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-b230/tmp/ttm-eth12, JIT cache /localdev/smarton/.cache/ttmc-t721-b230
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.917 fps=126.32 ms_frame_median=7.917 pass_ms_frame=7.916,7.917,7.917,7.919,7.917,7.912 check_pass_ms_frame=7.970 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.917 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-b230/tmp/t721-r3-nb230
+TTW_TIMING b2b_ms_frame=7.917
+TTW_TIMING b2b_ms_frame_median=7.917
+LEVER r3-nb230 cache_defines=[]
+=== r3-nnew f4b7d9b5 cams=benchmarks/cameras_train_nn.json  --back-to-back --b2b-passes 6 09:49:57 load=1.52
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/.cache/ttmc-t721-new
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.933 fps=126.06 ms_frame_median=7.934 pass_ms_frame=7.933,7.934,7.935,7.934,7.933,7.925 check_pass_ms_frame=8.012 raw_md5=fba4b01a gap_ms=0.00 render_ms_frame=7.933 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t721-r3-nnew
+TTW_TIMING b2b_ms_frame=7.933
+TTW_TIMING b2b_ms_frame_median=7.934
+LEVER r3-nnew cache_defines=[define BLEND_DWALK 1 ]
+=== done 3 09:50:25
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t721/tmp/ttw-state/logs/t721-r3n-20261014-024924.log
