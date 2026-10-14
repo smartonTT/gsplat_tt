@@ -18,7 +18,7 @@ inline void h_sfpu() {
     using namespace sfpi;
     sfpu_begin();
 #pragma GCC unroll 0
-    for (uint32_t v = 0; v < 32; v++) {
+    for (uint32_t v = 0; v < 32 * !(SSIM_ABL & 4); v++) {
         dst_reg[128] = vFloat(dst_reg[0]) * dst_reg[128];
         dst_reg[160] = vFloat(dst_reg[32]) * dst_reg[160];
         dst_reg[192] = vFloat(dst_reg[64]) * dst_reg[192];
@@ -30,7 +30,7 @@ inline void h_sfpu() {
     sfpu_end();
     sfpu_begin();
 #pragma GCC unroll 0
-    for (uint32_t v = 0; v < 32; v++) {
+    for (uint32_t v = 0; v < 32 * !(SSIM_ABL & 4); v++) {
         vFloat a = dst_reg[0];
         dst_reg[128] = a * a;
         a = dst_reg[32];
@@ -50,6 +50,7 @@ inline void h_sfpu() {
 // d_mu = Sw F_mu, d_xx = Sw F_xx, d_xy = Sw F_xy (Sw = S wm, next block).
 inline void ssim_pt() {
     using namespace sfpi;
+    if constexpr (SSIM_ABL & 4) return;
     sfpu_begin();
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {
@@ -79,6 +80,7 @@ inline void ssim_pt() {
 // 0 = S, 1..3 = F_mu, F_xx, F_xy, 4 = wm, 5 = x, 6 = y, 7 = acc -> 1..3 = d maps, 7 += loss.
 inline void loss_pt() {
     using namespace sfpi;
+    if constexpr (SSIM_ABL & 4) return;
     sfpu_begin();
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {

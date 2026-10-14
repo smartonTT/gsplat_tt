@@ -9,6 +9,7 @@ constexpr uint32_t CB_DIN = 0, CB_XY = 1, CB_HP = 6, CB_HQ = 9, CB_HR = 12, CB_G
 // 3 = G*d_xy, 4 = P, 5 = Q, 6 = x, 7 = y -> 3 = grad.
 inline void grad_pt() {
     using namespace sfpi;
+    if constexpr (SSIM_ABL & 4) return;
     sfpu_begin();
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {

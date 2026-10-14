@@ -19,6 +19,13 @@
 
 #define SF_INL inline __attribute__((always_inline))
 
+// Task #743 timing ablation (profile only, results are garbage when set): bit 0 skips the filter
+// rows (FiltRows), 8 the row-layout conversions (TConv) of vfilt_body, 2 the dest transposes,
+// 4 the pointwise SFPU passes. Host: LOSS_SSIM_ABL. 0 = the real kernel.
+#ifndef SSIM_ABL
+#define SSIM_ABL 0
+#endif
+
 #ifdef TRISC_MATH
 #ifndef SF_G0
 #error "SF_G0..SF_G5 must be defined"
@@ -85,12 +92,16 @@ struct FiltRows<B, O, 32> {
 template <uint32_t B, uint32_t O>
 SF_INL void vfilt_body() {
     using namespace sfpi;
-    TConv<B, 6, 8>::run();
-    TConv<B + 1, 0, 8>::run();
-    TConv<B + 2, 0, 2>::run();
-    const vFloat c3 = SF_G3, c4 = SF_G4, c5 = SF_G5;
-    FiltRows<B, O, 0>::run(c3, c4, c5);
-    TConv<O, 0, 8>::run();
+    if constexpr (!(SSIM_ABL & 8)) {
+        TConv<B, 6, 8>::run();
+        TConv<B + 1, 0, 8>::run();
+        TConv<B + 2, 0, 2>::run();
+    }
+    if constexpr (!(SSIM_ABL & 1)) {
+        const vFloat c3 = SF_G3, c4 = SF_G4, c5 = SF_G5;
+        FiltRows<B, O, 0>::run(c3, c4, c5);
+    }
+    if constexpr (!(SSIM_ABL & 8)) TConv<O, 0, 8>::run();
 }
 
 inline void sfpu_begin() {
@@ -129,6 +140,7 @@ inline void copy_n(uint32_t cb, uint32_t n, uint32_t d0) {
 }
 
 inline void transpose_tiles(uint32_t mask) {
+    if constexpr (SSIM_ABL & 2) return;
     transpose_wh_dest_init_short<true>();
     for (uint32_t k = 0; k < 8; k++)
         if (mask & (1u << k)) transpose_wh_dest<true>(k);

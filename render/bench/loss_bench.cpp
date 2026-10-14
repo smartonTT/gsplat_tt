@@ -414,6 +414,10 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
     defs["SS_C1"] = hexf(1e-4);
     defs["SS_C2"] = hexf(9e-4);
     defs["SS_WL1"] = hexf((1.0 - lam) / n);
+    if (const char* a = std::getenv("LOSS_SSIM_ABL"); a && a[0] && std::string(a) != "0") {
+        defs["SSIM_ABL"] = a;  // #743 timing ablation only (garbage results)
+        std::fprintf(stderr, "[LOSS] SSIM_ABL=%s (timing ablation, results invalid)\n", a);
+    }
     const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
     const std::string kd = LOSS_KERNEL_DIR;
     auto mk = [&](bool bwd) {
