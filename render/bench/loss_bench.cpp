@@ -363,6 +363,155 @@ int run_sfilt(distributed::MeshDevice* dev, const std::string& in, const std::st
     return 0;
 }
 
+// LOSS_MODE=ssim (task #736): fused L1 + D-SSIM loss and dL/dimage on the SFPU fp32 filter of
+// #720. Two programs back to back (ssim_fwd_compute.cpp: filtered maps, SSIM, loss partials, d
+// maps; ssim_bwd_compute.cpp: filtered d maps -> dL/dx). <in>: hw.txt, image.f32, target.f32
+// (H, W, 3) and consts.f32 (2, 3, Hp, Wp): mu_y, vy (per-view constants), written by
+// opt/t736/ssim_check.py prep. Writes <out>/grad.f32 (H, W, 3) and <out>/loss.txt.
+std::string hexf(double v) {
+    char b[48];
+    std::snprintf(b, sizeof b, "%af", double(float(v)));
+    return b;
+}
+
+int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::string& out, int iters) {
+    LossLayout L{};
+    {
+        std::ifstream f(in + "/hw.txt");
+        if (!(f >> L.H >> L.W)) {
+            std::fprintf(stderr, "[LOSS] ERROR bad %s/hw.txt\n", in.c_str());
+            return 2;
+        }
+    }
+    L.nh = (L.H + TS - 1) / TS;
+    L.nw = (L.W + TS - 1) / TS;
+    const uint32_t nh = L.nh, nw = L.nw, NP = nh * nw, NT = 3 * NP, Hp = nh * TS, Wp = nw * TS;
+    const size_t npx = size_t(L.H) * L.W * 3;
+    const double n = double(npx), lam = 0.2;
+    const auto x = lb_tilize(read_f32(in + "/image.f32", npx), L);
+    const auto y = lb_tilize(read_f32(in + "/target.f32", npx), L);
+    const auto kc = read_f32(in + "/consts.f32", size_t(6) * Hp * Wp);
+    std::vector<float> k(size_t(7) * NP * TS * TS, 0.0f);
+    for (uint32_t p = 0; p < 7; p++)
+        for (uint32_t r = 0; r < Hp; r++)
+            for (uint32_t c = 0; c < Wp; c++)
+                k[((size_t(p) * nh + r / TS) * nw + c / TS) * TS * TS + tidx(r % TS, c % TS)] =
+                    p < 6 ? kc[(size_t(p) * Hp + r) * Wp + c] : (r < L.H && c < L.W ? float(-lam / n) : 0.0f);
+    auto& cq = dev->mesh_command_queue();
+    const CoreCoord grid = dev->compute_with_storage_grid_size();
+    const uint32_t ncores = grid.x * grid.y;
+    auto bx = make_dram(dev, uint64_t(NT) * TILE_BYTES), by = make_dram(dev, uint64_t(NT) * TILE_BYTES);
+    auto bk = make_dram(dev, uint64_t(7) * NP * TILE_BYTES), bd = make_dram(dev, uint64_t(9) * NP * TILE_BYTES);
+    auto bg = make_dram(dev, uint64_t(NT) * TILE_BYTES), bs = make_dram(dev, uint64_t(ncores) * TILE_BYTES);
+    distributed::EnqueueWriteMeshBuffer(cq, bx, x, true);
+    distributed::EnqueueWriteMeshBuffer(cq, by, y, true);
+    distributed::EnqueueWriteMeshBuffer(cq, bk, k, true);
+
+    double g[11], sum = 0.0;
+    for (int i = 0; i < 11; i++) sum += g[i] = std::exp(-double((i - 5) * (i - 5)) / (2.0 * 1.5 * 1.5));
+    std::map<std::string, std::string> defs;
+    for (int i = 0; i < 6; i++) defs["SF_G" + std::to_string(i)] = hexf(g[i] / sum);
+    defs["SS_C1"] = hexf(1e-4);
+    defs["SS_C2"] = hexf(9e-4);
+    defs["SS_WL1"] = hexf((1.0 - lam) / n);
+    const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
+    const std::string kd = LOSS_KERNEL_DIR;
+    auto mk = [&](bool bwd) {
+        Program prog = CreateProgram();
+        std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+        std::vector<std::pair<uint32_t, uint32_t>> cbs;
+        if (bwd) {
+            cbs = {{0, 18}, {1, 4}, {16, 2}, {17, 2}};
+        } else {
+            cbs = {{0, 6}, {1, 6}, {2, 4}, {3, 6}, {16, 6}, {17, 2}, {18, 4}, {19, 1}, {20, 1}};
+        }
+        for (uint32_t q = 6; q < 15; q++) cbs.push_back({q, 1});
+        for (auto [id, pages] : cbs) {
+            add_cb(prog, cores, id, pages);
+            if (id != 16 && id != 20) u2d[id] = UnpackToDestMode::UnpackToDestFp32;
+        }
+        std::vector<uint32_t> ct_r, ct_w;
+        for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_r);
+        for (int i = 0; i < (bwd ? 1 : 2); i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct_w);
+        std::map<std::string, std::string> rdefs;
+        if (bwd) rdefs["SSIM_BWD"] = "1";
+        auto kr = CreateKernel(prog, kd + "reader_ssim.cpp", cores,
+                               DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
+                                                  .noc = NOC::RISCV_1_default, .compile_args = ct_r,
+                                                  .defines = rdefs});
+        auto kw = CreateKernel(prog, kd + (bwd ? "writer_filt.cpp" : "writer_ssim_fwd.cpp"), cores,
+                               DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                                                  .noc = NOC::RISCV_0_default, .compile_args = ct_w});
+        auto kcmp = CreateKernel(prog, kd + (bwd ? "ssim_bwd_compute.cpp" : "ssim_fwd_compute.cpp"), cores,
+                                 ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
+                                               .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
+                                               .math_approx_mode = false, .defines = defs});
+        for (uint32_t cy = 0, c = 0; cy < grid.y; cy++)
+            for (uint32_t cx = 0; cx < grid.x; cx++, c++) {
+                const uint32_t t0 = uint32_t(uint64_t(NT) * c / ncores), t1 = uint32_t(uint64_t(NT) * (c + 1) / ncores);
+                const CoreCoord cc{cx, cy};
+                if (bwd) {
+                    SetRuntimeArgs(prog, kr, cc, {uint32_t(bd->address()), uint32_t(bx->address()),
+                                                  uint32_t(by->address()), t0, t1, nh, nw});
+                    SetRuntimeArgs(prog, kw, cc, {uint32_t(bg->address()), t0, t1, nh, nw});
+                } else {
+                    SetRuntimeArgs(prog, kr, cc, {uint32_t(bx->address()), uint32_t(by->address()),
+                                                  uint32_t(bk->address()), t0, t1, nh, nw});
+                    SetRuntimeArgs(prog, kw, cc, {uint32_t(bd->address()), uint32_t(bs->address()), t0, t1, nh, nw, c});
+                }
+                SetRuntimeArgs(prog, kcmp, cc, {t0, t1, nh});
+            }
+        distributed::MeshWorkload wl;
+        wl.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(prog));
+        return wl;
+    };
+    distributed::MeshWorkload wf = mk(false), wb = mk(true);
+    std::fprintf(stderr, "[LOSS] stage=ssim_programs H=%u W=%u tiles=%u cores=%u\n", L.H, L.W, NT, ncores);
+    distributed::EnqueueMeshWorkload(cq, wf, false);
+    distributed::EnqueueMeshWorkload(cq, wb, false);
+    distributed::Finish(cq);
+    std::fprintf(stderr, "[LOSS] stage=launch1_done\n");
+    std::vector<float> o, s;
+    distributed::EnqueueReadMeshBuffer(cq, o, bg, true);
+    distributed::EnqueueReadMeshBuffer(cq, s, bs, true);
+    double loss = lam;
+    for (float v : s) loss += v;
+    {
+        const auto gh = lb_untilize(o, L);
+        std::ofstream f(out + "/grad.f32", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(gh.data()), gh.size() * 4);
+        std::ofstream lf(out + "/loss.txt");
+        lf.precision(17);
+        lf << loss << "\n";
+    }
+    auto pair_b2b = [&](std::vector<double>& ms) {
+        for (int i = 0; i < iters; i++) {
+            const auto t0 = std::chrono::steady_clock::now();
+            distributed::EnqueueMeshWorkload(cq, wf, false);
+            distributed::EnqueueMeshWorkload(cq, wb, false);
+            distributed::Finish(cq);
+            ms.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+        }
+        const auto b0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < iters; i++) {
+            distributed::EnqueueMeshWorkload(cq, wf, false);
+            distributed::EnqueueMeshWorkload(cq, wb, false);
+        }
+        distributed::Finish(cq);
+        std::sort(ms.begin(), ms.end());
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - b0).count() /
+               std::max(1, iters);
+    };
+    std::vector<double> ms, msf;
+    const double b2b = pair_b2b(ms);
+    const double fwd = time_b2b(cq, wf, iters, msf);
+    std::printf("[LOSS] mode=ssim H=%u W=%u tiles=%u cores=%u loss=%.9g b2b_ms=%.4f fwd_b2b_ms=%.4f "
+                "launch_ms_med=%.4f launch_ms_min=%.4f iters=%d\n",
+                L.H, L.W, NT, ncores, loss, b2b, fwd, ms.empty() ? 0.0 : ms[ms.size() / 2],
+                ms.empty() ? 0.0 : ms[0], iters);
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -372,6 +521,12 @@ int main(int argc, char** argv) {
     }
     const std::string in = argv[1], out = argv[2];
     const int iters = argc > 3 ? std::atoi(argv[3]) : 20;
+    if (const char* m = std::getenv("LOSS_MODE"); m && std::string(m) == "ssim") {
+        auto dev = distributed::MeshDevice::create_unit_mesh(0);
+        const int rc = run_ssim(dev.get(), in, out, iters);
+        dev->close();
+        return rc;
+    }
     if (const char* m = std::getenv("LOSS_MODE"); m && std::string(m) == "sfilt") {
         auto dev = distributed::MeshDevice::create_unit_mesh(0);
         const int rc = run_sfilt(dev.get(), in, out, iters);
