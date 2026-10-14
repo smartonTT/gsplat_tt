@@ -1,0 +1,22 @@
+{
+ "task": 707,
+ "scene": "scenes/bicycle.ply",
+ "view": "_DSC8679",
+ "H": 822,
+ "W": 1237,
+ "n_ply": 6131954,
+ "n_opacity_ge_1_255": 5559909,
+ "n_visible": 1809729,
+ "n_pairs": 4478225,
+ "n_tiles": 1014,
+ "max_tile_pairs": 25069,
+ "n_live_px": 35992041,
+ "l1_loss": 0.17208097875118256,
+ "psnr_vs_jpg_db": 13.096,
+ "target": "scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG",
+ "target_md5": "443198107d6105a2347152cab8518306",
+ "image_md5_f32": "81c4a1983527e3a19eda3519d952db09",
+ "forward": "blend_backward_dev.forward_fast (fp32, device rules, numpy exp)",
+ "build_s": 436.1,
+ "forward_s": 396.3
+}
