@@ -65,6 +65,9 @@ class RenderConfig:
     sh_degree: int = 0
     near: float = 0.2
     lowpass: float = 0.3
+    # 3DGS/gsplat: the camera-space mean the Jacobian sees is clamped to jclamp x tan(half FOV)
+    # per axis (#777/#786); None = no clamp (pre-#786 projection).
+    jclamp: float | None = 1.3
     alpha_max: float = 0.99
     alpha_min: float = 1.0 / 255.0
     t_min: float = 1e-4
@@ -149,9 +152,17 @@ def render(params: dict[str, torch.Tensor], cam: Camera, cfg: RenderConfig,
     M = Rq * scales.unsqueeze(1)
     cov3d = M @ M.transpose(1, 2)
     zero = torch.zeros_like(tz)
+    jx, jy = tx, ty
+    if cfg.jclamp:
+        # tx clamped to +-lim tz (= tz clamp(tx / tz, +-lim)); autograd then gives gsplat's
+        # persp_proj_vjp: no tx (ty) gradient through J where clamped, d/dtz picks up +-lim.
+        lx = cfg.jclamp * W / (2.0 * fx) * tz_safe
+        ly = cfg.jclamp * H / (2.0 * fy) * tz_safe
+        jx = torch.minimum(torch.maximum(tx, -lx), lx)
+        jy = torch.minimum(torch.maximum(ty, -ly), ly)
     J = torch.stack([
-        torch.stack([fx / tz_safe, zero, -fx * tx / (tz_safe * tz_safe)], -1),
-        torch.stack([zero, fy / tz_safe, -fy * ty / (tz_safe * tz_safe)], -1),
+        torch.stack([fx / tz_safe, zero, -fx * jx / (tz_safe * tz_safe)], -1),
+        torch.stack([zero, fy / tz_safe, -fy * jy / (tz_safe * tz_safe)], -1),
     ], dim=1)  # (N, 2, 3)
     cov2d = J @ (R @ cov3d @ R.T) @ J.transpose(1, 2)
     a = cov2d[:, 0, 0] + cfg.lowpass

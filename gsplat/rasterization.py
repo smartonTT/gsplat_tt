@@ -106,9 +106,14 @@ def project_gaussians(
 
         J = torch.zeros(N, 2, 3, dtype=means.dtype)
         J[:, 0, 0] = fx / tz
-        J[:, 0, 2] = -fx * tx / tz2
+        # 3DGS/gsplat Jacobian clamp (#786): the mean J sees is clamped to 1.3x tan(half FOV).
+        lx = 1.3 * image_width / (2.0 * fx) * tz
+        ly = 1.3 * image_height / (2.0 * fy) * tz
+        jx = torch.minimum(torch.maximum(tx, -lx), lx)
+        jy = torch.minimum(torch.maximum(ty, -ly), ly)
+        J[:, 0, 2] = -fx * jx / tz2
         J[:, 1, 1] = fy / tz
-        J[:, 1, 2] = -fy * ty / tz2
+        J[:, 1, 2] = -fy * jy / tz2
 
         # Σ_2D = J @ R @ Σ_3D @ R^T @ J^T
         cov_cam = R @ cov3d @ R.T
