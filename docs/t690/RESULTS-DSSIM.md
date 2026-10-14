@@ -422,3 +422,28 @@ Gradient md5 identical in all 16 runs (5e5be678...), loss 0.149902639 in all arm
 PASS on K=2 (hero included); ab_jit_check JIT-HASH OK. K=4 is 0.036 ms/view (3.8 %) faster, very
 repeatable (round spread <= 0.004 ms) but below the task's 0.1 ms/view keep threshold. Of the
 ~0.25 ms of exposed reads, the halo share was small: the rest is the per-tile x/y/constant reads.
+
+`LOSS_SSIM_VF=1` (6f7958bf): the whole V pass runs in one dest acquire. Forward no longer copies
+the five filtered maps out to CB_M and back in for the SSIM formula, nor the per-pixel factors out
+to CB_F; backward no longer round-trips CB_PQ. The fp32 ops and their order are unchanged
+(slot-templated `ssim_pt` / `loss_pt` / `grad_pt`), so results are bit-identical.
+
+A/B (bh-49 p150, 6f7958bf, syn 1237x822, 50 iters, 4 alternated rounds, 2026-10-14 10:26-10:32
+PDT; log docs/t753/vf-ab.log, run 2125):
+
+| arm | b2b ms/view (4 rounds) | median | fwd b2b ms |
+|-----|------------------------|--------|------------|
+| K=1 (t743) | 0.9543 0.9558 0.9547 0.9541 | 0.955 | 0.439 |
+| K=1 + VF | 0.9332 0.9359 0.9337 0.9339 | 0.934 | 0.420 |
+| K=4 | 0.9192 0.9187 0.9200 0.9186 | 0.919 | 0.465 |
+| K=4 + VF | 0.8906 0.8903 0.8911 0.8934 | 0.891 | 0.441 |
+
+Gradient md5 identical in all 16 runs (5e5be678...), loss 0.149902639 in every arm; T0 oracle 6/6
+PASS on K=4+VF (hero included: loss_err +5.4e-09, grad_l2rel 1.8e-06); ab_jit_check JIT-HASH OK
+(fwd and bwd compute kernels differ between arms, as they should). VF alone saves 0.021 ms/view,
+K=4 alone 0.036, both together 0.064 ms/view (6.7 %), round spread <= 0.003 ms.
+
+Verdict: lossless and repeatable, but 0.064 ms/view is under the task's ~0.1 ms/view keep bar, so
+the defaults stay K=1, VF=0 (the t743 path). Both levers stay in the code as opt-in env flags.
+Of the ~0.25 ms/view bound (0.70 ms compute without reads vs 0.954 ms), these two take 0.064;
+the rest is the per-tile x / y / constant reads, not the halo and not the Dst<->CB copies.
