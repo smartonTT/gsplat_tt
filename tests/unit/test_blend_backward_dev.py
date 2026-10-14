@@ -176,9 +176,9 @@ def test_skipdead_model_is_exact_and_skips(tmp_path):
     assert s1["visits"] < s0["visits"], (s0, s1)
 
 
-def _cb_interface_outside_unpack_pack(src):
-    """Lines that call get_local_cb_interface where TRISC1 (MATH) would compile them: cb_interface
-    is undefined on MATH, so the link fails on device (#787)."""
+def _cb_interface_outside_unpack_pack(src, token="get_local_cb_interface", threads=("TRISC_PACK", "TRISC_UNPACK")):
+    """Lines that use `token` outside code compiled only for `threads`. cb_interface is undefined
+    on MATH, so the link fails on device; fifo_rd_ptr is set only on UNPACK (PACK reads 0) (#787)."""
     stack, bad = [], []
     for n, line in enumerate(src.splitlines(), 1):
         s = line.strip()
@@ -188,10 +188,11 @@ def _cb_interface_outside_unpack_pack(src):
             stack[-1] = s  # an #else of a TRISC_PACK block is not PACK-only
         elif s.startswith("#endif"):
             stack.pop()
-        elif "get_local_cb_interface" in s:
-            guarded = any(("TRISC_PACK" in c or "TRISC_UNPACK" in c) and c.startswith(("#ifdef", "#if "))
-                          for c in stack)
-            if not guarded and not s.startswith(("PACK((", "UNPACK((")):
+        elif token in s and not s.startswith("//"):
+            def only(c):
+                return c.startswith(("#ifdef", "#if ")) and any(c.split()[-1] == t for t in threads)
+            macros = tuple(t.removeprefix("TRISC_") + "((" for t in threads)
+            if not any(only(c) for c in stack) and not s.startswith(macros):
                 bad.append(n)
     return bad
 
@@ -201,3 +202,13 @@ def test_bwd_compute_cb_interface_only_on_unpack_pack():
     assert _cb_interface_outside_unpack_pack(src) == []
     assert _cb_interface_outside_unpack_pack(
         "#ifdef BWD_SKIPDEAD\nx = get_local_cb_interface(19);\n#endif\n") == [2]
+
+
+def test_bwd_compute_cb_read_ptr_only_on_unpack():
+    """PACK's fifo_rd_ptr is never set: reading CB_TL / CB_LIVE through it hit L1 address 0 and the
+    device skipped no vector (#787 A/B: ST_NV equal on both arms)."""
+    src = (ROOT / "render" / "train" / "kernels" / "blend_bwd_compute.cpp").read_text()
+    assert _cb_interface_outside_unpack_pack(src, "fifo_rd_ptr", ("TRISC_UNPACK",)) == []
+    assert _cb_interface_outside_unpack_pack(
+        "#ifdef TRISC_PACK\nx = get_local_cb_interface(19).fifo_rd_ptr;\n#endif\n",
+        "fifo_rd_ptr", ("TRISC_UNPACK",)) == [2]

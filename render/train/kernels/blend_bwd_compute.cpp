@@ -380,22 +380,26 @@ inline void bwd_bodies(uint32_t mask) {
 
 #ifdef BWD_SKIPDEAD
 static_assert(NB == 16, "BWD_SKIPDEAD scans one 64-word T block per pair, 16 per ACC pack");
-// MATH has no CB interfaces (cb_interface is undefined on TRISC1): UNPACK resets the mailbox
-// and hands its address over at kernel start.
-uint32_t g_live_mb;
+// MATH has no CB interfaces (cb_interface is undefined on TRISC1) and PACK's fifo_rd_ptr is never
+// set (it reads 0): UNPACK resets the mailbox and hands the CB_LIVE / CB_TL addresses over at start.
+uint32_t g_live_mb, g_tl_addr;
 inline volatile uint32_t* bwd_live_mb() { return reinterpret_cast<volatile uint32_t*>(g_live_mb); }
 inline void bwd_live_init() {
 #ifdef TRISC_UNPACK
     g_live_mb = get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4;
+    g_tl_addr = get_local_cb_interface(CB_TL).fifo_rd_ptr << 4;  // 1 page: every pack lands here
     bwd_live_mb()[0] = ~0u;  // no tile tag yet (L1 keeps the last run's); PACK writes only after MATH commits
     asm volatile("fence" ::: "memory");
     ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, g_live_mb);
+    ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, g_live_mb);
+    ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, g_tl_addr);
 #endif
 #ifdef TRISC_MATH
     g_live_mb = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
 #endif
 #ifdef TRISC_PACK
-    g_live_mb = get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4;
+    g_live_mb = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
+    g_tl_addr = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
 #endif
 }
 #ifdef TRISC_MATH
@@ -423,7 +427,7 @@ inline void bwd_tl_wait() {
 inline void bwd_scan_block(uint32_t b, uint32_t t) {
     if (g_tl_ok == 0u) return;
     const volatile uint32_t* w =
-        reinterpret_cast<const volatile uint32_t*>((get_local_cb_interface(CB_TL).fifo_rd_ptr << 4) + 256u * b);
+        reinterpret_cast<const volatile uint32_t*>(g_tl_addr + 256u * b);
     uint32_t e = 0, o = 0;
 #pragma GCC unroll 8
     for (uint32_t i = 0; i < 64; i += 2) {
