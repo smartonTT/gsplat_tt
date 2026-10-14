@@ -48,6 +48,17 @@ if [ -n "$alive" ]; then
 else
   echo "[viewer] not running"
 fi
+# AFR render workers (gsplat/afr_pool.py) can outlive the viewer and keep their chip (t615:
+# 20 s+ later the next viewer could not open it): wait for them, then end them. Only pids of
+# python multiprocessing children are touched (a pid the file names may have been reused).
+for p in $(cat "$VDIR/viewer.afr.pids" 2>/dev/null); do
+  grep -qa multiprocessing "/proc/$p/cmdline" 2>/dev/null || continue
+  for _ in $(seq 30); do kill -0 "$p" 2>/dev/null || break; sleep 1; done
+  kill -0 "$p" 2>/dev/null && { kill -TERM "$p"; sleep 5; }
+  kill -0 "$p" 2>/dev/null && kill -KILL "$p"
+  echo "[viewer] AFR worker pid $p ended"
+done
+rm -f "$VDIR/viewer.afr.pids"
 sp=$(cat "$VDIR/viewer.sup.pid" 2>/dev/null || true)
 if [ -n "$sp" ] && kill -0 "$sp" 2>/dev/null; then
   for _ in $(seq 10); do kill -0 "$sp" 2>/dev/null || break; sleep 1; done
@@ -63,7 +74,9 @@ do_start() {
   # VIEWER_TIMELINE=<box path> writes per-frame render/send times (task #587).
   # VIEWER_AFR_DEVICES=0,1 renders alternate frames on those PCIe chips, one worker process
   # each (gsplat/afr_pool.py, task #620; needs a tree with that file), VIEWER_AFR_INFLIGHT
-  # the frames in flight (default one per chip). Unset: the single-chip viewer.
+  # the frames in flight (default one per chip). Unset: the single-chip viewer. Chips with
+  # different stage grids are capped to the smallest so all render the same bits (#661;
+  # VIEWER_AFR_SAME_GRID=0 turns that off).
   # VIEWER_VISIBLE_DEVICES=D sets TT_VISIBLE_DEVICES=D for the single-chip viewer: on a host whose
   # boards carry different firmware bundles (bh-50: 18.12.1 and 19.7.0) opening them all fails (#615).
   # VIEWER_GRID_X=12 caps the grid (GSPLAT_TT_GRID_X): unharvested p150s (bh-50) give 14x10 under ETH
@@ -78,6 +91,7 @@ do_start() {
       "${VIEWER_TIMELINE:+GSPLAT_VIEWER_TIMELINE=$VIEWER_TIMELINE}" \
       "${VIEWER_AFR_DEVICES:+GSPLAT_VIEWER_AFR_DEVICES=$VIEWER_AFR_DEVICES}" \
       "${VIEWER_AFR_INFLIGHT:+GSPLAT_VIEWER_AFR_INFLIGHT=$VIEWER_AFR_INFLIGHT}" \
+      "${VIEWER_AFR_SAME_GRID:+GSPLAT_VIEWER_AFR_SAME_GRID=$VIEWER_AFR_SAME_GRID}" \
       "${VIEWER_VISIBLE_DEVICES:+TT_VISIBLE_DEVICES=$VIEWER_VISIBLE_DEVICES}" \
       "${VIEWER_GRID_X:+GSPLAT_TT_GRID_X=$VIEWER_GRID_X}" \
       "GSPLAT_TT_B4A_FOLD=${VIEWER_B4A_FOLD:-1} bash -s" <<'R'
@@ -95,6 +109,7 @@ export TT_METAL_CACHE=$VDIR/tt-metal-cache
 # overlay here and switches TT_METAL_CACHE to the overlay's own cache (its ELFs must not mix).
 export GSPLAT_TT_ETH_OVERLAY=$ETHOV GSPLAT_TT_ETH_CACHE=$ETHOV-cache
 if [ -n "$DISPATCH" ]; then export GSPLAT_TT_DISPATCH=$DISPATCH; else unset GSPLAT_TT_DISPATCH; fi
+export GSPLAT_VIEWER_AFR_PIDFILE=$VDIR/viewer.afr.pids  # read by do_stop (task #661)
 export NUMPY_MADVISE_HUGEPAGE=0  # THP compaction stalls on bh-35 (see viewer_clean.py)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
 # The pid file is written by the viewer process itself (exec keeps the pid): $! can be

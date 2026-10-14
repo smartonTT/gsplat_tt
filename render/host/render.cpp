@@ -589,6 +589,20 @@ PYBIND11_MODULE(render_clean, m) {
         gsplat_tt::device_state::cap_grid(gx, gy);
         return static_cast<int64_t>(gx * gy);
     });
+    // Task #661: the capped stage grid (x, y) every stage partitions by. The AFR
+    // pool caps all chips to the smallest one so they render the same bits.
+    m.def("stage_grid", []() {
+        std::size_t gx = 0, gy = 0;
+        {
+            py::gil_scoped_release nogil;
+            std::lock_guard<std::mutex> lock(render_view_mutex);
+            const auto g = gsplat_tt::device_state::get_device()->compute_with_storage_grid_size();
+            gx = g.x;
+            gy = g.y;
+            gsplat_tt::device_state::cap_grid(gx, gy);
+        }
+        return py::make_tuple(static_cast<int64_t>(gx), static_cast<int64_t>(gy));
+    });
     m.def("device_shutdown", []() {
         // Same lock order as render_view: GIL released, then the mutex, so a
         // close() waits for an in-flight viewer frame instead of freeing

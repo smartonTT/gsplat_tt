@@ -252,3 +252,73 @@ def test_viewer_clean_flag_off_builds_no_pool(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def _grids_pool(grids, env=None, **kw):
+    import os
+    base = {k: v for k, v in os.environ.items() if not k.startswith("GSPLAT_TT_GRID_")}
+    base.update(env or {})
+    return AFRPool([0, 1], fake_factory, {"grids": grids}, max_wh=(64, 64), base_env=base,
+                   log=lambda m: None, **kw)
+
+
+def _frame_meta(pool):
+    pipe = AFRPipeline(pool)
+    return [pipe.wait(pipe.submit(_w2c(i), K, 32, 32)).meta for i in range(2)]
+
+
+def test_common_grid():
+    assert afr_pool.common_grid([(12, 10), (11, 10)]) == (11, 10)
+    assert afr_pool.common_grid([(12, 10), (13, 9)]) == (12, 9)
+    assert afr_pool.common_grid([(12, 10), None]) is None
+
+
+def test_different_grids_are_capped_to_the_smallest():
+    # t615 bh-50: board 0 12x10 (120 cores), harvested board 1 11x10 (110): frames differed
+    # in 257 px because the pipeline partitions work by core count (task #661).
+    pool = _grids_pool([(12, 10), (11, 10)])
+    try:
+        assert pool._grid == [(11, 10), (11, 10)]
+        meta = _frame_meta(pool)
+        assert [m["stage_grid"] for m in meta] == [(11, 10), (11, 10)]
+    finally:
+        pool.close()
+
+
+def test_harvested_first_chip_caps_the_second():
+    pool = _grids_pool([(11, 10), (12, 10)])
+    try:
+        assert [m["stage_grid"] for m in _frame_meta(pool)] == [(11, 10), (11, 10)]
+    finally:
+        pool.close()
+
+
+def test_same_grid_off_keeps_each_chips_grid():
+    pool = _grids_pool([(12, 10), (11, 10)], env={afr_pool.ENV_SAME_GRID: "0"})
+    try:
+        assert [m["stage_grid"] for m in _frame_meta(pool)] == [(12, 10), (11, 10)]
+    finally:
+        pool.close()
+
+
+def test_equal_grids_start_each_worker_once():
+    pool = _grids_pool([(12, 10), (12, 10)])
+    try:
+        pids = [p.pid for p in pool._procs]
+        assert pool._grid == [(12, 10), (12, 10)]
+        assert {m["pid"] for m in _frame_meta(pool)} == set(pids)
+    finally:
+        pool.close()
+
+
+def test_pidfile_names_live_workers_and_goes_on_close():
+    with tempfile.TemporaryDirectory() as d:
+        pf = Path(d) / "viewer.afr.pids"
+        pool = _grids_pool([(12, 10), (11, 10)], env={afr_pool.ENV_PIDFILE: str(pf)})
+        try:
+            pids = [int(x) for x in pf.read_text().split()]
+            assert pids == [p.pid for p in pool._procs]
+            assert all(p.is_alive() for p in pool._procs)
+        finally:
+            pool.close()
+        assert not pf.exists()

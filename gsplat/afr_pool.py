@@ -12,6 +12,15 @@ settings); the worker renders it with the same Pipeline(tt_clean) as opt/viewer/
 and writes the 8-bit image into a multiprocessing.shared_memory slot of its own. The viewer
 keeps up to GSPLAT_VIEWER_AFR_INFLIGHT frames in flight (default: one per chip) and waits
 for the oldest first, so frames leave in order (gsplat/nerfview_viewer.py FastRenderer).
+
+Same grid on every chip (task #661): the pipeline partitions work by core count, so a different
+grid changes a few pixels' bits (docs/eth-dispatch-t397: 10x10 vs 11x10). A harvested board
+(bh-50 board 1: 11x10) next to a full one (12x10) gave chip-1 frames 257 px off chip 0's. Once all
+workers are ready, the pool restarts any worker whose stage grid is larger than the smallest
+with GSPLAT_TT_GRID_X/Y capped to it, so every chip renders the same bits. The slowest chip
+paces round-robin frames anyway. GSPLAT_VIEWER_AFR_SAME_GRID=0 turns this off.
+GSPLAT_VIEWER_AFR_PIDFILE names a file the pool keeps the worker pids in, so opt/viewer/viewer.sh
+stop can wait for workers that outlive the viewer (t615: one still held its chip 20 s later).
 """
 from __future__ import annotations
 
@@ -37,6 +46,8 @@ REPO = Path(__file__).resolve().parents[1]
 ENV_DEVICES = "GSPLAT_VIEWER_AFR_DEVICES"
 ENV_INFLIGHT = "GSPLAT_VIEWER_AFR_INFLIGHT"
 ENV_MAX_WH = "GSPLAT_VIEWER_AFR_MAX_WH"
+ENV_SAME_GRID = "GSPLAT_VIEWER_AFR_SAME_GRID"
+ENV_PIDFILE = "GSPLAT_VIEWER_AFR_PIDFILE"
 # Pipeline render knobs a request carries (the viewer's sliders).
 SETTINGS = ("cull_disabled", "contrib_floor", "transmittance_threshold", "min_opacity",
             "max_radius", "k_cap", "use_isoellipse")
@@ -70,6 +81,17 @@ def max_wh_from_env(env=os.environ) -> tuple[int, int]:
     raw = env.get(ENV_MAX_WH, "").strip() or "2048x2048"
     w, h = (int(x) for x in raw.lower().split("x"))
     return w, h
+
+
+def same_grid_from_env(env=os.environ) -> bool:
+    return env.get(ENV_SAME_GRID, "1").strip() != "0"
+
+
+def common_grid(grids) -> Optional[tuple[int, int]]:
+    """The grid every chip can run (smallest x, smallest y); None if any is unknown."""
+    if not grids or any(g is None for g in grids):
+        return None
+    return min(int(g[0]) for g in grids), min(int(g[1]) for g in grids)
 
 
 def _load_afr():
@@ -118,7 +140,9 @@ def _worker_main(k, dev, factory, cfg, env, req_q, resp_q, shm_names, slot_bytes
     except BaseException:
         resp_q.put({"kind": "error", "err": traceback.format_exc()})
         return
-    resp_q.put({"kind": "ready", "pid": os.getpid()})
+    grid = getattr(render, "stage_grid", None)
+    resp_q.put({"kind": "ready", "pid": os.getpid(),
+                "grid": tuple(int(v) for v in grid) if grid is not None else None})
     try:
         while True:
             try:
@@ -179,45 +203,103 @@ class AFRPool:
         self._procs: list = []
         self._readers: list[threading.Thread] = []
         atexit.register(self.close)
+        self._ctx, self._factory, self._cfg = ctx, factory, cfg or {}
+        self._ready_timeout_s = ready_timeout_s
+        self._grid: list[Optional[tuple[int, int]]] = [None] * n
         base = dict(os.environ if base_env is None else base_env)
+        self._pidfile = base.get(ENV_PIDFILE, "").strip() or None
         try:
-            for k, dev in enumerate(self.devices):
-                env = worker_env(base, k, dev)
-                p = ctx.Process(
-                    target=_worker_main, name=f"gsplat-afr{k}",
-                    args=(k, dev, factory, cfg or {}, env, self._req[k], self._resp[k],
-                          [s.name for s in self._shm[k]], self.slot_bytes, os.getpid()))
-                t0 = time.monotonic()
-                with _environ(env):  # the child's exec environment from its first line
-                    p.start()
-                self._procs.append(p)
-                r = threading.Thread(target=self._read, args=(k,), name=f"gsplat-afr{k}-rx",
-                                     daemon=True)
-                r.start()
-                self._readers.append(r)
-                with self._cv:  # one after the other: the JIT compiles must not collide
-                    if not self._cv.wait_for(lambda: self._state[k] != "starting",
-                                             ready_timeout_s):
-                        raise RuntimeError(f"AFR worker {k} (chip {dev}) not ready after "
-                                           f"{ready_timeout_s:g} s")
-                    if self._state[k] != "ready":
-                        raise RuntimeError(f"AFR worker {k} (chip {dev}) failed to start:\n"
-                                           f"{self._err[k]}")
-                log(f"[afr] worker {k} chip {dev} pid {p.pid} ready in "
-                    f"{time.monotonic() - t0:.1f} s")
+            envs = [worker_env(base, k, dev) for k, dev in enumerate(self.devices)]
+            for k in range(n):
+                self._start_worker(k, envs[k])
+            target = common_grid(self._grid) if same_grid_from_env(base) else None
+            if n > 1 and target is not None and len(set(self._grid)) > 1:
+                log(f"[afr] stage grids {self._grid} differ: capping every chip to "
+                    f"{target[0]}x{target[1]} so all render the same bits")
+                for k in range(n):
+                    if self._grid[k] != target:
+                        envs[k] = dict(envs[k], GSPLAT_TT_GRID_X=str(target[0]),
+                                       GSPLAT_TT_GRID_Y=str(target[1]))
+                        self._stop_worker(k)
+                        self._start_worker(k, envs[k])
+                        if self._grid[k] != target:
+                            raise RuntimeError(f"AFR worker {k} (chip {self.devices[k]}) grid "
+                                               f"{self._grid[k]} after capping to {target}")
+            elif n > 1 and target is None and same_grid_from_env(base):
+                log("[afr] stage grid unknown on some chip: frames may differ in a few bits "
+                    "between chips")
         except BaseException:
             self.close()
             raise
-        log(f"[afr] {n} chip(s) {self.devices}, {self.inflight} frame(s) in flight")
+        log(f"[afr] {n} chip(s) {self.devices}, grids {self._grid}, "
+            f"{self.inflight} frame(s) in flight")
 
-    def _read(self, k: int) -> None:
-        proc = self._procs[k]
+    def _start_worker(self, k: int, env: dict) -> None:
+        dev = self.devices[k]
+        p = self._ctx.Process(
+            target=_worker_main, name=f"gsplat-afr{k}",
+            args=(k, dev, self._factory, self._cfg, env, self._req[k], self._resp[k],
+                  [s.name for s in self._shm[k]], self.slot_bytes, os.getpid()))
+        t0 = time.monotonic()
+        with self._cv:
+            self._state[k], self._err[k], self._grid[k] = "starting", None, None
+        with _environ(env):  # the child's exec environment from its first line
+            p.start()
+        if k < len(self._procs):
+            self._procs[k] = p
+        else:
+            self._procs.append(p)
+        self._write_pidfile()
+        r = threading.Thread(target=self._read, args=(k, p), name=f"gsplat-afr{k}-rx",
+                             daemon=True)
+        r.start()
+        if k < len(self._readers):
+            self._readers[k] = r
+        else:
+            self._readers.append(r)
+        with self._cv:  # one after the other: the JIT compiles must not collide
+            if not self._cv.wait_for(lambda: self._state[k] != "starting",
+                                     self._ready_timeout_s):
+                raise RuntimeError(f"AFR worker {k} (chip {dev}) not ready after "
+                                   f"{self._ready_timeout_s:g} s")
+            if self._state[k] != "ready":
+                raise RuntimeError(f"AFR worker {k} (chip {dev}) failed to start:\n"
+                                   f"{self._err[k]}")
+        g = self._grid[k]
+        self._log(f"[afr] worker {k} chip {dev} pid {p.pid} ready in "
+                  f"{time.monotonic() - t0:.1f} s, stage grid "
+                  f"{f'{g[0]}x{g[1]}' if g else 'unknown'}")
+
+    def _stop_worker(self, k: int) -> None:
+        """Stop worker k (before a restart) and its reader."""
+        p = self._procs[k]
+        self._req[k].put(None)
+        p.join(60.0)
+        if p.is_alive():
+            p.terminate()
+            p.join(10.0)
+        self._readers[k].join(5.0)
+
+    def _write_pidfile(self) -> None:
+        if not self._pidfile:
+            return
+        try:
+            tmp = f"{self._pidfile}.tmp"
+            with open(tmp, "w") as f:
+                f.write("".join(f"{p.pid}\n" for p in self._procs if p.pid))
+            os.replace(tmp, self._pidfile)
+        except OSError as e:
+            self._log(f"[afr] cannot write {self._pidfile}: {e}")
+
+    def _read(self, k: int, proc) -> None:
         while not self._closed:
             try:
                 msg = self._resp[k].get(timeout=0.5)
             except queue.Empty:
                 if not proc.is_alive():
                     with self._cv:
+                        if self._procs[k] is not proc:  # restarted (same-grid cap)
+                            return
                         self._state[k] = "dead"
                         self._err[k] = self._err[k] or f"exit code {proc.exitcode}"
                         self._cv.notify_all()
@@ -228,6 +310,7 @@ class AFRPool:
             with self._cv:
                 if msg["kind"] == "ready":
                     self._state[k] = "ready"
+                    self._grid[k] = msg.get("grid")
                 elif msg["kind"] == "error":
                     self._state[k], self._err[k] = "dead", msg["err"]
                 else:
@@ -296,6 +379,11 @@ class AFRPool:
             if p.is_alive():
                 p.terminate()
                 p.join(5.0)
+        if self._pidfile and not any(p.is_alive() for p in self._procs):
+            try:
+                os.remove(self._pidfile)
+            except OSError:
+                pass
         for chip in self._shm:
             for s in chip:
                 try:
@@ -413,6 +501,11 @@ def tt_clean_factory(k: int, dev: int, cfg: dict):
         return {"image": r.image, "timings": r.timings, "sub_timings": r.sub_timings,
                 "num_visible": r.num_visible}
 
+    # The capped stage grid every stage partitions by (render/host/device_state.cpp cap_grid);
+    # the pool compares it across chips (task #661). Trees without the binding report none.
+    clean = getattr(pipe.backend, "_clean", None)
+    if clean is not None and hasattr(clean, "stage_grid"):
+        render.stage_grid = tuple(int(v) for v in clean.stage_grid())
     if cfg.get("warm") is not None:
         w2c, K, H, W = cfg["warm"]
         for _ in range(int(cfg.get("warm_n", 2))):
@@ -426,6 +519,12 @@ def fake_factory(k: int, dev: int, cfg: dict):
     delay = cfg.get("delay_s", [0.0])
     if cfg.get("fail_start") == k:
         raise RuntimeError(f"fake worker {k} fails to start")
+    grids = cfg.get("grids")  # per-chip compute grid; capped like device_state.cpp cap_grid
+    stage_grid = None
+    if grids is not None:
+        gx, gy = grids[k % len(grids)]
+        cx, cy = (int(os.environ.get(v, "0") or 0) for v in ("GSPLAT_TT_GRID_X", "GSPLAT_TT_GRID_Y"))
+        stage_grid = (cx if 0 < cx < gx else gx, cy if 0 < cy < gy else gy)
 
     def render(w2c, K, H, W, settings):
         time.sleep(delay[k % len(delay)])
@@ -435,7 +534,10 @@ def fake_factory(k: int, dev: int, cfg: dict):
                 "meta": {"settings": dict(settings), "pid": os.getpid(),
                          "TT_VISIBLE_DEVICES": os.environ.get("TT_VISIBLE_DEVICES"),
                          "GSPLAT_TT_DEVICE_ID": os.environ.get("GSPLAT_TT_DEVICE_ID"),
-                         ENV_DEVICES: os.environ.get(ENV_DEVICES)}}
+                         ENV_DEVICES: os.environ.get(ENV_DEVICES),
+                         "stage_grid": stage_grid}}
+    if stage_grid is not None:
+        render.stage_grid = stage_grid
     return render
 
 
