@@ -1735,6 +1735,45 @@ def check_b2b(rows: list[dict]) -> list[str]:
     return [p for r in rows for p in b2b_problems(r)]
 
 
+# Training-view throughput (#667/#683): optional metrics.ms_view_b2b_train_nn, b2b ms/view over
+# the 169 dataset train views of bicycle at 1237x822 in the greedy NN order
+# (benchmarks/cameras_train_nn.json), median of its passes. Shown next to the orbit headline;
+# rows without it get an empty cell (never a placeholder). Orbit single-chip b2b stays the headline.
+TRAIN_NN_LABEL = "train NN b2b ms/view (169 views, 1237x822)"
+
+
+def check_train_nn(rows: list[dict]) -> list[str]:
+    """Problems with the optional train-NN column: if set, a positive number that is the
+    median of its passes (when passes are listed)."""
+    out = []
+    for r in rows:
+        m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+        if "ms_view_b2b_train_nn" not in m:
+            continue
+        v, passes = m["ms_view_b2b_train_nn"], m.get("ms_view_b2b_train_nn_passes")
+        it = r.get("iter")
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v <= 0:
+            out.append(f"iter {it}: metrics.ms_view_b2b_train_nn {v!r} is not a positive number")
+            continue
+        if passes is not None:
+            if not (isinstance(passes, list) and passes
+                    and all(isinstance(x, (int, float)) and x > 0 for x in passes)):
+                out.append(f"iter {it}: metrics.ms_view_b2b_train_nn_passes must be positive numbers")
+            elif abs(statistics.median(passes) - v) > 2e-3:
+                out.append(f"iter {it}: ms_view_b2b_train_nn {v} is not the median of its passes "
+                           f"({statistics.median(passes):.3f})")
+    return out
+
+
+def train_nn_cell(m: dict) -> str:
+    v = m.get("ms_view_b2b_train_nn")
+    if not isinstance(v, (int, float)) or v <= 0:
+        return "<td class='train-nn'></td>"
+    passes = ", ".join(f"{x:.3f}" for x in m.get("ms_view_b2b_train_nn_passes") or [])
+    return (f"<td class='train-nn'><b>{v:.3f}</b> ({1000.0 / v:.1f} FPS)"
+            + (f"<br><small>passes {passes}</small>" if passes else "") + "</td>")
+
+
 def b2b_rows() -> list[dict]:
     """ttw rows that carry a measured b2b headline, oldest first."""
     return [r for r in load_ttw_iters()
@@ -1827,7 +1866,11 @@ def b2b_headline_section() -> str:
             + "RTX 4090 at 1237&times;822 (<b>published, not measured</b>): "
             + "; ".join(f"{g['id']} {g['renderer']} {g['ms']} ms = {g['ms'] / b2b:.2f}&times;"
                         for g in PUBLISHED_GPU_ROWS if g["gpu"] == "NVIDIA RTX 4090")
-            + " (GPU ms / TT ms; &lt;1 means the GPU is faster).</li>")
+            + " (GPU ms / TT ms; &lt;1 means the GPU is faster)."
+            + (f" {TRAIN_NN_LABEL}: <b>{m['ms_view_b2b_train_nn']:.3f}</b> "
+               f"({1000.0 / m['ms_view_b2b_train_nn']:.1f} FPS), same iter."
+               if isinstance(m.get("ms_view_b2b_train_nn"), (int, float)) else "")
+            + "</li>")
     body = []
     for r in sorted(rows, key=lambda r: r.get("iter") or 0, reverse=True):
         m = r["metrics"]
@@ -1841,19 +1884,25 @@ def b2b_headline_section() -> str:
             f"<td>{html_escape(str(m.get('board', '')))}</td>"
             f"<td>{html_escape(str(m.get('build', '')))} <code>{html_escape(str(m.get('commit', '')))}</code></td>"
             f"<td><b>{m['ms_view_b2b']:.3f}</b> ({1000.0 / m['ms_view_b2b']:.1f} FPS)<br><small>passes {passes}</small></td>"
+            + train_nn_cell(m) +
             f"<td>{'&mdash;' if lat is None else f'{float(lat):.3f}'}<br><small>{lat_runs}</small></td>"
             f"<td><code>{html_escape(str(m.get('md5', '')))}</code></td>"
             f"<td>{'&mdash;' if psnr is None else f'{psnr} dB'}</td></tr>")
     table = ("<p>No b2b rows yet.</p>" if not body else
              "<table class='rows'><tr><th>iter</th><th>row</th><th>board</th><th>build</th>"
-             "<th>b2b ms/view (headline): median, passes</th><th>latency ms/view (secondary, no dump)</th>"
+             "<th>b2b ms/view (headline): median, passes</th>"
+             f"<th>{TRAIN_NN_LABEL}</th><th>latency ms/view (secondary, no dump)</th>"
              "<th>sweep md5</th><th>hero PSNR vs reference_v2</th></tr>" + "".join(body) + "</table>")
     return f"""
 <section class='b2b-headline' style='border-left:4px solid #1d6fa5;background:#f2f8fc;padding:12px 16px'>
   <h2 style='margin-top:0'>Headline: back-to-back ms/view</h2>
   <p>Sustained rendering, <code>render/run.py --back-to-back</code> over the 30 bicycle views at
   1024&times;1024: what the viewer and real use get. Each value is the median of all measured passes;
-  the passes are listed. Latency (no <code>--dump-views</code>) is a secondary column. Iterations
+  the passes are listed. Latency (no <code>--dump-views</code>) is a secondary column. The
+  <b>{TRAIN_NN_LABEL}</b> column is training-view throughput: the 169 Mip-NeRF360 bicycle train
+  cameras in nearest-neighbour order (<code>benchmarks/cameras_train_nn.json</code>,
+  <a href='{_opt_href("docs/training-bench/RESULTS.md")}' target='_blank'>docs/training-bench/RESULTS.md</a>,
+  #667); it is empty where not measured. Iterations
   before #465 were measured only in latency; their cards and the trajectory below say
   <b>latency (legacy)</b>, and no b2b number is filled in for them.</p>
   <h3>Current b2b per board</h3>

@@ -56,6 +56,14 @@ manual steps the renewal tasks (#263, #316, #318, #320, #321, #325) worked out a
    then releases the old job under `ttp lock p100`. The old box stays reserved until the new one
    has built, and every run until then extends it too (`ird change-timeout`).
 
+7. Current measurement box (#687, 2026-10-14): **bh-49, board 0, Blackhole p150a** (IRD job 134115,
+   cluster tt_bgd), reached through yyz-ird with strict host-key checking. bh-49 has no rsync, so
+   `opt/sync_remote.sh` falls back to ssh+tar (changed files by md5, one-way). Later tasks target it with
+   `opt/ird/renew.sh measure` (extends it; `--keep-old` while bh-33 is still held by #653), then
+   `ttp lock p100 -- opt/sync_remote.sh bh-49 /localdev/$USER/gstt2 <rev>` and runs under the same lock
+   (`MESH_DEVICE=P150`). On the p150a, eth dispatch keeps the JIT cache in `<tree>/tmp/ttm-eth12-cache`.
+   Numbers from bh-49 are labelled p150; earlier bh-33 numbers stay labelled p100.
+
 `--dry-run` makes only read-only queries (ird list and list-machines, strict ssh and preflight to a
 box we already hold, `viewer.sh status`). It prints every changing command as
 `[dry-run] would run: ...` and writes no state. It never opens an ssh to a box we do not hold.

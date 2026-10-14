@@ -1,0 +1,668 @@
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache
+[run] warmup (hero='_DSC8680', 618x411, scene=bicycle)
+2026-10-14 07:50:58.483 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:50:58.483 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:50:58.486 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:50:58.486 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:50:58.486 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:50:58.486 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:50:58.487 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-14 07:50:58.487 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-14 07:50:58.487 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:50:58.487 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:50:58.490 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:50:58.490 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:50:58.490 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:50:58.490 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:50:58.490 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-14 07:50:58.491 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-14 07:50:58.491 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-14 07:50:58.530 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-14 07:50:58.530 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-14 07:50:58.530 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-14 07:50:58.530 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-14 07:50:58.530 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-14 07:50:58.531 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-14 07:50:58.531 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-14 07:50:59.547 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-14 07:50:59.547 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-14 07:50:59.547 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:50:59.547 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:50:59.548 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:50:59.549 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:50:59.549 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:50:59.549 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:50:59.549 | warning  |          Always | Unknown motherboard 'PRO X870-P WIFI (MS-7E47)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-14 07:50:59.549 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-14 07:50:59.549 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:50:59.549 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:50:59.549 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-14 07:50:59.549 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:50:59.550 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:50:59.550 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 07:50:59.550 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 07:50:59.550 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 07:50:59.550 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 07:50:59.550 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 07:50:59.550 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 07:50:59.553 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/gstt2-sync/tmp/ttm-eth12/tt_metal/pre-compiled/2674056940313099667/ (build_env_manager.cpp:257)
+[DEV] device 0 (card 0), dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[run] opacity prune: kept 500000 of 500000 gaussians (pfwc cores 120)
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 1.8 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 260 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 260 row_pages 17 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 17 tiles 260)
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5322
+[SORT] stage=ONELAUNCH P=332232 P_kept=332232 num_tiles=260 max_tile_n=6033 onelaunch=0.10 layout=0.03 pub_host=0.07 total=0.23ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[run] timing 169 views (warmup excluded)
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5322
+[SORT] stage=ONELAUNCH P=332232 P_kept=332232 num_tiles=260 max_tile_n=6033 onelaunch=0.09 layout=0.02 pub_host=0.04 total=0.16ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=120/120 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[run]   view=_DSC8680 2.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3566
+[SORT] stage=ONELAUNCH P=220572 P_kept=220572 num_tiles=260 max_tile_n=3966 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[B4A] fold: view K2 from the previous blend (2 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[run]   view=_DSC8726 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4494
+[SORT] stage=ONELAUNCH P=279748 P_kept=279748 num_tiles=260 max_tile_n=5979 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[run]   view=_DSC8779 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6741
+[SORT] stage=ONELAUNCH P=423305 P_kept=423305 num_tiles=260 max_tile_n=6820 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8725 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6161
+[SORT] stage=ONELAUNCH P=386572 P_kept=386572 num_tiles=260 max_tile_n=7192 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8778 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5552
+[SORT] stage=ONELAUNCH P=347171 P_kept=347171 num_tiles=260 max_tile_n=6182 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8817 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5906
+[SORT] stage=ONELAUNCH P=369739 P_kept=369739 num_tiles=260 max_tile_n=6043 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8781 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6064
+[SORT] stage=ONELAUNCH P=380047 P_kept=380047 num_tiles=260 max_tile_n=6753 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8780 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3328
+[SORT] stage=ONELAUNCH P=204223 P_kept=204223 num_tiles=260 max_tile_n=3180 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8819 1.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5936
+[SORT] stage=ONELAUNCH P=371414 P_kept=371414 num_tiles=260 max_tile_n=7757 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8818 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5843
+[SORT] stage=ONELAUNCH P=366011 P_kept=366011 num_tiles=260 max_tile_n=7536 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8820 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5933
+[SORT] stage=ONELAUNCH P=371488 P_kept=371488 num_tiles=260 max_tile_n=6535 onelaunch=0.08 layout=0.02 pub_host=0.07 total=0.17ms
+[run]   view=_DSC8782 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3692
+[SORT] stage=ONELAUNCH P=228248 P_kept=228248 num_tiles=260 max_tile_n=4349 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8821 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6077
+[SORT] stage=ONELAUNCH P=380763 P_kept=380763 num_tiles=260 max_tile_n=5936 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8783 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6624
+[SORT] stage=ONELAUNCH P=415895 P_kept=415895 num_tiles=260 max_tile_n=6591 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8731 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6521
+[SORT] stage=ONELAUNCH P=409183 P_kept=409183 num_tiles=260 max_tile_n=6506 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8729 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3472
+[SORT] stage=ONELAUNCH P=214260 P_kept=214260 num_tiles=260 max_tile_n=3854 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8730 1.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3826
+[SORT] stage=ONELAUNCH P=237131 P_kept=237131 num_tiles=260 max_tile_n=4493 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8732 1.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=7341
+[SORT] stage=ONELAUNCH P=461250 P_kept=461250 num_tiles=260 max_tile_n=6310 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.12ms
+[run]   view=_DSC8683 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2600
+[SORT] stage=ONELAUNCH P=157875 P_kept=157875 num_tiles=260 max_tile_n=3175 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8684 1.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3163
+[SORT] stage=ONELAUNCH P=194426 P_kept=194426 num_tiles=260 max_tile_n=4042 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8682 1.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=7537
+[SORT] stage=ONELAUNCH P=473689 P_kept=473689 num_tiles=260 max_tile_n=6352 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8681 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3497
+[SORT] stage=ONELAUNCH P=215643 P_kept=215643 num_tiles=260 max_tile_n=3410 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8728 1.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4026
+[SORT] stage=ONELAUNCH P=249677 P_kept=249677 num_tiles=260 max_tile_n=6271 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8859 2.2ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=5864
+[SORT] stage=ONELAUNCH P=367454 P_kept=367454 num_tiles=260 max_tile_n=8657 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8858 2.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5449
+[SORT] stage=ONELAUNCH P=340578 P_kept=340578 num_tiles=260 max_tile_n=7675 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8873 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5475
+[SORT] stage=ONELAUNCH P=342322 P_kept=342322 num_tiles=260 max_tile_n=7424 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8860 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5573
+[SORT] stage=ONELAUNCH P=348915 P_kept=348915 num_tiles=260 max_tile_n=7804 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8861 2.5ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=5796
+[SORT] stage=ONELAUNCH P=362878 P_kept=362878 num_tiles=260 max_tile_n=8706 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold view 30: prepared=1 cores_with_k2_args=120/120 ran=1
+[run]   view=_DSC8822 2.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3961
+[SORT] stage=ONELAUNCH P=244992 P_kept=244992 num_tiles=260 max_tile_n=6703 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold: view K2 from the previous blend (30 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (30 views, cq1 1)
+[run]   view=_DSC8823 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3593
+[SORT] stage=ONELAUNCH P=221377 P_kept=221377 num_tiles=260 max_tile_n=6752 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8825 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6041
+[SORT] stage=ONELAUNCH P=378365 P_kept=378365 num_tiles=260 max_tile_n=8037 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8786 2.7ms
+[SUBCHUNK] tiles_split=6 total_subchunks=266 max_subchunks_per_tile=2 payload_pages=5893
+[SORT] stage=ONELAUNCH P=368835 P_kept=368835 num_tiles=260 max_tile_n=10973 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8826 3.0ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=6020
+[SORT] stage=ONELAUNCH P=377167 P_kept=377167 num_tiles=260 max_tile_n=10951 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8788 3.0ms
+[SUBCHUNK] tiles_split=5 total_subchunks=265 max_subchunks_per_tile=2 payload_pages=5149
+[SORT] stage=ONELAUNCH P=321768 P_kept=321768 num_tiles=260 max_tile_n=10000 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8827 2.8ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=6203
+[SORT] stage=ONELAUNCH P=388446 P_kept=388446 num_tiles=260 max_tile_n=8433 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8737 2.6ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=5233
+[SORT] stage=ONELAUNCH P=326372 P_kept=326372 num_tiles=260 max_tile_n=8804 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8789 2.7ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=6304
+[SORT] stage=ONELAUNCH P=394734 P_kept=394734 num_tiles=260 max_tile_n=10064 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8739 2.9ms
+[SUBCHUNK] tiles_split=5 total_subchunks=265 max_subchunks_per_tile=2 payload_pages=5399
+[SORT] stage=ONELAUNCH P=337087 P_kept=337087 num_tiles=260 max_tile_n=11266 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8791 3.0ms
+[SUBCHUNK] tiles_split=9 total_subchunks=269 max_subchunks_per_tile=2 payload_pages=6228
+[SORT] stage=ONELAUNCH P=390469 P_kept=390469 num_tiles=260 max_tile_n=14693 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8742 3.5ms
+[SUBCHUNK] tiles_split=7 total_subchunks=267 max_subchunks_per_tile=2 payload_pages=6715
+[SORT] stage=ONELAUNCH P=421549 P_kept=421549 num_tiles=260 max_tile_n=12980 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8691 3.4ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=4544
+[SORT] stage=ONELAUNCH P=282991 P_kept=282991 num_tiles=260 max_tile_n=14863 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8743 3.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2354
+[SORT] stage=ONELAUNCH P=142539 P_kept=142539 num_tiles=260 max_tile_n=7115 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8692 2.3ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=3741
+[SORT] stage=ONELAUNCH P=231270 P_kept=231270 num_tiles=260 max_tile_n=8277 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.12ms
+[run]   view=_DSC8741 2.6ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=6887
+[SORT] stage=ONELAUNCH P=432316 P_kept=432316 num_tiles=260 max_tile_n=8804 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8689 2.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4759
+[SORT] stage=ONELAUNCH P=296444 P_kept=296444 num_tiles=260 max_tile_n=7750 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8738 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4292
+[SORT] stage=ONELAUNCH P=266964 P_kept=266964 num_tiles=260 max_tile_n=5883 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8736 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2507
+[SORT] stage=ONELAUNCH P=152298 P_kept=152298 num_tiles=260 max_tile_n=3646 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8688 1.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=1574
+[SORT] stage=ONELAUNCH P=92689 P_kept=92689 num_tiles=260 max_tile_n=1763 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8690 1.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4741
+[SORT] stage=ONELAUNCH P=295088 P_kept=295088 num_tiles=260 max_tile_n=6799 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8787 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6046
+[SORT] stage=ONELAUNCH P=378801 P_kept=378801 num_tiles=260 max_tile_n=6642 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8785 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6371
+[SORT] stage=ONELAUNCH P=399020 P_kept=399020 num_tiles=260 max_tile_n=6360 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8733 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4558
+[SORT] stage=ONELAUNCH P=283425 P_kept=283425 num_tiles=260 max_tile_n=5608 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8734 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=7224
+[SORT] stage=ONELAUNCH P=454272 P_kept=454272 num_tiles=260 max_tile_n=6505 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8685 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2410
+[SORT] stage=ONELAUNCH P=146190 P_kept=146190 num_tiles=260 max_tile_n=3670 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8686 1.6ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=3587
+[SORT] stage=ONELAUNCH P=221135 P_kept=221135 num_tiles=260 max_tile_n=10716 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8829 2.8ms
+[SUBCHUNK] tiles_split=6 total_subchunks=266 max_subchunks_per_tile=2 payload_pages=5766
+[SORT] stage=ONELAUNCH P=360663 P_kept=360663 num_tiles=260 max_tile_n=12940 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8790 3.4ms
+[SUBCHUNK] tiles_split=7 total_subchunks=267 max_subchunks_per_tile=2 payload_pages=5775
+[SORT] stage=ONELAUNCH P=361476 P_kept=361476 num_tiles=260 max_tile_n=14000 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8828 3.4ms
+[SUBCHUNK] tiles_split=5 total_subchunks=266 max_subchunks_per_tile=3 payload_pages=5520
+[SORT] stage=ONELAUNCH P=345342 P_kept=345342 num_tiles=260 max_tile_n=17400 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.12ms
+[B4A] fold view 60: prepared=1 cores_with_k2_args=120/120 ran=1
+[run]   view=_DSC8830 4.4ms
+[SUBCHUNK] tiles_split=3 total_subchunks=264 max_subchunks_per_tile=3 payload_pages=3526
+[SORT] stage=ONELAUNCH P=218035 P_kept=218035 num_tiles=260 max_tile_n=16854 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold: view K2 from the previous blend (60 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (60 views, cq1 1)
+[run]   view=_DSC8831 4.2ms
+[SUBCHUNK] tiles_split=7 total_subchunks=268 max_subchunks_per_tile=3 payload_pages=5066
+[SORT] stage=ONELAUNCH P=316189 P_kept=316189 num_tiles=260 max_tile_n=18869 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8793 4.6ms
+[SUBCHUNK] tiles_split=8 total_subchunks=268 max_subchunks_per_tile=2 payload_pages=6424
+[SORT] stage=ONELAUNCH P=402848 P_kept=402848 num_tiles=260 max_tile_n=14978 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8693 3.7ms
+[SUBCHUNK] tiles_split=4 total_subchunks=265 max_subchunks_per_tile=3 payload_pages=3636
+[SORT] stage=ONELAUNCH P=224400 P_kept=224400 num_tiles=260 max_tile_n=18087 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8745 4.4ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=2280
+[SORT] stage=ONELAUNCH P=137728 P_kept=137728 num_tiles=260 max_tile_n=14587 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8694 3.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=1130
+[SORT] stage=ONELAUNCH P=63986 P_kept=63986 num_tiles=260 max_tile_n=2253 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8696 1.2ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=3822
+[SORT] stage=ONELAUNCH P=236292 P_kept=236292 num_tiles=260 max_tile_n=9474 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8747 2.6ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=5939
+[SORT] stage=ONELAUNCH P=372233 P_kept=372233 num_tiles=260 max_tile_n=10416 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8746 2.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5041
+[SORT] stage=ONELAUNCH P=314329 P_kept=314329 num_tiles=260 max_tile_n=7886 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8795 2.7ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=5575
+[SORT] stage=ONELAUNCH P=348612 P_kept=348612 num_tiles=260 max_tile_n=10203 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8794 3.0ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=3123
+[SORT] stage=ONELAUNCH P=191666 P_kept=191666 num_tiles=260 max_tile_n=10720 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8833 2.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2868
+[SORT] stage=ONELAUNCH P=175135 P_kept=175135 num_tiles=260 max_tile_n=7484 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8835 2.5ms
+[SUBCHUNK] tiles_split=5 total_subchunks=265 max_subchunks_per_tile=2 payload_pages=5683
+[SORT] stage=ONELAUNCH P=355454 P_kept=355454 num_tiles=260 max_tile_n=9697 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8834 3.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5798
+[SORT] stage=ONELAUNCH P=362902 P_kept=362902 num_tiles=260 max_tile_n=7848 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8836 2.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5908
+[SORT] stage=ONELAUNCH P=369215 P_kept=369215 num_tiles=260 max_tile_n=7107 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8796 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3887
+[SORT] stage=ONELAUNCH P=240910 P_kept=240910 num_tiles=260 max_tile_n=6331 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8837 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5217
+[SORT] stage=ONELAUNCH P=325849 P_kept=325849 num_tiles=260 max_tile_n=5895 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8797 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6124
+[SORT] stage=ONELAUNCH P=384213 P_kept=384213 num_tiles=260 max_tile_n=7542 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8750 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5373
+[SORT] stage=ONELAUNCH P=335909 P_kept=335909 num_tiles=260 max_tile_n=7221 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8751 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6447
+[SORT] stage=ONELAUNCH P=404250 P_kept=404250 num_tiles=260 max_tile_n=7406 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8699 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4557
+[SORT] stage=ONELAUNCH P=283707 P_kept=283707 num_tiles=260 max_tile_n=5744 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8753 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=995
+[SORT] stage=ONELAUNCH P=55702 P_kept=55702 num_tiles=260 max_tile_n=2113 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8700 1.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=1414
+[SORT] stage=ONELAUNCH P=82037 P_kept=82037 num_tiles=260 max_tile_n=2796 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8702 1.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3638
+[SORT] stage=ONELAUNCH P=224465 P_kept=224465 num_tiles=260 max_tile_n=4996 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8755 1.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6382
+[SORT] stage=ONELAUNCH P=400485 P_kept=400485 num_tiles=260 max_tile_n=6697 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8701 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6053
+[SORT] stage=ONELAUNCH P=379195 P_kept=379195 num_tiles=260 max_tile_n=6318 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8754 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5539
+[SORT] stage=ONELAUNCH P=346773 P_kept=346773 num_tiles=260 max_tile_n=5645 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8799 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5863
+[SORT] stage=ONELAUNCH P=366701 P_kept=366701 num_tiles=260 max_tile_n=6297 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8798 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5868
+[SORT] stage=ONELAUNCH P=367247 P_kept=367247 num_tiles=260 max_tile_n=6779 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8838 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3958
+[SORT] stage=ONELAUNCH P=245130 P_kept=245130 num_tiles=260 max_tile_n=5804 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[B4A] fold view 90: prepared=1 cores_with_k2_args=120/120 ran=1
+[run]   view=_DSC8839 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3374
+[SORT] stage=ONELAUNCH P=207527 P_kept=207527 num_tiles=260 max_tile_n=4528 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold: view K2 from the previous blend (90 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (90 views, cq1 1)
+[run]   view=_DSC8841 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4384
+[SORT] stage=ONELAUNCH P=272258 P_kept=272258 num_tiles=260 max_tile_n=4265 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8801 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6027
+[SORT] stage=ONELAUNCH P=377183 P_kept=377183 num_tiles=260 max_tile_n=5687 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8756 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4893
+[SORT] stage=ONELAUNCH P=305166 P_kept=305166 num_tiles=260 max_tile_n=5229 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8757 1.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=775
+[SORT] stage=ONELAUNCH P=41026 P_kept=41026 num_tiles=260 max_tile_n=534 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8704 1.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4929
+[SORT] stage=ONELAUNCH P=307204 P_kept=307204 num_tiles=260 max_tile_n=4936 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8706 1.9ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5141
+[SORT] stage=ONELAUNCH P=320485 P_kept=320485 num_tiles=260 max_tile_n=5262 onelaunch=0.07 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8759 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6163
+[SORT] stage=ONELAUNCH P=386457 P_kept=386457 num_tiles=260 max_tile_n=5905 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8705 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5939
+[SORT] stage=ONELAUNCH P=371918 P_kept=371918 num_tiles=260 max_tile_n=5300 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8758 1.9ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4367
+[SORT] stage=ONELAUNCH P=270971 P_kept=270971 num_tiles=260 max_tile_n=4180 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.12ms
+[run]   view=_DSC8803 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6193
+[SORT] stage=ONELAUNCH P=388227 P_kept=388227 num_tiles=260 max_tile_n=5576 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8707 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4019
+[SORT] stage=ONELAUNCH P=249206 P_kept=249206 num_tiles=260 max_tile_n=4915 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8761 1.9ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2613
+[SORT] stage=ONELAUNCH P=158961 P_kept=158961 num_tiles=260 max_tile_n=3704 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8708 1.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4576
+[SORT] stage=ONELAUNCH P=284797 P_kept=284797 num_tiles=260 max_tile_n=7135 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8763 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6077
+[SORT] stage=ONELAUNCH P=380711 P_kept=380711 num_tiles=260 max_tile_n=7935 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8709 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4570
+[SORT] stage=ONELAUNCH P=283987 P_kept=283987 num_tiles=260 max_tile_n=5985 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8805 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2948
+[SORT] stage=ONELAUNCH P=180523 P_kept=180523 num_tiles=260 max_tile_n=5017 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8847 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5820
+[SORT] stage=ONELAUNCH P=364789 P_kept=364789 num_tiles=260 max_tile_n=7238 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8804 2.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5735
+[SORT] stage=ONELAUNCH P=358886 P_kept=358886 num_tiles=260 max_tile_n=6952 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8846 2.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5625
+[SORT] stage=ONELAUNCH P=351419 P_kept=351419 num_tiles=260 max_tile_n=6243 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8868 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5486
+[SORT] stage=ONELAUNCH P=342502 P_kept=342502 num_tiles=260 max_tile_n=5090 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8867 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5629
+[SORT] stage=ONELAUNCH P=352262 P_kept=352262 num_tiles=260 max_tile_n=5986 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8844 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5718
+[SORT] stage=ONELAUNCH P=358398 P_kept=358398 num_tiles=260 max_tile_n=5304 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8802 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3881
+[SORT] stage=ONELAUNCH P=240279 P_kept=240279 num_tiles=260 max_tile_n=4823 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8845 1.9ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5863
+[SORT] stage=ONELAUNCH P=367020 P_kept=367020 num_tiles=260 max_tile_n=6910 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8762 2.3ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=6109
+[SORT] stage=ONELAUNCH P=382508 P_kept=382508 num_tiles=260 max_tile_n=8394 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8764 2.5ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=6001
+[SORT] stage=ONELAUNCH P=375942 P_kept=375942 num_tiles=260 max_tile_n=9863 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8766 2.8ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=4882
+[SORT] stage=ONELAUNCH P=303601 P_kept=303601 num_tiles=260 max_tile_n=9849 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8807 2.9ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=6056
+[SORT] stage=ONELAUNCH P=379102 P_kept=379102 num_tiles=260 max_tile_n=8972 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.13ms
+[run]   view=_DSC8713 2.7ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=4470
+[SORT] stage=ONELAUNCH P=278083 P_kept=278083 num_tiles=260 max_tile_n=9408 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold view 120: prepared=1 cores_with_k2_args=120/120 ran=1
+[run]   view=_DSC8767 2.8ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=2698
+[SORT] stage=ONELAUNCH P=164480 P_kept=164480 num_tiles=260 max_tile_n=9324 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold: view K2 from the previous blend (120 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (120 views, cq1 1)
+[run]   view=_DSC8714 2.5ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=3572
+[SORT] stage=ONELAUNCH P=220580 P_kept=220580 num_tiles=260 max_tile_n=8271 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8712 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4520
+[SORT] stage=ONELAUNCH P=281635 P_kept=281635 num_tiles=260 max_tile_n=7850 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8765 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3868
+[SORT] stage=ONELAUNCH P=239246 P_kept=239246 num_tiles=260 max_tile_n=6789 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8710 2.2ms
+[SUBCHUNK] tiles_split=6 total_subchunks=266 max_subchunks_per_tile=2 payload_pages=5766
+[SORT] stage=ONELAUNCH P=360776 P_kept=360776 num_tiles=260 max_tile_n=9538 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8806 3.0ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=3744
+[SORT] stage=ONELAUNCH P=231251 P_kept=231251 num_tiles=260 max_tile_n=8722 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8849 2.8ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=2769
+[SORT] stage=ONELAUNCH P=168585 P_kept=168585 num_tiles=260 max_tile_n=13832 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8851 3.4ms
+[SUBCHUNK] tiles_split=6 total_subchunks=266 max_subchunks_per_tile=2 payload_pages=5424
+[SORT] stage=ONELAUNCH P=338873 P_kept=338873 num_tiles=260 max_tile_n=12022 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8850 3.1ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=5191
+[SORT] stage=ONELAUNCH P=324411 P_kept=324411 num_tiles=260 max_tile_n=11481 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.13ms
+[run]   view=_DSC8870 3.2ms
+[SUBCHUNK] tiles_split=5 total_subchunks=265 max_subchunks_per_tile=2 payload_pages=5626
+[SORT] stage=ONELAUNCH P=351698 P_kept=351698 num_tiles=260 max_tile_n=13245 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8852 3.5ms
+[SUBCHUNK] tiles_split=7 total_subchunks=267 max_subchunks_per_tile=2 payload_pages=5888
+[SORT] stage=ONELAUNCH P=368582 P_kept=368582 num_tiles=260 max_tile_n=12736 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8810 3.0ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=2799
+[SORT] stage=ONELAUNCH P=171028 P_kept=171028 num_tiles=260 max_tile_n=10638 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8853 2.9ms
+[SUBCHUNK] tiles_split=4 total_subchunks=264 max_subchunks_per_tile=2 payload_pages=4297
+[SORT] stage=ONELAUNCH P=266798 P_kept=266798 num_tiles=260 max_tile_n=11435 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8811 3.0ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=6317
+[SORT] stage=ONELAUNCH P=395917 P_kept=395917 num_tiles=260 max_tile_n=9682 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8772 2.9ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=3995
+[SORT] stage=ONELAUNCH P=247109 P_kept=247109 num_tiles=260 max_tile_n=8245 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8773 2.4ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2199
+[SORT] stage=ONELAUNCH P=131878 P_kept=131878 num_tiles=260 max_tile_n=4741 onelaunch=0.06 layout=0.02 pub_host=0.05 total=0.12ms
+[run]   view=_DSC8720 1.9ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=3471
+[SORT] stage=ONELAUNCH P=213762 P_kept=213762 num_tiles=260 max_tile_n=12478 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8718 3.2ms
+[SUBCHUNK] tiles_split=8 total_subchunks=268 max_subchunks_per_tile=2 payload_pages=5306
+[SORT] stage=ONELAUNCH P=331251 P_kept=331251 num_tiles=260 max_tile_n=12205 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8771 3.4ms
+[SUBCHUNK] tiles_split=7 total_subchunks=267 max_subchunks_per_tile=2 payload_pages=6187
+[SORT] stage=ONELAUNCH P=387743 P_kept=387743 num_tiles=260 max_tile_n=12867 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8717 3.7ms
+[SUBCHUNK] tiles_split=8 total_subchunks=268 max_subchunks_per_tile=2 payload_pages=6215
+[SORT] stage=ONELAUNCH P=389001 P_kept=389001 num_tiles=260 max_tile_n=14021 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8770 3.6ms
+[SUBCHUNK] tiles_split=7 total_subchunks=268 max_subchunks_per_tile=3 payload_pages=5424
+[SORT] stage=ONELAUNCH P=339372 P_kept=339372 num_tiles=260 max_tile_n=18136 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8809 4.5ms
+[SUBCHUNK] tiles_split=8 total_subchunks=269 max_subchunks_per_tile=3 payload_pages=6169
+[SORT] stage=ONELAUNCH P=386724 P_kept=386724 num_tiles=260 max_tile_n=17458 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8715 4.5ms
+[SUBCHUNK] tiles_split=10 total_subchunks=270 max_subchunks_per_tile=2 payload_pages=4508
+[SORT] stage=ONELAUNCH P=280287 P_kept=280287 num_tiles=260 max_tile_n=14899 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8769 3.4ms
+[SUBCHUNK] tiles_split=3 total_subchunks=264 max_subchunks_per_tile=3 payload_pages=2389
+[SORT] stage=ONELAUNCH P=144693 P_kept=144693 num_tiles=260 max_tile_n=17632 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8716 3.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2812
+[SORT] stage=ONELAUNCH P=171696 P_kept=171696 num_tiles=260 max_tile_n=6395 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8855 2.3ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4246
+[SORT] stage=ONELAUNCH P=263204 P_kept=263204 num_tiles=260 max_tile_n=8190 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8813 2.6ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=6128
+[SORT] stage=ONELAUNCH P=384206 P_kept=384206 num_tiles=260 max_tile_n=8606 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8774 2.8ms
+[SUBCHUNK] tiles_split=5 total_subchunks=265 max_subchunks_per_tile=2 payload_pages=6035
+[SORT] stage=ONELAUNCH P=378308 P_kept=378308 num_tiles=260 max_tile_n=10086 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8812 2.9ms
+[SUBCHUNK] tiles_split=6 total_subchunks=266 max_subchunks_per_tile=2 payload_pages=5845
+[SORT] stage=ONELAUNCH P=366218 P_kept=366218 num_tiles=260 max_tile_n=12669 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8854 3.1ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=5672
+[SORT] stage=ONELAUNCH P=354941 P_kept=354941 num_tiles=260 max_tile_n=9939 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold view 150: prepared=1 cores_with_k2_args=120/120 ran=1
+[run]   view=_DSC8871 2.8ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=6045
+[SORT] stage=ONELAUNCH P=379004 P_kept=379004 num_tiles=260 max_tile_n=8971 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[B4A] fold: view K2 from the previous blend (150 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (150 views, cq1 1)
+[run]   view=_DSC8814 2.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=2778
+[SORT] stage=ONELAUNCH P=169580 P_kept=169580 num_tiles=260 max_tile_n=4104 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8857 1.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4246
+[SORT] stage=ONELAUNCH P=263227 P_kept=263227 num_tiles=260 max_tile_n=6540 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8815 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4843
+[SORT] stage=ONELAUNCH P=301785 P_kept=301785 num_tiles=260 max_tile_n=7424 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8777 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=7207
+[SORT] stage=ONELAUNCH P=452945 P_kept=452945 num_tiles=260 max_tile_n=7032 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8723 2.5ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4345
+[SORT] stage=ONELAUNCH P=270712 P_kept=270712 num_tiles=260 max_tile_n=5201 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8724 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3335
+[SORT] stage=ONELAUNCH P=205142 P_kept=205142 num_tiles=260 max_tile_n=5908 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8722 2.2ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=4430
+[SORT] stage=ONELAUNCH P=274702 P_kept=274702 num_tiles=260 max_tile_n=7724 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8775 2.5ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=6544
+[SORT] stage=ONELAUNCH P=410591 P_kept=410591 num_tiles=260 max_tile_n=9117 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8721 2.9ms
+[SUBCHUNK] tiles_split=1 total_subchunks=261 max_subchunks_per_tile=2 payload_pages=5389
+[SORT] stage=ONELAUNCH P=336931 P_kept=336931 num_tiles=260 max_tile_n=8392 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8869 2.8ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5357
+[SORT] stage=ONELAUNCH P=334563 P_kept=334563 num_tiles=260 max_tile_n=4228 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8866 1.9ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5454
+[SORT] stage=ONELAUNCH P=341190 P_kept=341190 num_tiles=260 max_tile_n=5214 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8842 2.0ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=3626
+[SORT] stage=ONELAUNCH P=224334 P_kept=224334 num_tiles=260 max_tile_n=4411 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8843 1.7ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=5630
+[SORT] stage=ONELAUNCH P=352086 P_kept=352086 num_tiles=260 max_tile_n=4911 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8865 2.1ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=6076
+[SORT] stage=ONELAUNCH P=381090 P_kept=381090 num_tiles=260 max_tile_n=8098 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8748 2.7ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=5383
+[SORT] stage=ONELAUNCH P=335959 P_kept=335959 num_tiles=260 max_tile_n=9420 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8749 2.5ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=6461
+[SORT] stage=ONELAUNCH P=405143 P_kept=405143 num_tiles=260 max_tile_n=8689 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8697 2.6ms
+[SUBCHUNK] tiles_split=0 total_subchunks=260 max_subchunks_per_tile=1 payload_pages=905
+[SORT] stage=ONELAUNCH P=49711 P_kept=49711 num_tiles=260 max_tile_n=482 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8698 1.0ms
+[SUBCHUNK] tiles_split=2 total_subchunks=262 max_subchunks_per_tile=2 payload_pages=5180
+[SORT] stage=ONELAUNCH P=322799 P_kept=322799 num_tiles=260 max_tile_n=10442 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8863 2.9ms
+[SUBCHUNK] tiles_split=3 total_subchunks=263 max_subchunks_per_tile=2 payload_pages=5678
+[SORT] stage=ONELAUNCH P=354971 P_kept=354971 num_tiles=260 max_tile_n=10246 onelaunch=0.06 layout=0.02 pub_host=0.04 total=0.12ms
+[run]   view=_DSC8862 2.5ms
+SUMMARY scene=bicycle hero='_DSC8680' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=2.5 p50_ms=2.4 min_ms=1.0 max_ms=4.6 n_views=169 warmup_s=1.2 out=/localdev/smarton/gstt2-sync/tmp/t691-r1-lat-0p5M_s2
+TTW_TIMING ms_view=2.493
+TTW_TIMING blend=2.493
+TTW_TIMING stage_head=0.002
+TTW_TIMING stage_project=0.027
+TTW_TIMING stage_tile_assign=0.002
+TTW_TIMING stage_sort=0.126
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=2.168
+TTW_TIMING stage_d2h=0.004
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.002
+TTW_TIMING stage_xview=0.139
+TTW_TIMING stage_view_total=2.470
+TTW_TIMING stage_pybind=0.023
+STAGES n=169 head=0.002 project=0.027 tile_assign=0.002 sort=0.126 blend_setup=0.000 mat=0.000 cull=0.000 blend=2.168 d2h=0.004 assemble=0.000 tail=0.002 xview=0.139 | sum=2.469 view_total=2.470 resid_in_view=+0.001 avg_frame_ms=2.493 resid_vs_frame=+0.024 xview_hits=168 xview_misses=0
+TTW_TIMING stage_sort_pread=0.001
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.016
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.062
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.044
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.029
+TTW_TIMING stage_sort_pre=0.001
+TTW_TIMING stage_sort_log=0.004
+TTW_TIMING stage_sort_cont_prep=0.004
+TTW_TIMING stage_sort_cont_rtargs=0.045
+TTW_TIMING stage_sort_cont_other=-0.079
+TTW_TIMING stage_sort_other=0.001
+SORT_STAGES n=169 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.016 upload=0.000 bin_emit=0.062 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.044 publish_wait=0.000 mat=0.029 pre=0.001 log=0.004 cont_prep=0.004 cont_rtargs=0.045 cont_other=-0.079 | sum=0.125 sort=0.126 resid=+0.001
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=0.001
+TTW_TIMING stage_project_pfwc_rtargs=0.032
+TTW_TIMING stage_project_pfwc_chunkcull=0.000
+TTW_TIMING stage_project_pfwc_enqueue=0.016
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.001
+TTW_TIMING stage_project_gather_rtargs=0.000
+TTW_TIMING stage_project_gather_enqueue=0.000
+TTW_TIMING stage_project_gather_wait=0.025
+TTW_TIMING stage_project_gather_result=0.000
+TTW_TIMING stage_project_other=-0.049
+PROJECT_STAGES n=169 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.032 pfwc_chunkcull=0.000 pfwc_enqueue=0.016 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.025 gather_result=0.000 | sum=0.077 project=0.027 resid=-0.049
+TTW_TIMING stage_tile_assign_setup=0.001
+TTW_TIMING stage_tile_assign_rtargs=0.000
+TTW_TIMING stage_tile_assign_enqueue=0.000
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=0.000
+TTW_TIMING stage_tile_assign_publish=0.000
+TTW_TIMING stage_tile_assign_other=0.000
+TILE_ASSIGN_STAGES n=169 setup=0.001 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.001 tile_assign=0.002 resid=+0.000

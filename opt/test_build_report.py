@@ -214,3 +214,34 @@ def test_split_2chip_line_and_g5_label():
     g5 = [r for r in b.PUBLISHED_GPU_ROWS if r["id"] == "G5"][0]
     assert "full unpruned model" in g5["scene"] and "likely smaller" not in g5["scene"]
     assert "5.56M" not in g5["scene"] and "#627" in line and "#615" in line
+
+
+def test_train_nn_column_optional_next_to_headline():
+    # #683: optional train-NN b2b column (169 dataset train views, 1237x822, #667);
+    # empty for rows without it, never a placeholder; orbit b2b stays the headline.
+    rows = [
+        _b2b_row(228, 8.226, [8.225, 8.226, 8.226], board="bh-33 p100"),
+        dict(_b2b_row(229, 8.063, [8.061, 8.064, 8.066, 8.062], board="bh-33 p100",
+                      ms_view_b2b_train_nn=8.565,
+                      ms_view_b2b_train_nn_passes=[8.565, 8.565, 8.564, 8.565]), decision="keep"),
+    ]
+    orig = b.load_ttw_iters
+    b.load_ttw_iters = lambda: rows
+    try:
+        sec = b.b2b_headline_section()
+    finally:
+        b.load_ttw_iters = orig
+    assert b.TRAIN_NN_LABEL in sec, sec
+    assert "Headline: back-to-back ms/view" in sec and "8.063 ms/view b2b" in sec, sec
+    assert "8.565" in sec and "116.8 FPS" in sec, sec
+    # The iter-228 row has an empty train-NN cell.
+    row228 = sec.split("<tr><td>228</td>")[1].split("</tr>")[0]
+    assert "8.565" not in row228 and "<td class='train-nn'></td>" in row228, row228
+    # Validator rule: optional, but if present it is positive and the median of its passes.
+    assert b.check_train_nn(rows) == []
+    bad = dict(rows[1], metrics=dict(rows[1]["metrics"], ms_view_b2b_train_nn=-1))
+    assert "ms_view_b2b_train_nn" in b.check_train_nn([bad])[0]
+    bad2 = dict(rows[1], metrics=dict(rows[1]["metrics"], ms_view_b2b_train_nn=8.7))
+    assert "not the median" in b.check_train_nn([bad2])[0]
+    bad3 = dict(rows[1], metrics=dict(rows[1]["metrics"], ms_view_b2b_train_nn=""))
+    assert b.check_train_nn([bad3]), "a placeholder string is rejected"

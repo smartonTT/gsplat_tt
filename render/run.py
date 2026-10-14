@@ -210,7 +210,13 @@ class CleanBackend(CpuCppBackend):
                 pass
 
 
-def build_intrinsics(W, H, fov_deg):
+def build_intrinsics(W, H, fov_deg, intr=None):
+    """Square-pixel K from fov_deg (longer side), or the camera file's own
+    "intrinsics" {fx, fy, cx, cy} when present (task #667: dataset cameras)."""
+    if intr:
+        K = np.array([[intr["fx"], 0.0, intr["cx"]], [0.0, intr["fy"], intr["cy"]],
+                      [0.0, 0.0, 1.0]], dtype=np.float32)
+        return torch.from_numpy(K)
     longer = max(W, H)
     f = 0.5 * longer / math.tan(0.5 * math.radians(fov_deg))
     K = np.array([[f, 0.0, W * 0.5], [0.0, f, H * 0.5], [0.0, 0.0, 1.0]],
@@ -263,12 +269,12 @@ def _to_image(res):
     return np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0)
 
 
-def render_hero(backend, gauss, view, fov_deg, W, H, contrib_floor):
+def render_hero(backend, gauss, view, fov_deg, W, H, contrib_floor, intr=None):
     """Render a single view through `backend` (used for the CPU reference)."""
     pipeline = Pipeline(backend, tile_size=32, contrib_floor=contrib_floor)
     c2w = np.asarray(view["c2w"], dtype=np.float32)
     extr = c2w_to_w2c(torch.from_numpy(c2w))
-    K = build_intrinsics(W, H, fov_deg)
+    K = build_intrinsics(W, H, fov_deg, intr)
     # Warmup (JIT compile + caches), then the render we keep.
     _ = pipeline.render(gauss, extr, K, H, W)
     return _to_image(pipeline.render(gauss, extr, K, H, W))
@@ -761,12 +767,12 @@ def _main():
         dump_dir = REPO_ROOT / "tmp" / args.dump_views
         dump_dir.mkdir(parents=True, exist_ok=True)
 
-    K = build_intrinsics(W, H, fov_deg)
+    K = build_intrinsics(W, H, fov_deg, cam.get("intrinsics"))
 
     if args.ref_only is not None:
         out_npy = Path(args.ref_only[0])
         ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
-                          W, H, contrib_floor)
+                          W, H, contrib_floor, cam.get("intrinsics"))
         out_npy.parent.mkdir(parents=True, exist_ok=True)
         np.save(out_npy, ref.astype(np.float32))
         print(f"[run] ref-only wrote {out_npy} mean={ref.mean():.4f}", flush=True)

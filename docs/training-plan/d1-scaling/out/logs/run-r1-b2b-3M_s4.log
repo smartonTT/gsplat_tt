@@ -1,0 +1,182 @@
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=171
+[run] warmup (hero='_DSC8680', 309x205, scene=bicycle)
+2026-10-14 07:47:01.414 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:01.414 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:01.416 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:01.416 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:01.416 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:01.417 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:01.418 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-14 07:47:01.418 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-14 07:47:01.418 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:01.418 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:01.420 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:01.420 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:01.420 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:01.421 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:01.421 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-14 07:47:01.421 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-14 07:47:01.421 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-14 07:47:01.460 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-14 07:47:01.460 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-14 07:47:01.460 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-14 07:47:01.460 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-14 07:47:01.460 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-14 07:47:01.461 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-14 07:47:01.461 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-14 07:47:02.459 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-14 07:47:02.459 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-14 07:47:02.460 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 07:47:02.460 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 07:47:02.460 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 07:47:02.461 | info     |             UMD | Established firmware bundle version: 19.8.0 (topology_discovery.cpp:544)
+2026-10-14 07:47:02.461 | info     |             UMD | Firmware bundle version 19.8.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 07:47:02.461 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 07:47:02.462 | warning  |          Always | Unknown motherboard 'PRO X870-P WIFI (MS-7E47)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-14 07:47:02.462 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-14 07:47:02.462 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:02.462 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:02.462 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-14 07:47:02.462 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:02.462 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 07:47:02.462 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 07:47:02.462 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 07:47:02.462 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 07:47:02.462 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 07:47:02.462 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 07:47:02.462 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 07:47:02.465 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/gstt2-sync/tmp/ttm-eth12/tt_metal/pre-compiled/2674056940313099667/ (build_env_manager.cpp:257)
+[DEV] device 0 (card 0), dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[run] opacity prune: kept 3000000 of 3000000 gaussians (pfwc cores 120)
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 2.1 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 70 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 70 row_pages 5 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 5 tiles 70)
+[gsplat_tt::sort] tile 52 holds 42592 (padded) records > bucket capacity 32832; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (42592 records): bucket grown to 65472, retrying the view at contrib floor 1/255
+[SUBCHUNK] tiles_split=48 total_subchunks=172 max_subchunks_per_tile=6 payload_pages=16926
+[SORT] stage=ONELAUNCH P=1080828 P_kept=1080828 num_tiles=70 max_tile_n=41738 onelaunch=0.03 layout=0.02 pub_host=0.05 total=0.10ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[run] timing 169 views (warmup excluded)
+[SUBCHUNK] tiles_split=48 total_subchunks=172 max_subchunks_per_tile=6 payload_pages=16926
+[SORT] stage=ONELAUNCH P=1080828 P_kept=1080828 num_tiles=70 max_tile_n=41738 onelaunch=0.03 layout=0.01 pub_host=0.03 total=0.07ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[B4A] fold view 2: prepared=1 cores_with_k2_args=120/120 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (1 views, cq1 1)
+[SUBCHUNK] tiles_split=40 total_subchunks=135 max_subchunks_per_tile=5 payload_pages=12043
+[SORT] stage=ONELAUNCH P=768790 P_kept=768790 num_tiles=70 max_tile_n=35239 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+[B4A] fold: view K2 from the previous blend (2 views)
+[LA] prefetch: next view's sort + proj_M read behind the blend (2 views, cq1 1)
+[SUBCHUNK] tiles_split=47 total_subchunks=145 max_subchunks_per_tile=4 payload_pages=13639
+[SORT] stage=ONELAUNCH P=870903 P_kept=870903 num_tiles=70 max_tile_n=28449 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.11ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+[gsplat_tt::sort] tile 43 holds 76672 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (76672 records > 65472): retrying the view at contrib floor 1/71 (was 1/255)
+[gsplat_tt::sort] tile 43 holds 73440 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (73440 records > 65472): retrying the view at contrib floor 1/30 (was 1/71)
+[gsplat_tt::sort] tile 43 holds 71248 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (71248 records > 65472): retrying the view at contrib floor 1/15 (was 1/30)
+[gsplat_tt::sort] tile 43 holds 69408 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (69408 records > 65472): retrying the view at contrib floor 1/8 (was 1/15)
+[gsplat_tt::sort] tile 43 holds 67600 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (67600 records > 65472): retrying the view at contrib floor 1/4 (was 1/8)
+[gsplat_tt::sort] tile 43 holds 66016 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (66016 records > 65472): retrying the view at contrib floor 1/2 (was 1/4)
+[SUBCHUNK] tiles_split=41 total_subchunks=170 max_subchunks_per_tile=8 payload_pages=17759
+[SORT] stage=ONELAUNCH P=1134415 P_kept=1134415 num_tiles=70 max_tile_n=63793 onelaunch=0.03 layout=0.01 pub_host=0.04 total=0.09ms
+OUT_RING new pinned slot (slots=5 grows=4 replaced=0)
+[gsplat_tt::sort] tile 33 holds 71312 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (71312 records > 65472): retrying the view at contrib floor 1/97 (was 1/255)
+[gsplat_tt::sort] tile 33 holds 69216 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (69216 records > 65472): retrying the view at contrib floor 1/49 (was 1/97)
+[gsplat_tt::sort] tile 33 holds 67424 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (67424 records > 65472): retrying the view at contrib floor 1/24 (was 1/49)
+[gsplat_tt::sort] tile 33 holds 65600 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (65600 records > 65472): retrying the view at contrib floor 1/12 (was 1/24)
+[SUBCHUNK] tiles_split=41 total_subchunks=166 max_subchunks_per_tile=8 payload_pages=16573
+[SORT] stage=ONELAUNCH P=1058435 P_kept=1058435 num_tiles=70 max_tile_n=62761 onelaunch=0.08 layout=0.02 pub_host=0.05 total=0.15ms
+OUT_RING new pinned slot (slots=6 grows=5 replaced=0)
+[SUBCHUNK] tiles_split=49 total_subchunks=168 max_subchunks_per_tile=7 payload_pages=16827
+[SORT] stage=ONELAUNCH P=1074811 P_kept=1074811 num_tiles=70 max_tile_n=53624 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=7 grows=6 replaced=0)
+[SUBCHUNK] tiles_split=49 total_subchunks=174 max_subchunks_per_tile=8 payload_pages=17920
+[SORT] stage=ONELAUNCH P=1144726 P_kept=1144726 num_tiles=70 max_tile_n=63098 onelaunch=0.07 layout=0.01 pub_host=0.04 total=0.11ms
+OUT_RING new pinned slot (slots=8 grows=7 replaced=0)
+[SUBCHUNK] tiles_split=46 total_subchunks=186 max_subchunks_per_tile=8 payload_pages=19303
+[SORT] stage=ONELAUNCH P=1232783 P_kept=1232783 num_tiles=70 max_tile_n=63174 onelaunch=0.07 layout=0.01 pub_host=0.04 total=0.12ms
+OUT_RING new pinned slot (slots=9 grows=8 replaced=0)
+[SUBCHUNK] tiles_split=36 total_subchunks=113 max_subchunks_per_tile=3 payload_pages=10469
+[SORT] stage=ONELAUNCH P=667698 P_kept=667698 num_tiles=70 max_tile_n=24450 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=10 grows=9 replaced=0)
+[SUBCHUNK] tiles_split=42 total_subchunks=178 max_subchunks_per_tile=8 payload_pages=18600
+[SORT] stage=ONELAUNCH P=1188499 P_kept=1188499 num_tiles=70 max_tile_n=63371 onelaunch=0.06 layout=0.01 pub_host=0.03 total=0.10ms
+OUT_RING new pinned slot (slots=11 grows=10 replaced=0)
+[SUBCHUNK] tiles_split=42 total_subchunks=177 max_subchunks_per_tile=8 payload_pages=18629
+[SORT] stage=ONELAUNCH P=1190398 P_kept=1190398 num_tiles=70 max_tile_n=63771 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=12 grows=11 replaced=0)
+[gsplat_tt::sort] tile 32 holds 69520 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (69520 records > 65472): retrying the view at contrib floor 1/110 (was 1/255)
+[gsplat_tt::sort] tile 32 holds 68192 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (68192 records > 65472): retrying the view at contrib floor 1/55 (was 1/110)
+[gsplat_tt::sort] tile 32 holds 66816 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (66816 records > 65472): retrying the view at contrib floor 1/27 (was 1/55)
+[gsplat_tt::sort] tile 32 holds 65536 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (65536 records > 65472): retrying the view at contrib floor 1/14 (was 1/27)
+[SUBCHUNK] tiles_split=42 total_subchunks=168 max_subchunks_per_tile=8 payload_pages=16884
+[SORT] stage=ONELAUNCH P=1078406 P_kept=1078406 num_tiles=70 max_tile_n=63386 onelaunch=0.08 layout=0.01 pub_host=0.04 total=0.13ms
+OUT_RING new pinned slot (slots=13 grows=12 replaced=0)
+[SUBCHUNK] tiles_split=40 total_subchunks=125 max_subchunks_per_tile=4 payload_pages=11322
+[SORT] stage=ONELAUNCH P=722285 P_kept=722285 num_tiles=70 max_tile_n=28841 onelaunch=0.07 layout=0.01 pub_host=0.02 total=0.10ms
+OUT_RING new pinned slot (slots=14 grows=13 replaced=0)
+[SUBCHUNK] tiles_split=46 total_subchunks=182 max_subchunks_per_tile=8 payload_pages=19011
+[SORT] stage=ONELAUNCH P=1214830 P_kept=1214830 num_tiles=70 max_tile_n=61779 onelaunch=0.07 layout=0.01 pub_host=0.03 total=0.11ms
+OUT_RING new pinned slot (slots=15 grows=14 replaced=0)
+[gsplat_tt::sort] tile 32 holds 78032 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (78032 records > 65472): retrying the view at contrib floor 1/66 (was 1/255)
+[gsplat_tt::sort] tile 32 holds 74976 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (74976 records > 65472): retrying the view at contrib floor 1/27 (was 1/66)
+[gsplat_tt::sort] tile 32 holds 72992 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (72992 records > 65472): retrying the view at contrib floor 1/13 (was 1/27)
+[gsplat_tt::sort] tile 32 holds 71360 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (71360 records > 65472): retrying the view at contrib floor 1/7 (was 1/13)
+[gsplat_tt::sort] tile 32 holds 69968 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (69968 records > 65472): retrying the view at contrib floor 1/3 (was 1/7)
+[gsplat_tt::sort] tile 32 holds 68528 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+[render_clean] tile overflow (68528 records > 65472): retrying the view at contrib floor 1/2 (was 1/3)
+[gsplat_tt::sort] tile 32 holds 67616 (padded) records > bucket capacity 65472; sort failed, the view is retried at a coarser floor
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 977, in main
+    _main()
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 744, in _main
+    rc = _back_to_back(args, clean_pipeline, gauss, cam, order, K, H, W,
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 421, in _back_to_back
+    imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
+  File "/localdev/smarton/gstt2-sync/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2-sync/render/run.py", line 170, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: render_clean: device sort failed; single-path TT, no CPU fallback
