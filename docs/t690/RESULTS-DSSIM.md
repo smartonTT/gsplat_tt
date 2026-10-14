@@ -100,3 +100,79 @@ What this shows:
   is (a): split R into 9-bit hi + 9-bit lo (or quantise the 11 weights to 18 bits) and do the
   extra R_lo pass; expected to bring the filter to ~1e-5. If ~1e-5 is still too much for the
   T0 oracle on loss and dL/dimage, use (b) from the list above for the remaining accumulation part.
+
+## t714: tap-structure and fixed-point diagnostics, error propagation to the T0 oracle (bh-49 p150a, 2026-10-14 01:45-02:10 PDT)
+
+Spec step 1 premise: R was already split on the host (band_consts: h = trunc9(r), l = trunc9(r - h),
+CB_R holds Rh/Rl/RTh/RTl and every pass runs zh·Rh + zl·Rh + zh·Rl). So the 2.8e-4 floor is not
+from unsplit weights. New diagnostics (fe8578b4, 36041f84):
+- `LOSS_RDIAG=t<preset>` replaces the Gaussian with other 11-tap sets; the bench writes the taps
+  it used (taps.txt) and loss_check compares against an fp64 separable filter with those taps.
+  g9 = Gaussian masked to 9 bits (no lo part, so every product is exact), g5 = 5 bits,
+  pw = powers of two (2^-10..2^-2), gl = lo parts only.
+- `_q<n>` suffix quantises the input to multiples of 2^-n (fixed point), to test whether the
+  error depends on the inputs' exponents.
+
+| case | taps | l2rel vs fp64 (same taps) | mean rel bias |
+|---|---|---|---|
+| dump64 | default split3 Gaussian | 2.92e-4 | – |
+| dump64 | g9 (exact products) | 2.94e-4 | +2.28e-4 |
+| dump64 | g5 | 2.43e-4 | +1.80e-4 |
+| dump64 | pw | 1.06e-4 | +6.83e-5 |
+| dump64 | gl | 1.28e-3 | -1.27e-3 |
+| syn | g9 | 2.85e-4 | +2.61e-4 |
+| syn | pw | 9.5e-5 | +7.9e-5 |
+| dump64 | R = c·I, c of 5/6/9 bits (single product) | 7.2e-7 .. 7.5e-7 | PASS |
+| dump64 | pw, input q12 / q16 / q20 | 1.07e-4 each | |
+| dump64 | g9 q12 | 2.94e-4 | |
+| dump64 | g5 q8 | 2.54e-4 | |
+| syn | pw q12 / g9 q12 | 9.55e-5 / 2.85e-4 | |
+
+What this shows:
+- Single products are exact (also with two 9-bit operands). The error is all in the
+  multi-term accumulation inside one FPU matmul: a positive relative bias that does not depend
+  on content and grows with the spread of product magnitudes (box ~1e-5, powers of two ~7e-5,
+  Gaussian ~2.6e-4). Fixed-point inputs do not change it. Spec step 1 (split R) cannot reach
+  1e-5: it is already in place and the floor is the accumulator, not the operands.
+
+### Propagation to loss and dL/dimage (opt/t714/dssim_prop.py, model, T0 tolerance)
+
+Every filter output multiplied by (1 + e), run through loss_and_grad_device, compared to exact
+fp32. T0 bar: grad l2rel <= 1e-4 and |loss err| < 1e-5. bike_* = 256x384 crops of the real
+bicycle photo _DSC8679 (images_4) against a blurred + noisy copy (23.9 dB).
+
+| case | e = measured 2.8e-4 bias | 1e-5 | 3e-6 | 1e-6 | fp32 rounding only |
+|---|---|---|---|---|---|
+| dump64 | 9.2e-4 FAIL | 3.6e-5 PASS | PASS | PASS | PASS |
+| syn | 332 FAIL | 2.3e-3 FAIL | 6.1e-4 FAIL | 1.8e-4 FAIL | 1.3e-5 PASS |
+| bike_top | 5.2e5 FAIL | 5.7e-3 FAIL | 1.5e-3 FAIL | 4.3e-4 FAIL | 2.0e-5 PASS |
+| bike_mid | 0.42 FAIL | 7.5e-4 FAIL | 2.0e-4 FAIL | 6.0e-5 PASS | 3.0e-6 PASS |
+
+(grad l2rel; bike_top at 1e-5 also has loss err 7.5e-5, SSIM err -3.7e-4.)
+
+Why: sigma^2 = E[x^2] - mu^2 cancels, so a relative filter error is amplified by about
+mu^2 / C2 (C2 = 9e-4) in flat regions. Real images need the filter at about fp32 precision
+(<~1e-7 relative).
+
+Oracle verdict: the FPU split3 filter FAILS the T0 oracle on loss and dL/dimage, by orders of
+magnitude. Even the box-level 1e-5 accumulation error fails on real images, so no FPU-fp32
+accumulation path is good enough as is.
+
+Not done, and why:
+- Spec 2b (one non-zero tap per K group per matmul, so sums happen in fp32 dest): exact, but
+  each band matmul turns into ~11 single-diagonal matmuls, about 7x the matmul count. Estimate
+  (not measured) ~1.5 ms per filtered map, x6 maps per step: not viable against the 1-2 ms/view
+  training target.
+- Spec step 3 (fused L1 + D-SSIM kernel): its precision prerequisite fails; not started.
+- Filter timing unchanged: 0.209 ms/view b2b at 1237x822 (#706, not re-measured).
+
+Exact paths for the next task (sized only, none measured):
+1. Integer FPU matmul: Blackhole LLK has Int8 srcA/srcB with int32 dest
+   (tt_llk_blackhole/llk_lib/llk_math_common.h, ALU_ACC_CTRL_INT8_math_enabled, needs fp32 dest
+   mode). Sums are exact integers, so the only error is the fixed-point quantisation of x and the
+   taps, chosen up front (e.g. x as 3 int8 limbs, taps as 2-3 limbs). Needs a feasibility probe
+   (int8 x int8 -> int32 matmul_tiles with a known answer) and a cost size.
+2. SFPU fp32 FMA filter (11 taps x 2 passes per pixel per map), exact to fp32 rounding; size it.
+3. Better conditioning as a complement: filter (x - c_T) with a per-tile constant c_T and add
+   c_T back (G * c is known), which cuts the mu^2 / C2 amplification; still needs a filter far
+   better than 1e-5 on real images.
