@@ -1,0 +1,5 @@
+OK t2g_reader: same hashes ['11764250209759479447', '12209847043831273822'] (runtime-arg-only)
+OK t2g_compute: same hashes ['2560876098778140448', '6610215706525512914'] (runtime-arg-only)
+OK marker k8: '"kcap": 8,' found
+OK marker k16: '"kcap": 16,' found
+JIT-HASH OK (runtime-arg-only)
