@@ -1,4 +1,4 @@
-# T1 device blend backward: results (#693, 2026-10-13)
+# T1 device blend backward: results (#693 v1 2026-10-13, #704 v2 2026-10-14)
 
 Kernel: render/train/kernels/{bwd_reader,blend_bwd_compute,bwd_writer}.cpp, host
 render/train/blend_bwd_bench.cpp, driver docs/t685/drive.sh (one `ttp lock p100`: preflight,
@@ -50,24 +50,111 @@ v1 packs and writes a 4 KB tile per pair and leaves the lane reduce to the host,
 per pair and its output size (4 KB per pair, 143 MB for s2) do not carry to the hero view.
 No hero-view number yet: the hero needs v2 (below) and a hero dump.
 
-## Not done in this task (moved to the follow-up)
+## v2 (#704, 2026-10-14): lane reduce and finish on device
 
-- Hero-view timing with a per-stage split (needs v2 and a real hero-view forward state).
-- Forward training flag (fp32 image, accurate exp, slab kept alive) with the flag-off
-  b2b raw_md5 1d372b94 check and the on/off A/B (opt/ab_jit_check.py on both arms).
-- DRAM/L1 footprint at hero scale.
+Changes against v1 (commit 60591b2b):
+- Compute: after each pair, a per-lane finish (linear, so it can run before the reduce:
+  dmx = A Su + B Sv and dmy = B Su + C Sv per lane, dA = -Su²/2, and so on). Then a 32-lane sum
+  per group of 4 terms: SFPTRANSP, an add tree, and a row rotate-add by 1, 2 and 4
+  (SFPSHFT2 SUBVEC_SHFLROR1). The result goes into column p % 8 of ACC vectors
+  24 + 3 (p % 16 / 8) + {0, 1, 2}.
+- Pack: one ACC pack per 16 pairs instead of one per pair, using the non-zeroing release.
+- Writer: gathers 9 floats per pair and writes one 64 B page to slot rec[13] (= P[g] + j).
+- Host: no host reduce. Readback is n_slots x 64 B (2.2 MB for s2) instead of 4 KB per pair
+  (143 MB for s2).
+- numpy model of the pack: `blend_backward_dev.pack_v2`, tested against the v1 host finish
+  (`test_pack_v2_matches_host_finish`).
 
-## Next steps (proposal)
+Oracle on device (bh-33, p100), bar 1e-2. Raw files: results/check-*-v2.json.
 
-1. **T1 v2**: do the 32-lane reduce on device (SFPU transpose/shuffle into one vector, or FPU
-   row-reduce via a ones matmul, T6) and the 9-float finish per pair; write 36 B per pair to
-   slot P[g] + j. This removes the 4 KB pack + write per pair and the host reduce. Check again
-   on sh0/sh3/s1/s2, then time s2 against v1.
-2. **Hero dump**: a vectorised prep (the current one loops per pair in Python) plus a hero-view
-   forward state from bicycle (means2d, conic, opacity, colours, order, fp32 image, dL/dimage
-   from the L1 loss against _DSC8679 at 1237x822). Time v2 on it, p100 first, then p150.
-3. **Forward training flag** with the accurate exp, fp32 image output and the slab kept alive,
-   so T1 consumes the forward's own pair lists (no host prep). Flag-off b2b raw_md5 must stay
-   1d372b94; on/off A/B with opt/ab_jit_check.py on both arms.
-4. **T2** (fused segment reduce + projection/SH0 backward + sparse Adam) against the slot
-   layout above; it can start now on the oracle slots.
+| dump | pairs | v2 rel err | worst term | v1 rel err |
+|---|---|---|---|---|
+| t0_sh0_64x64_n50 | 74 | 1.4e-4 | dC 1.4e-4 | 8.8e-5 |
+| t0_sh3_64x64_n50 | 74 | 1.0e-5 | dop 1.0e-5 | 6.8e-6 |
+| s1 256x256, N=3000, seed 1 | 7,975 | 3.7e-4 | dop 5.8e-3 | 3.5e-4 |
+| s2 512x512, N=12000, seed 2 | 35,052 | 9.0e-4 | dmy 3.9e-3 | 9.4e-4 |
+
+All four pass. The small change against v1 comes from a different fp32 summation order (a tree
+on device instead of a sequential host sum).
+
+Timing, **p100 (provisional)**, bh-33. The method is the same as v1: median of 5 host
+EnqueueMeshWorkload + Finish after warm-up. Raw files: results/timing-*-v2.json.
+
+| dump | pairs | max pairs/core | v1 device ms | v1 host reduce ms | **v2 device ms** | v2 host reduce |
+|---|---|---|---|---|---|---|
+| sh0 | 74 | 21 | 0.069 | 0.05 | 0.086 | none |
+| sh3 | 74 | 21 | | | 0.073 | none |
+| s1 | 7,975 | 224 | 0.499 | 4.70 | **0.463** | none |
+| s2 | 35,052 | 454 | 1.367 | 17.8 | **0.819** | none |
+
+- s2: device time 1.67x faster (1.367 to 0.819 ms). End to end it is 23x faster
+  (19.2 to 0.82 ms), since the 17.8 ms host reduce and the 143 MB readback are gone.
+- Slope from s1 to s2 on the busiest core: 1.55 us per pair, against 3.8 us in v1.
+  That is about 2,100 cycles at 1.35 GHz for about 10 live vectors plus the finish.
+- The two tiny dumps are dispatch-bound (4 cores).
+- Per-stage split: not measured. The kernel has no in-kernel stage counters yet. Only device
+  versus host is split here, and v2 has no host stage left except readback.
+
+Hero view: not timed in this task (no hero dump yet, see the follow-ups). Rough scaling, not a
+measurement: at 1.55 us per pair on 110 p100 cores, 1M pairs cost about 14 ms. The hero's pair
+count from the forward has to be measured first. If it is several million, T1 at this
+per-pair cost is far above the plan's 8.7-10.2 ms. The cost per pair then has to fall by
+several times (see the T1 v3 levers below).
+
+## Footprint (v2, analytic from the code)
+
+L1 per core (CBs): HDR 2x64 B, PLANE 5x4 KB, RAMP 2x4 KB, REC 4x64 B, OUT 2x4 KB, writer
+scratch 4 KB. Total 41.3 KB of about 1.4 MB on a p100 (1.5 MB on a p150). Dst: 8 fp32 tiles.
+Tile 7 is ACC; vectors 0-8 are the per-lane sums and 24-29 the 16 finished pairs.
+
+DRAM per view: tiles 64 B/tile, recs 64 B/pair, planes 20 KB/tile, slots 64 B/pair
+(36 B used).
+- Hero 1237x822 = 39x26 = 1,014 tiles: planes 20.8 MB, plus 128 B per pair (recs + slots),
+  i.e. 128 MB per 1M pairs.
+- Traffic per pair: the reader and the writer each read the 64 B record once (128 B), and the
+  writer writes 64 B.
+- Planes: T, BH and dL/dimage (3) are written once per tile by prep or the forward, and read once.
+
+## T1 v3 levers (sized from the above, not yet measured)
+
+1. **Pass the slot index reader to writer through a small CB.** This drops the writer's second
+   64 B record read per pair: a third of the per-pair DRAM traffic.
+2. **Records from the forward's slab.** The training-mode forward keeps per-tile pair lists and
+   live masks. Prep then produces nothing per pair, and 4 B mx/my/A/B/C/op/rgb are read from the
+   forward's per-Gaussian buffer.
+3. **Cost per live vector.** The compute body is the cost driver (about 200 cycles per vector).
+   Profile with in-kernel cycle counters split into setup, bodies, finish and pack sync. Then
+   cut with the accurate exp only where alpha >= 1/255 (v_if), and batch the reciprocal.
+   Lossless only, checked against the T0 oracle.
+
+## T2 proposal (against the v2 slot layout; coordinate with #697, do not duplicate it)
+
+v2 writes pair j of Gaussian g to slot P[g] + j, where P is the exclusive prefix sum of the
+per-Gaussian tile-rectangle sizes. Each Gaussian's 9 partials are therefore contiguous, and T2
+is a deterministic segment reduce with no atomics.
+- One pass per core over a contiguous range of visible Gaussians:
+  1. Read slots P[g]..P[g+1] (64 B pages; consecutive, so one NoC burst per Gaussian).
+  2. Sum the 9 terms in fp32.
+  3. Apply the projection backward (conic to cov2d, then EWA Jacobian to means3d, scales and
+     quats) and the SH0 colour backward.
+  4. Run sparse Adam on the visible set.
+  5. Write the updated parameters directly into pfwc's input layout (PLAN.md row T2).
+- Gradients for the parameters never reach DRAM.
+- DRAM per step: 64 B x pairs (slots) + per visible Gaussian (params + 2 Adam moments) read and
+  written.
+- First check: one step on a 10k-Gaussian synthetic scene. Updated params must match T0's Adam
+  step to rel 1e-3, starting from the device slots of s2.
+
+Quality rule (msgs #384/#387): every step is lossless and must pass the T0 gradient oracle.
+The training quality bar is published 3DGS/gsplat or LiteGS bicycle test PSNR/SSIM/LPIPS
+(published numbers).
+
+## Not done (moved to the follow-up)
+
+- Hero dump: a vectorised prep and a bicycle hero forward state (1237x822, L1 dL/dimage against
+  _DSC8679), then v2 timing on it with a per-stage split (in-kernel counters).
+- p150 timing: #687 (the measurement box moving to a p150, bh-49) has not landed yet, so the
+  p100 numbers stay provisional.
+- Forward training flag (fp32 image, accurate exp, slab kept alive), with the flag-off b2b
+  raw_md5 1d372b94 check and the on/off A/B (opt/ab_jit_check.py on both arms, plus a device
+  hero.png, a diff and PSNR against benchmarks/reference_v2/hero.png).
