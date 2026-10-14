@@ -3,7 +3,7 @@
 #   remote.sh build                   build-avx2-tt: gsplat_cpu_tests + _gsplat_cpu; gsplat_cpu_tests '[project]'
 #   remote.sh pytest                  T0 dumps current? (else regenerate in place, kept in tmp/t797/dumps);
 #                                     then the train / T2 / blend-backward unit tests on the box venv
-#   remote.sh run <round> <arm>...    arms: cand (defaults, GSPLAT_TT_JCLAMP=1) / base (GSPLAT_TT_JCLAMP=0),
+#   remote.sh run <round> <arm>...    arms: cand (GSPLAT_TT_JCLAMP=1) / base (GSPLAT_TT_JCLAMP=0),
 #                                     prefixed o (orbit b2b, cameras_v2 30 views, 20 passes), n (train NN
 #                                     b2b, 169 views, 6 passes), h (orbit hero with the CPU ref: golden +
 #                                     hero_vs_cpu), d (_DSC8679 1237x822, cameras_test view 0)
@@ -42,7 +42,7 @@ run)
   r=${1:?round}; shift; fail=0
   for a in "$@"; do
     arm=${a:1}; kind=${a:0:1}; tag=r$r-$a; env=()
-    case $arm in cand) ;; base) env=(GSPLAT_TT_JCLAMP=0) ;; *) echo "bad arm $a"; exit 2 ;; esac
+    case $arm in cand) env=(GSPLAT_TT_JCLAMP=1) ;; base) env=(GSPLAT_TT_JCLAMP=0) ;; *) echo "bad arm $a"; exit 2 ;; esac
     case $kind in
       o) args=(--no-ref --back-to-back) ;;
       n) args=(--no-ref --back-to-back --b2b-passes 6 --cameras benchmarks/cameras_train_nn.json) ;;

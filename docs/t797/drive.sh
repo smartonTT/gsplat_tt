@@ -2,7 +2,7 @@
 # t797 (continues #794): 3DGS Jacobian clamp build, tests, device A/B, hero PSNR. ONE `ttp lock p100`:
 #   ttp detach t797 -- docs/t797/drive.sh <rev>       (Mac, worktree root; <rev> committed)
 # ssh preflight @p100, opt/sync_remote.sh (one-way, repo-scoped, this worktree) + render build, remote.sh build
-# (gsplat_cpu_tests '[project]', _gsplat_cpu), remote.sh pytest, then base (GSPLAT_TT_JCLAMP=0) vs cand (default 1):
+# (gsplat_cpu_tests '[project]', _gsplat_cpu), remote.sh pytest, then base (GSPLAT_TT_JCLAMP=0) vs cand (GSPLAT_TT_JCLAMP=1):
 # orbit hero with the CPU ref (golden + hero_vs_cpu), _DSC8679, warm-up, ROUNDS alternated rounds of orbit b2b
 # + train-NN b2b, JIT listings for opt/ab_jit_check.py, device screenshots (opt/ttw/screenshot.sh, NAME=t797),
 # pull tmp/t797, PSNR of the _DSC8679 renders vs the JPG on the Mac (images stay uncommitted).
@@ -53,7 +53,7 @@ for r in $(seq 1 "$ROUNDS"); do
 done
 timeout 300 ssh "$H" "for a in base cand; do find /localdev/smarton/.cache/ttmc-t797-\$a -maxdepth 8 -type d -path '*/kernels/*' > $T/tmp/t797/jit-\$a.txt; done"
 for a in cand base; do
-  e=""; [ $a = base ] && e=GSPLAT_TT_JCLAMP=0
+  e=GSPLAT_TT_JCLAMP=1; [ $a = base ] && e=GSPLAT_TT_JCLAMP=0
   H=$H T=$T NO_SYNC=1 NAME=t797 FILE=hero-$a.png SHOT_TIMEOUT=500 opt/ttw/screenshot.sh 797 "$rev" --locked $e > "$O/shot-$a.out" 2>&1
   s=$?; grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot-$a.out"; echo "shot $a rc=$s"; [ $s = 0 ] || rc=7
 done

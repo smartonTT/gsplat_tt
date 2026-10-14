@@ -462,7 +462,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Task #489: GSPLAT_TT_PFWC_ACQ_FUSE bit 0 / 1 (pfwc_fuse_sfpu.h), bit-identical.
     if (env_config::pfwc_acq_fuse() & 1u) vis_defines["PFWC_FUSE_PROJ"] = "1";
     if (env_config::pfwc_acq_fuse() & 2u) vis_defines["PFWC_FUSE_CCAC"] = "1";
-    // Task #786: GSPLAT_TT_JCLAMP (default 1), 3DGS Jacobian clamp; args 67 / 68.
+    // Task #786: GSPLAT_TT_JCLAMP (default 0 until #797 validates it), 3DGS Jacobian clamp; args 67 / 68.
     if (env_config::jclamp_on()) {
         if (!(env_config::pfwc_acq_fuse() & 1u))
             throw std::runtime_error("pfwc: GSPLAT_TT_JCLAMP=1 needs GSPLAT_TT_PFWC_ACQ_FUSE bit 0 "
