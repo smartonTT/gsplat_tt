@@ -45,6 +45,15 @@ def prep(out):
         print(f"prep {name} {x.shape}")
 
 
+def sep_filter(x, taps):
+    """fp64 separable filter of (H, W, C) with 11 taps, zero padding (the device's G * x)."""
+    r = len(taps) // 2
+    H, W = x.shape[:2]
+    xp = np.pad(x, ((r, r), (r, r), (0, 0)))
+    rows = sum(taps[i] * xp[:, i:i + W] for i in range(len(taps)))
+    return sum(taps[i] * rows[i:i + H] for i in range(len(taps)))
+
+
 def check_filt(out):
     """#706: device G * x (split3 banded matmuls) against the fp64 filter and the split3 model."""
     import glob
@@ -67,6 +76,18 @@ def check_filt(out):
                 continue
             g = np.fromfile(f, np.float32).reshape(x.shape)
             tag = os.path.basename(o)
+            tf = os.path.join(o, "taps.txt")
+            if os.path.exists(tf):  # LOSS_RDIAG=t<preset> (#714): the device's own taps, fp64 reference
+                taps = np.loadtxt(tf, dtype=np.float64)
+                dref = sep_filter(x.astype(np.float64), taps)
+                rel = float(np.linalg.norm(g - dref) / np.linalg.norm(dref))
+                nz = np.abs(dref) > 0
+                bias = float(np.mean((g - dref)[nz] / dref[nz]))
+                good = bool(np.isfinite(g).all() and rel < 2e-6)
+                ok &= good
+                print(f"[CHECK] mode=filt case={name} out={tag} taps=device vs_fp64_taps_l2rel={rel:.2e} "
+                      f"mean_rel_bias={bias:+.2e} {'PASS' if good else 'FAIL'}")
+                continue
             if "-r" in tag:  # LOSS_RDIAG=c run: R[0] = c I, so G * x = c^2 x (split3 error ~2^-18)
                 c = float(np.float32(tag.split("-r", 1)[1]))
                 dref = c * c * x.astype(np.float64)

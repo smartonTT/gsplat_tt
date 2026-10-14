@@ -103,11 +103,39 @@ inline float trunc_tf32(float v) {
 // gsplat/train_loss.py band_tiles(); h = fp32 & HI_MASK_U, l = (fp32 - h) & HI_MASK_U.
 // LOSS_RDIAG=<c> (#706 precision diagnostic): R[0] = c I, R[+-1] = 0, so G * x = c^2 x exactly.
 // LOSS_RDIAG=-<c>: an 11-tap box with every tap = c (exact products, 11-term sums: tests accumulation).
+// LOSS_RDIAG=t<preset> (#714): an 11-tap separable filter with chosen taps; the taps the device
+// gets (h + l) go to <out>/taps.txt and loss_check.py uses them as the fp64 reference.
+//   tg9 / tg5: Gaussian truncated to 9 / 5 explicit mantissa bits (Rl = 0, exact single products)
+//   tpw: power-of-two taps of mixed size (exact products, mixed-magnitude sums)
+//   tgl: only the Gaussian's lo parts (Rh = 0): the zh Rl products alone
+std::vector<double> TAPS_USED;
 std::vector<float> band_consts() {
     const char* rd = std::getenv("LOSS_RDIAG");
+    const std::string preset = (rd && rd[0] == 't') ? std::string(rd + 1) : std::string();
+    if (!preset.empty()) rd = nullptr;
     const double diag = rd ? std::atof(rd) : 0.0;
     double g[11], sum = 0.0;
     for (int i = 0; i < 11; i++) sum += g[i] = std::exp(-double((i - 5) * (i - 5)) / (2.0 * 1.5 * 1.5));
+    auto mask = [](float v, int bits) {
+        uint32_t u;
+        std::memcpy(&u, &v, 4);
+        u &= ~((1u << (23 - bits)) - 1u);
+        std::memcpy(&v, &u, 4);
+        return v;
+    };
+    static const int pw_exp[11] = {10, 7, 5, 3, 2, 2, 2, 3, 5, 7, 10};
+    float th[11], tl[11];
+    for (int i = 0; i < 11; i++) {
+        const float r = float(g[i] / sum);
+        th[i] = trunc_tf32(r);
+        tl[i] = trunc_tf32(r - th[i]);
+        if (preset == "g9") th[i] = mask(r, 9), tl[i] = 0.0f;
+        if (preset == "g5") th[i] = mask(r, 5), tl[i] = 0.0f;
+        if (preset == "pw") th[i] = float(std::ldexp(1.0, -pw_exp[i])), tl[i] = 0.0f;
+        if (preset == "gl") th[i] = 0.0f;
+    }
+    TAPS_USED.assign(11, 0.0);
+    for (int i = 0; i < 11; i++) TAPS_USED[i] = double(th[i]) + double(tl[i]);
     std::vector<float> out(12 * TS * TS, 0.0f);
     for (int k = -1; k <= 1; k++)
         for (uint32_t a = 0; a < TS; a++)
@@ -116,7 +144,8 @@ std::vector<float> band_consts() {
                 float r = (off >= 0 && off < 11) ? float(g[off] / sum) : 0.0f;
                 if (rd && diag >= 0.0) r = (k == 0 && a == b) ? float(diag) : 0.0f;
                 if (rd && diag < 0.0) r = (off >= 0 && off < 11) ? float(-diag) : 0.0f;
-                const float h = trunc_tf32(r), l = trunc_tf32(r - h);
+                float h = trunc_tf32(r), l = trunc_tf32(r - h);
+                if (!rd) h = (off >= 0 && off < 11) ? th[off] : 0.0f, l = (off >= 0 && off < 11) ? tl[off] : 0.0f;
                 const size_t t = size_t(k + 1);
                 out[(0 + t) * TS * TS + tidx(a, b)] = h;
                 out[(3 + t) * TS * TS + tidx(a, b)] = l;
@@ -206,6 +235,11 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
         const auto oh = lb_untilize(o, L);
         std::ofstream f(out + "/filt.f32", std::ios::binary);
         f.write(reinterpret_cast<const char*>(oh.data()), oh.size() * 4);
+    }
+    if (std::getenv("LOSS_RDIAG") && std::getenv("LOSS_RDIAG")[0] == 't') {
+        std::ofstream f(out + "/taps.txt");
+        f.precision(17);
+        for (double v : TAPS_USED) f << v << "\n";
     }
     std::vector<double> ms;
     const double b2b = time_b2b(cq, wl, iters, ms);
