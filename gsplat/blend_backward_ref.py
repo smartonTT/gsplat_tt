@@ -12,12 +12,14 @@ Decomposition (PLAN.md §3 steps 1-4):
    nothing else per pair: no last-contributor index, no per-pair T.
 2. Per 32x32 tile, on the core that blended it, pairs run front to back in the tile's
    sorted list. Per pixel the backward carries T and the colour accumulated so far
-   (C_acc). It recomputes the forward's alpha and live decision with the forward's own
+   (as C_acc . g). It recomputes the forward's alpha and live decision with the forward's own
    math (fp32 power polynomial in tile-local coordinates, alpha clamp 0.99, skip below
    1/255, stop when T * (1 - alpha) < t_min), so no live mask is stored. The colour
    behind pair i is image - C_acc(<= i), so
-       dL/dalpha_i = T_i (c_i . g) - ((image - C_acc) . g) / (1 - alpha_i)
-   needs one reciprocal of (1 - alpha_i) per live pixel.
+       dL/dalpha_i = T_i (c_i . g) - (image . g - C_acc . g) / (1 - alpha_i)
+   needs one reciprocal of (1 - alpha_i) per live pixel. Only the dot products are
+   needed: per pixel the state is T, s = C_acc . g, Ig = image . g and g (3), which with
+   the x/y ramps is 8 fp32 tiles, the Dst capacity in full-sync mode.
 3. Per pair and per live pixel it forms 9 terms, with G = dL/dpower and u, v the pixel
    centre minus the Gaussian mean:
        dopacity: dalpha * w            (0 where the alpha clamp is active)
@@ -154,7 +156,8 @@ def blend_backward(means2d, conic, opacity, colors, order, valid, image, dL_dima
             I[:h, :w] = img[oy:oy + h, ox:ox + w]
             Gp[:h, :w] = gimg[oy:oy + h, ox:ox + w]
             T = np.ones((tile, tile), f32)
-            Cacc = np.zeros((tile, tile, 3), f32)
+            Ig = (I * Gp).sum(-1, dtype=f32)        # image . g, once per pixel
+            s_acc = np.zeros((tile, tile), f32)     # C_acc . g, carried as one scalar
             alive = pix.copy()
             for g in order:
                 g = int(g)
@@ -182,8 +185,8 @@ def blend_backward(means2d, conic, opacity, colors, order, valid, image, dL_dima
                 n_live_px += int(live.sum())
                 at = np.where(live, alpha * T, f32(0.0)).astype(f32)
                 cg = (col[g] * Gp).sum(-1, dtype=f32)
-                Cacc = Cacc + at[..., None] * col[g]
-                behind = ((I - Cacc) * Gp).sum(-1, dtype=f32)
+                s_acc = s_acc + at * cg
+                behind = Ig - s_acc
                 dalpha = T * cg - behind / (one - alpha)
                 T = np.where(live, T * (one - alpha), T).astype(f32)
                 act = live & ~clamp & (power <= f32(0.0))

@@ -85,3 +85,10 @@ def test_bf16_round():
     x = np.array([1.0, 1.00390625, 1.005859375, -3.14159], np.float32)
     np.testing.assert_array_equal(b.bf16_round(x),
                                   torch.tensor(x).to(torch.bfloat16).float().numpy())
+
+
+def test_bf16_final_image_fails_gate():
+    """Why the training forward must write the fp32 final colour (T1 doc, finding 1)."""
+    d = dict(np.load(DUMPS[0]))
+    d["image"] = b.bf16_round(np.asarray(d["image"], np.float32)).astype(np.float64)
+    assert b.compare(d, frozen=True)["worst_rel_err"] > BAR
