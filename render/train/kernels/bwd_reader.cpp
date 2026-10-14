@@ -3,6 +3,11 @@
 //   its 5 fp32 planes -> CB_PLANE, then one 64 B record page per pair -> CB_REC.
 // Runtime args: tiles, recs, planes, ramps DRAM addresses, first tile, tile count.
 // Compile args: TensorAccessorArgs(tiles, recs, planes, ramps).
+// BWD_PRESTAGE (#767): CB_REC pages are 128 B. The record lands in the upper 64 B; words 0-23 get
+// each of its 12 floats as the two SFPLOADI instruction words that load it into LREG0 (USHORT low
+// half, then UPPER high half: what the compiler builds per value), word 24 its vector mask. The
+// MATH thread then only copies words into its instruction buffer (blend_bwd_compute.cpp
+// bwd_stage_record), the same instructions as before, so the results are bit-identical.
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
@@ -10,6 +15,11 @@
 namespace {
 constexpr uint32_t CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3;
 constexpr uint32_t SMALL = 64, TILE_B = 4096, N_PLANES = 5;
+#ifdef BWD_PRESTAGE
+// TT_OP_SFPLOADI(0, SFPLOADI_MOD0_USHORT, 0) and (0, SFPLOADI_MOD0_UPPER, 0); the compute kernel
+// static_asserts the same values against ckernel_ops.h.
+constexpr uint32_t K_LOAD_LO = 0x71020000u, K_LOAD_HI = 0x71080000u, N_VALS = 12, REC_MASK = 12;
+#endif
 }  // namespace
 
 void kernel_main() {
@@ -58,8 +68,23 @@ void kernel_main() {
 
         for (uint32_t r = rec_start; r < rec_start + cnt; r++) {
             cb_reserve_back(CB_REC, 1);
+#ifdef BWD_PRESTAGE
+            const uint32_t pl = get_write_ptr(CB_REC);
+            noc_async_read(get_noc_addr(r, recs), pl + SMALL, SMALL);
+            noc_async_read_barrier();
+            volatile uint32_t* w = reinterpret_cast<volatile uint32_t*>(pl);
+            uint32_t v[N_VALS];
+            for (uint32_t k = 0; k < N_VALS; k++) v[k] = w[SMALL / 4 + k];
+            const uint32_t mask = w[SMALL / 4 + REC_MASK];
+            for (uint32_t k = 0; k < N_VALS; k++) {
+                w[2 * k] = K_LOAD_LO + (v[k] & 0xffffu);
+                w[2 * k + 1] = K_LOAD_HI + (v[k] >> 16);
+            }
+            w[2 * N_VALS] = mask;
+#else
             noc_async_read(get_noc_addr(r, recs), get_write_ptr(CB_REC), SMALL);
             noc_async_read_barrier();
+#endif
             cb_push_back(CB_REC, 1);
         }
     }
