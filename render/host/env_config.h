@@ -186,6 +186,18 @@ inline bool ol_emit_town() {
 // reader waits for a free bulk ring slot before it takes the next tile from the
 // shared counter, so a core holds at most 2 tiles (compute + ring) instead of 3.
 // Default on; 0 = claim as soon as the previous subchunk is pushed.
+// Task #722 (B1'): heavy tiles (records > total / num_cores) are blended as 4
+// (=1) or 4/16 (=2) units, each its parent tile plus a microblock mask. 0 = off
+// (today's kernels, no new defines). Fused mat+blend program only.
+inline unsigned int b1_mode() {
+    static const unsigned int v = env_uint("GSPLAT_TT_B1", 0u);
+    return v;
+}
+// Minimum records for a tile to split (GSPLAT_TT_B1_MIN, default 256).
+inline unsigned int b1_min() {
+    static const unsigned int v = env_uint("GSPLAT_TT_B1_MIN", 256u);
+    return v;
+}
 inline bool blend_late_claim() {
     static const bool v = env_uint("GSPLAT_TT_BLEND_LATE_CLAIM", 1u) != 0u;
     return v;

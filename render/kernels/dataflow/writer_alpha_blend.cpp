@@ -7,6 +7,9 @@
 #include "api/dataflow/dataflow_api.h"
 #include "img_pack_u8.h"
 #include "tile_window.h"
+#if defined(BLEND_B1) && BLEND_B1
+#include "subtile_unit.h"
+#endif
 
 // Task #280: shifted ids / compile-time args in the fused mat+blend program.
 #ifndef BLEND_CB_BASE
@@ -100,7 +103,20 @@ void kernel_main() {
     auto stage = reinterpret_cast<volatile uint8_t*>(stage_addr);
     // One screen tile: pack the 3 R/G/B tiles compute pushed for it into u8
     // image rows and write them to the image buffer.
-    auto write_tile = [&](uint32_t screen_tile) {
+    // Task #722 (B1'): CB_TILE_Q carries a unit word (tile | code << 16); a unit
+    // writes only its rows and its 48 B column half (subtile_unit.h).
+    auto write_tile = [&](uint32_t unit_word) {
+#if defined(BLEND_B1) && BLEND_B1
+        const uint32_t screen_tile = subtile_unit::tile_of(unit_word);
+        const uint32_t code = subtile_unit::code_of(unit_word);
+        const uint32_t r0 = subtile_unit::row0(code);
+        const uint32_t nr = subtile_unit::rows(code);
+        const uint32_t c0 = subtile_unit::col_byte0(code);
+        const uint32_t nb = subtile_unit::col_bytes(code);
+#else
+        const uint32_t screen_tile = unit_word;
+        constexpr uint32_t r0 = 0u, nr = 32u, c0 = 0u, nb = ROW_BYTES;
+#endif
         const uint32_t ty0 = screen_tile / tiles_x;
         const uint32_t tx = screen_tile - ty0 * tiles_x + win.x0;
         const uint32_t ty = ty0 + win.y0;
@@ -123,23 +139,24 @@ void kernel_main() {
         }
         cb_pop_front(CB_COLOR_OUT, 3);
 
-        const uint32_t row0 = ty * 32u;
-        const uint32_t col_off = tx * ROW_BYTES;
+        const uint32_t row0 = ty * 32u + r0;
+        const uint32_t col_off = tx * ROW_BYTES + c0;
+        const uint32_t src0 = stage_addr + r0 * ROW_BYTES + c0;
 #if defined(OUT_PINNED) && OUT_PINNED
 #if defined(BLEND_WRITER_PRE)
         // Task #542: the pre-phase's other NoC writes reuse write_cmd_buf.
         noc_write_init_state<write_cmd_buf>(noc_index, NOC_UNICAST_WRITE_VC);
 #endif
         uint64_t dst = pin_base + static_cast<uint64_t>(row0) * pitch + col_off;
-        for (uint32_t i = 0; i < 32u; i++) {
+        for (uint32_t i = 0; i < nr; i++) {
             noc_wwrite_with_state<noc_mode, write_cmd_buf, CQ_NOC_SNDL, CQ_NOC_SEND, CQ_NOC_WAIT, true, false>(
-                noc_index, stage_addr + i * ROW_BYTES, pin_xy, dst, ROW_BYTES, 1);
+                noc_index, src0 + i * ROW_BYTES, pin_xy, dst, nb, 1);
             dst += pitch;
         }
 #else
-        for (uint32_t i = 0; i < 32u; i++) {
-            noc_async_write(stage_addr + i * ROW_BYTES,
-                            out.get_noc_addr(row0 + i, col_off), ROW_BYTES);
+        for (uint32_t i = 0; i < nr; i++) {
+            noc_async_write(src0 + i * ROW_BYTES,
+                            out.get_noc_addr(row0 + i, col_off), nb);
         }
 #endif
     };

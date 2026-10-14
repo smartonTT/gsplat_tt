@@ -1070,6 +1070,11 @@ inline void non_zeroing_pack_release() {
 // Task #146 (BLEND_FAST_TRED, host default 1): the reduce lives in
 // blend_t_live.h; 1 = the range-compare form with a per-row-pair early exit,
 // 0 = the original per-value max loop (bit-identical, tests/unit/test_blend_t_live.cpp).
+#if defined(BLEND_B1) && BLEND_B1
+// Task #722 (B1'): microblock mask of the current unit (whole tile: all ones).
+// Pixels outside it stay at T = 1, so the readback must not re-enable them.
+uint32_t g_b1_unit_mask = 0xFFFFFFFFu;
+#endif
 inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
     mb_cb_consume_fence();
     const volatile uint32_t* w = reinterpret_cast<const volatile uint32_t*>(t_rb_addr);
@@ -1079,6 +1084,9 @@ inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
     live_mb_mask = blend_t_live_fast(w, eps_bits);
 #else
     live_mb_mask = blend_t_live_ref(w, eps_bits);
+#endif
+#if defined(BLEND_B1) && BLEND_B1
+    live_mb_mask &= g_b1_unit_mask;
 #endif
 }
 
@@ -1805,6 +1813,13 @@ void kernel_main() {
             }
             const bool continue_blend = (flags & MB_FLAG_CONTINUE) != 0;
             const bool emit_tile = (flags & MB_FLAG_EMIT) != 0;
+#if defined(BLEND_B1) && BLEND_B1
+            if (!continue_blend) {
+                g_b1_unit_mask =
+                    reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0))[2];
+                live_mb_mask = g_b1_unit_mask;
+            }
+#endif
             const bool l1_bulk = (flags & MB_FLAG_L1_BULK) != 0;
 
             if (!continue_blend) {

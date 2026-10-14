@@ -44,6 +44,12 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "tile_window.h"
+#if defined(BLEND_B1) && BLEND_B1
+#include "subtile_unit.h"
+#ifndef BLEND_B1_MIN
+#define BLEND_B1_MIN 256u
+#endif
+#endif
 
 // Task #280 (GSPLAT_TT_MATBLEND_FUSE): in the fused mat+blend program this body
 // runs after the mat mover on the same RISC (matblend_ncrisc.cpp), with its CB
@@ -238,6 +244,52 @@ void kernel_main() {
     for (uint32_t c = 0; c < num_cores; ++c) {
         total_tiles += lpt_meta[c * 2u + 1u];
     }
+#if defined(BLEND_B1) && BLEND_B1
+    // Task #722 (B1'): heavy tiles become 4 or 16 units (parent tile + microblock
+    // mask, subtile_unit.h), claimed before the rank-interleaved list; the list
+    // then skips them. Every reader builds the same plan from this view's own
+    // per-tile record counts (sort_tile_ranges), so it is exact and lossless.
+    // Arg 30: number of (window) tiles. Scratch: the bulk ring's first slot
+    // (nothing pushed yet) holds the counts; the heavy list sits in CB_SCR_ATTR
+    // after the LPT meta.
+    const uint32_t b1_num_tiles = get_arg_val<uint32_t>(30);
+    constexpr uint32_t B1_HEAVY_CAP = 128u;
+    const uint32_t b1_meta_bytes = ((num_cores * 2u + 15u) / 16u) * 64u;
+    auto b1_heavy = reinterpret_cast<volatile uint32_t*>(meta_l1 + b1_meta_bytes);
+    uint32_t b1_n_heavy = 0, b1_units = 0, b1_thr = 0;
+    {
+        cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+        const uint32_t scr = get_write_ptr(CB_BUCKET_BULK);
+        auto cnt = reinterpret_cast<volatile uint32_t*>(scr);
+        const uint32_t pages = (b1_num_tiles * 2u + 15u) / 16u;
+        for (uint32_t p = 0; p < pages;) {
+            const uint32_t end = (p + 64u < pages) ? p + 64u : pages;
+            for (uint32_t q = p; q < end; ++q) {
+                noc_async_read_tile(q, ranges_acc, scr + q * 64u);
+            }
+            noc_async_read_barrier();
+            p = end;
+        }
+        invalidate_l1_cache();
+        uint32_t total = 0;
+        for (uint32_t t = 0; t < b1_num_tiles; ++t) {
+            const uint32_t c = cnt[2u * t + 1u] - cnt[2u * t];
+            cnt[t] = c;
+            total += c;
+        }
+        b1_thr = num_cores ? total / num_cores : 0u;
+        for (uint32_t t = 0; t < b1_num_tiles; ++t) {
+            if (subtile_unit::is_heavy(cnt[t], b1_thr, BLEND_B1_MIN)) {
+                subtile_unit::heavy_insert(b1_heavy, b1_n_heavy, B1_HEAVY_CAP, cnt[t], t);
+            }
+        }
+        for (uint32_t i = 0; i < b1_n_heavy; ++i) {
+            b1_units += subtile_unit::n_units(b1_heavy[i] >> 16, b1_thr, BLEND_B1);
+        }
+    }
+#else
+    constexpr uint32_t b1_units = 0;
+#endif
     // Compute runs until the DONE flag (count value 0xFFFFFFFF = dynamic).
     cb_reserve_back(CB_CORE_TILES, 1);
     reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = 0xFFFFFFFFu;
@@ -301,9 +353,25 @@ void kernel_main() {
                 claim = ret_ptr[0];
             } while (claim == 0xFFFFFFFFu);
         }
-        if (claim >= total_tiles) {
+        if (claim >= b1_units + total_tiles) {
             break;
         }
+        uint32_t unit_code = 0;
+        uint32_t tile_id;
+#if defined(BLEND_B1) && BLEND_B1
+        if (claim < b1_units) {
+            uint32_t i = 0, k = claim, n = 0;
+            for (;; ++i) {
+                n = subtile_unit::n_units(b1_heavy[i] >> 16, b1_thr, BLEND_B1);
+                if (k < n) break;
+                k -= n;
+            }
+            tile_id = b1_heavy[i] & subtile_unit::kTileBits;
+            unit_code = subtile_unit::split_code(n, k);
+        } else
+#endif
+        {
+        claim -= b1_units;
         // Advance the rank cursor (claims are monotonically increasing per core).
         while (claim - rank_base >= rank_width) {
             rank_base += rank_width;
@@ -327,11 +395,32 @@ void kernel_main() {
             noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
             noc_async_read_barrier();
         }
-        const uint32_t tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
+        tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
+#if defined(BLEND_B1) && BLEND_B1
+        // A split tile is blended by its units only.
+        bool split = false;
+        for (uint32_t i = 0; i < b1_n_heavy; ++i) {
+            split |= (b1_heavy[i] & subtile_unit::kTileBits) == tile_id;
+        }
+        if (split) {
+            continue;
+        }
+#endif
+        }
+#if defined(BLEND_B1) && BLEND_B1
+        const uint32_t unit_mask = subtile_unit::mask(unit_code);
+        // Hand the unit (tile id | code << 16) to the writer before its data.
+        cb_reserve_back(CB_TILE_Q, 1);
+        reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] =
+            subtile_unit::word(tile_id, unit_code);
+        cb_push_back(CB_TILE_Q, 1);
+#else
+        (void)unit_code;
         // Hand the tile id to the writer (output address) before its data.
         cb_reserve_back(CB_TILE_Q, 1);
         reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = tile_id;
         cb_push_back(CB_TILE_Q, 1);
+#endif
         const uint32_t tx = tile_id % tiles_x + win.x0;
         const uint32_t ty = tile_id / tiles_x + win.y0;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -460,6 +549,9 @@ void kernel_main() {
                     get_write_ptr(CB_MB_COUNTS));
                 cnt_ptr[0] = L_sub;
                 cnt_ptr[1] = sc_flags;
+#if defined(BLEND_B1) && BLEND_B1
+                cnt_ptr[2] = unit_mask;
+#endif
             }
             cb_push_back(CB_MB_COUNTS, 1);
             continue;
@@ -469,6 +561,9 @@ void kernel_main() {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
             cnt_ptr[0] = L_sub;
             cnt_ptr[1] = flags;
+#if defined(BLEND_B1) && BLEND_B1
+            cnt_ptr[2] = unit_mask;
+#endif
         }
         cb_push_back(CB_MB_COUNTS, 1);
         }  // end subchunk loop

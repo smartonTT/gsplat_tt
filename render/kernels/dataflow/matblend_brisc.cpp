@@ -9,6 +9,9 @@
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
 #include "tile_window.h"
+#if defined(BLEND_B1) && BLEND_B1
+#include "subtile_unit.h"
+#endif
 
 #ifndef BLEND_RTA_BASE
 #define BLEND_RTA_BASE 32
