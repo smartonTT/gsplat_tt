@@ -1,0 +1,3 @@
+src=/localdev/smarton/tt-metal
+n_eth=12
+ierisc_kb=36

@@ -24,14 +24,38 @@ empty, not `0`), `setup()`:
   and keeps an env overlay that already has a bound of 36 KB or more.
 Without the profiler nothing changes: same 32 KB overlay, same cache, same ELFs.
 
-So a profiled run needs no extra setting:
+So a profiled run needs no overlay setting. Verified command (bh-49, p150a, 12x10 ETH dispatch):
 
     GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_PROF=1 TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 \
-      python3 render/run.py --no-ref --cameras benchmarks/cameras_v2.json --back-to-back --view-range 0:4
+    TT_METAL_PROFILER_DIR=<out dir> TT_METAL_PROFILER_MID_RUN_DUMP=1 TT_METAL_PROFILER_DISABLE_PUSH_TO_TRACY=1 \
+    GSPLAT_TT_PROFILE_READ_EVERY=4 \
+      python3 render/run.py --no-ref --cameras benchmarks/cameras_v2.json \
+        --back-to-back --view-range 0:4 --b2b-passes 2 --b2b-warmup 0
 
-The device CSV lands in `$TT_METAL_HOME/generated/profiler/.logs/profile_log_device.csv`
-(the overlay's `generated/` links there). Aggregate it with
-`python3 opt/profiler/analyze_zones.py <csv> <n_views>`.
+`TT_METAL_PROFILER_MID_RUN_DUMP=1` is needed: a plain `run.py` without it wrote no device CSV
+(the `tracy` wrapper would do it too, but it needs `loguru`, which the bh-49 venv lacks).
+`GSPLAT_TT_PROFILE_READ_EVERY=4` reads the profiler buffers every 4 renders so they do not
+fill up. The device CSV is `profile_log_device.csv` under `<out dir>`. Aggregate it with
+`python3 opt/profiler/analyze_zones.py <csv> <n_renders>` (here 12: 2 timed passes of 4 views
+plus the 4-view check pass).
+
+## Result (b3e8f99a, 2026-10-14 08:40 PDT, bh-49)
+The run finished, rc 0, with the 36 KB overlay (`[eth] ... overlay .../tmp/ttm-eth12p36`,
+marker `ierisc_kb=36`) and no overflow. Device CSV: 852,134 rows, 11,520 `tile_blend_*` zone
+rows. B2B under the profiler: 50.38 ms/frame (the profiler adds a lot of overhead; this is
+not a speed number). Sample from docs/t731/out/prof-zones.txt (`per_view` = sum over cores,
+`pv_makespan` = longest core per view, ms):
+
+    zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+    tile_blend_sfpu            28308.9  2359.076        79.3       6.611     4320  TRISC_0,TRISC_1,TRISC_2
+    tile_blend_load             9262.9   771.912        77.9       6.492     1440  NCRISC
+    rd_bulk_wait                9027.7   752.310        77.1       6.429    26906  NCRISC
+    wr_wait_out                 8639.3   719.940        76.3       6.357    12288  BRISC
+    cmp_emit                    7139.1   594.926        77.1       6.422    36864  TRISC_0,TRISC_1,TRISC_2
+    pfwc                        5854.2   487.848        17.3       1.440     4680  TRISC_0,TRISC_1,TRISC_2
+    mat_cull_mask               5160.9   430.072        24.1       2.006     4320  TRISC_0,TRISC_1,TRISC_2
+
+Full table, run log and sync log: docs/t731/out/.
 
 Other ways out, not taken: worker dispatch (`GSPLAT_TT_DISPATCH=worker`) also avoids the ETH
 kernel, but it changes the compute grid (11x10 instead of 12x10), so the zones would not match

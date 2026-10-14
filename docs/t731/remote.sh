@@ -43,7 +43,7 @@ for arm in "$@"; do
   cp $T/tmp/ttm-eth12p36/.gsplat-eth-overlay $S/overlay-marker.txt 2>/dev/null
   f=$(find $PR -name profile_log_device.csv | head -1)
   if [ -n "$f" ] && [ -s "$f" ]; then
-    echo "device csv rows $(wc -l < "$f") blend zones $(grep -c ',bl' "$f")"
+    echo "device csv rows $(wc -l < "$f") blend zones $(grep -c ',tile_blend' "$f")"
     gzip -c "$f" > $S/$arm-device.csv.gz
     python3 opt/profiler/analyze_zones.py "$f" 12 > $S/$arm-zones.txt 2>&1; echo "zones rc=$?"; head -40 $S/$arm-zones.txt
   else echo "NO_DEVICE_CSV"; fail=1; fi

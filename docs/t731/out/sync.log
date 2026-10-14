@@ -1,0 +1,10 @@
+[sync_remote] b3e8f99ac602d5925c81d1a803732e15ca0ff1b1 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t731: 1141 files, 64969222 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 8 of 1143 files, 37435 bytes (tar)
+[sync_remote] sha=b3e8f99ac602d5925c81d1a803732e15ca0ff1b1 so_md5=3f19c57ec21c809ca4c673ace30abebd 
+[sync_remote] WARNING: host sources changed but render_clean .so md5 did not -- stale build? rm render/render_clean*.so and rebuild
+[sync_remote] b3e8f99ac602d5925c81d1a803732e15ca0ff1b1 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t731: 1141 files, 64969222 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 1 of 1143 files, 165 bytes (tar)
+[sync_remote] sha=b3e8f99ac602d5925c81d1a803732e15ca0ff1b1 so_md5=3f19c57ec21c809ca4c673ace30abebd 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
