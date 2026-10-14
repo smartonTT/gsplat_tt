@@ -33,6 +33,14 @@ import sys
 import numpy as np
 
 SH_C0 = np.float32(0.28209479177387814)
+SH_C1 = np.float32(0.4886025119029199)
+SH_C2 = tuple(np.float32(c) for c in (1.0925484305920792, -1.0925484305920792,
+                                      0.31539156525252005, -1.0925484305920792,
+                                      0.5462742152960396))
+SH_C3 = tuple(np.float32(c) for c in (-0.5900435899266435, 2.890611442640554,
+                                      -0.4570457994644658, 0.3731763325901154,
+                                      -0.4570457994644658, 1.445305721320277,
+                                      -0.5900435899266435))
 PARAM_NAMES = ("means", "log_scales", "quats", "opacity_logits", "sh")
 ELEMS_PER_TILE = 1024
 PFWC_STREAMS = ("mx", "my", "mz", "c00", "c01", "c02", "c11", "c12", "c22",
@@ -118,6 +126,70 @@ def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
                 op=op, raw=raw, mx=mx, my=my, j00=j00, j02=j02, j11=j11, j12=j12)
 
 
+def sh_basis(x, y, z) -> list:
+    """3DGS real SH basis lanes 0..15 at unit direction (x, y, z) (train_oracle.sh_eval)."""
+    xx, yy, zz = x * x, y * y, z * z
+    one = np.ones_like(x)
+    C2, C3 = SH_C2, SH_C3
+    return [SH_C0 * one, -SH_C1 * y, SH_C1 * z, -SH_C1 * x,
+            C2[0] * x * y, C2[1] * y * z, C2[2] * (2 * zz - xx - yy), C2[3] * x * z,
+            C2[4] * (xx - yy),
+            C3[0] * y * (3 * xx - yy), C3[1] * x * y * z, C3[2] * y * (4 * zz - xx - yy),
+            C3[3] * z * (2 * zz - 3 * xx - 3 * yy), C3[4] * x * (4 * zz - xx - yy),
+            C3[5] * z * (xx - yy), C3[6] * x * (xx - 3 * yy)]
+
+
+def sh_dbasis(x, y, z) -> list:
+    """d basis_j / d(x, y, z) at (x, y, z), as 16 (dx, dy, dz) triples (unconstrained)."""
+    xx, yy, zz = x * x, y * y, z * z
+    o = np.zeros_like(x)
+    C1, C2, C3 = SH_C1, SH_C2, SH_C3
+    return [(o, o, o), (o, -C1 + o, o), (o, o, C1 + o), (-C1 + o, o, o),
+            (C2[0] * y, C2[0] * x, o), (o, C2[1] * z, C2[1] * y),
+            (-2 * C2[2] * x, -2 * C2[2] * y, 4 * C2[2] * z), (C2[3] * z, o, C2[3] * x),
+            (2 * C2[4] * x, -2 * C2[4] * y, o),
+            (6 * C3[0] * x * y, C3[0] * (3 * xx - 3 * yy), o),
+            (C3[1] * y * z, C3[1] * x * z, C3[1] * x * y),
+            (-2 * C3[2] * x * y, C3[2] * (4 * zz - xx - 3 * yy), 8 * C3[2] * y * z),
+            (-6 * C3[3] * x * z, -6 * C3[3] * y * z, C3[3] * (6 * zz - 3 * xx - 3 * yy)),
+            (C3[4] * (4 * zz - 3 * xx - yy), -2 * C3[4] * x * y, 8 * C3[4] * x * z),
+            (2 * C3[5] * x * z, -2 * C3[5] * y * z, C3[5] * (xx - yy)),
+            (C3[6] * (3 * xx - 3 * yy), -6 * C3[6] * x * y, o)]
+
+
+def sh_lanes(params: dict, w2c) -> dict:
+    """View-dependent colour lanes (#751, the t2sh pre pass): unit direction from the camera
+    centre, the full colour raw = (SH0 C0 + 0.5) + sum_{j>=1} basis_j sh_j, its clamp mask
+    keep (0 <= raw <= 1, train_oracle.render) and J[c] = d raw_c / d means (N, 3), masked by
+    keep[c]. Bands >= 1 are summed in ascending order, as the device does."""
+    R = np.asarray(w2c, f32)[:3, :3]
+    t = np.asarray(w2c, f32)[:3, 3]
+    cam = -(R.T @ t).astype(f32)
+    m = np.asarray(params["means"], f32)
+    sh = np.asarray(params["sh"], f32)
+    v = [m[:, k] - cam[k] for k in range(3)]
+    inv = f32(1) / np.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    x, y, z = (a * inv for a in v)
+    B, dB = sh_basis(x, y, z), sh_dbasis(x, y, z)
+    K = sh.shape[1]
+    raw = np.zeros((m.shape[0], 3), f32)
+    J = np.zeros((3, m.shape[0], 3), f32)
+    for c in range(3):
+        rest = np.zeros_like(x)
+        g = [np.zeros_like(x) for _ in range(3)]
+        for j in range(1, K):
+            rest = rest + B[j] * sh[:, j, c]
+            for a in range(3):
+                g[a] = g[a] + dB[j][a] * sh[:, j, c]
+        raw[:, c] = (SH_C0 * sh[:, 0, c] + f32(0.5)) + rest
+        dot = x * g[0] + y * g[1] + z * g[2]
+        for a, d in enumerate((x, y, z)):
+            J[c, :, a] = (g[a] - d * dot) * inv
+    keep = (raw >= f32(0)) & (raw <= f32(1))
+    J = np.where(keep.T[:, :, None], J, f32(0))
+    return dict(dirs=np.stack([x, y, z], 1), inv=inv, basis=B, raw=raw, keep=keep, J=J)
+
+
 def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: int,
                             near: float = 0.2, lowpass: float = 0.3) -> tuple[dict, np.ndarray]:
     """g2d (N, 9) = (dmx, dmy, dA, dB, dC, dopacity, dr, dg, db) -> optimizer-space grads
@@ -174,10 +246,20 @@ def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: in
     gq = np.stack([(gqn[i] - F["qn"][i] * dot) * F["qinv"] for i in range(4)], 1)
     op = F["op"]
     gol = gop * op * (f32(1) - op)
-    raw = F["raw"]
-    keep = (raw >= f32(0)) & (raw <= f32(1))
-    gsh = np.zeros_like(np.asarray(params["sh"], f32))
-    gsh[:, 0] = np.where(keep, SH_C0 * g[:, 6:9], f32(0))
+    sh = np.asarray(params["sh"], f32)
+    gsh = np.zeros_like(sh)
+    if sh.shape[1] == 1:
+        raw = F["raw"]
+        keep = (raw >= f32(0)) & (raw <= f32(1))
+        gsh[:, 0] = np.where(keep, SH_C0 * g[:, 6:9], f32(0))
+    else:
+        # #751: full-colour clamp mask, dL/dsh_j for every band, view-direction term.
+        S = sh_lanes(params, w2c)
+        gcol = np.where(S["keep"], g[:, 6:9], f32(0))
+        gsh[:, 0] = SH_C0 * gcol
+        for j in range(1, sh.shape[1]):
+            gsh[:, j] = S["basis"][j][:, None] * gcol
+        gmeans = gmeans + (gcol.T[:, :, None] * S["J"]).sum(0, dtype=f32)
     grads = {"means": gmeans, "log_scales": gls, "quats": gq, "opacity_logits": gol, "sh": gsh}
     return grads, F["visible"]
 
@@ -268,8 +350,6 @@ def check(d, grad_bar: float = 1e-2, adam_bar: float = 1e-3) -> dict:
     """Run T2 on a T0 dump: grads vs grad_* (rel grad_bar), Adam vs adam_bf16_* / adam_fp32_*
     (rel adam_bar). Adam is checked twice: fed the oracle's grads (isolates the optimizer)
     and end to end from the slots."""
-    if int(d["sh_degree"]) != 0:
-        raise ValueError("T2 covers SH degree 0 (SH3 is T4)")
     H, W = int(d["H"]), int(d["W"])
     params = {k: np.asarray(d[f"param_{k}"], f32) for k in PARAM_NAMES}
     bw = oracle_slots(d)
