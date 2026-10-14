@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=d5d30d31 bin=22c179f4f97f1693 t741 d5d30d31 opc side bucket A/B (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t741-u0  timeout=400s  worry=600s  ts=2026-10-14T09:00:27-0700
 cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t741-remote.sh 0 dump dumpr32 dumpside
