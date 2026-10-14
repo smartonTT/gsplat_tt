@@ -1,10 +1,12 @@
 #!/bin/bash
 # t615: page FPS on bh-50 for 1 chip and AFR on 2 chips through a temporary tunnel (local 8095).
-# Exit trap: close tunnel, stop viewer, release IRD job 133847, confirm it is gone.
+# Exit trap: close tunnel, stop viewer, release IRD job $JOB, confirm it is gone.
+# Run 2 (job 133865): bh-50's boards are /dev/tenstorrent/0 (fw 18.12.1) and /7 (fw 19.7.0);
+# one process opening both fails the firmware-bundle check, so 1 chip = TT_VISIBLE_DEVICES=0, AFR = 0,7.
 set -eo pipefail
 cd "$(dirname "$0")/../.."
 . docs/viewer-t615/env.sh
-O=tmp/t615/out; mkdir -p "$O"; JOB=133847; LP=8095
+O=tmp/t615/out; mkdir -p "$O"; JOB=${JOB:-133865}; LP=8095
 S=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 PY=/Users/smarton/dev/gsplat_tt/venv-macos/bin/python
 ts() { TZ=America/Los_Angeles date '+%F %T %Z'; }
@@ -23,16 +25,15 @@ cleanup() {
   echo "=== $(ts) end rc=$rc"; echo $rc > "$O/measure.rc"
 }
 trap cleanup EXIT
-# wait for the deploy (detached separately)
-DRC=$TTP_RUN_DIR_DEPLOY/t615deploy.rc
-for _ in $(seq 180); do [ -f "$DRC" ] && break; sleep 10; done
-[ -f "$DRC" ] && [ "$(cat "$DRC")" = 0 ] || { echo "=== deploy failed or not done: $(cat "$DRC" 2>/dev/null)"; exit 3; }
+# the deploy of run 1 (4c9bfc26) is still on bh-50's /localdev
+ssh "${S[@]}" bh-50 "cat $VIEWER_DIR/tree/SHA" | grep -q '^4c9bfc26' || { echo "=== tree is not 4c9bfc26"; exit 3; }
 wait_log() {  # wait for READY in the viewer log (selftest runs first)
   for _ in $(seq 120); do
     ssh "${S[@]}" bh-50 "grep -q READY $VIEWER_DIR/viewer.log 2>/dev/null" && return 0
     ssh "${S[@]}" bh-50 "grep -q Traceback $VIEWER_DIR/viewer.log 2>/dev/null" && break
     sleep 10; done
-  ssh "${S[@]}" bh-50 "tail -30 $VIEWER_DIR/viewer.log"; return 4
+  ssh "${S[@]}" bh-50 "cat $VIEWER_DIR/viewer.log" > "$O/viewer-fail.log" || true
+  grep -m3 -E "Error|error:" "$O/viewer-fail.log" || true; tail -20 "$O/viewer-fail.log"; return 4
 }
 arm() {  # arm <label>
   local L=$1
@@ -51,9 +52,10 @@ arm() {  # arm <label>
   done
   ssh "${S[@]}" bh-50 "cat $VIEWER_DIR/viewer.log" > "$O/viewer-$L.log"
 }
-echo "=== $(ts) arm 1chip (deployed single-chip viewer)"
+echo "=== $(ts) arm 1chip (single-chip viewer, TT_VISIBLE_DEVICES=0)"
+VIEWER_VISIBLE_DEVICES=0 timeout 300 opt/viewer/viewer.sh restart
 arm 1chip
-echo "=== $(ts) restart AFR 0,1"
-VIEWER_AFR_DEVICES=0,1 timeout 300 opt/viewer/viewer.sh restart
+echo "=== $(ts) restart AFR 0,7"
+VIEWER_AFR_DEVICES=0,7 timeout 300 opt/viewer/viewer.sh restart
 arm afr2
 echo "=== $(ts) done"

@@ -64,6 +64,8 @@ do_start() {
   # VIEWER_AFR_DEVICES=0,1 renders alternate frames on those PCIe chips, one worker process
   # each (gsplat/afr_pool.py, task #620; needs a tree with that file), VIEWER_AFR_INFLIGHT
   # the frames in flight (default one per chip). Unset: the single-chip viewer.
+  # VIEWER_VISIBLE_DEVICES=D sets TT_VISIBLE_DEVICES=D for the single-chip viewer: on a host whose
+  # boards carry different firmware bundles (bh-50: 18.12.1 and 19.7.0) opening them all fails (#615).
   # The B4a fold is on in the viewer unless VIEWER_B4A_FOLD=0 (empty or unset = 1). It used to cost
   # page FPS (#577/#587): under the fold the device idles through the render thread's host work
   # before sort(N). #597 moved that work (pose matrices) into the camera-update callback; bh-30
@@ -74,6 +76,7 @@ do_start() {
       "${VIEWER_TIMELINE:+GSPLAT_VIEWER_TIMELINE=$VIEWER_TIMELINE}" \
       "${VIEWER_AFR_DEVICES:+GSPLAT_VIEWER_AFR_DEVICES=$VIEWER_AFR_DEVICES}" \
       "${VIEWER_AFR_INFLIGHT:+GSPLAT_VIEWER_AFR_INFLIGHT=$VIEWER_AFR_INFLIGHT}" \
+      "${VIEWER_VISIBLE_DEVICES:+TT_VISIBLE_DEVICES=$VIEWER_VISIBLE_DEVICES}" \
       "GSPLAT_TT_B4A_FOLD=${VIEWER_B4A_FOLD:-1} bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
