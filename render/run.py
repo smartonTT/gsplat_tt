@@ -465,7 +465,15 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                   + " ".join(f"{k}={float(st.get(k, 0.0)) / nv:.3f}"
                              for k in _b2b_stage_keys(st)), flush=True)
         if keep:
-            digests = [hashlib.md5(_to_u8(im).tobytes()).hexdigest() for im in imgs]
+            # A split-frame worker (afr.window) writes only its window: hash that crop, since
+            # the rest of the frame holds stale pixels that differ across passes (t627).
+            win = getattr(afr, "window", None) if afr is not None else None
+            if win is not None:
+                import afr as afr_mod
+                digests = [hashlib.md5(np.ascontiguousarray(afr_mod.crop(_to_u8(im), win)).tobytes()).hexdigest()
+                           for im in imgs]
+            else:
+                digests = [hashlib.md5(_to_u8(im).tobytes()).hexdigest() for im in imgs]
         if p == 0:
             digests0 = digests
             for i, (name, img) in enumerate(zip(order, imgs)):

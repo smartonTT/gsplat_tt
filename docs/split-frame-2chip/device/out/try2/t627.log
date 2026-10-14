@@ -1,0 +1,86 @@
+=== t627 remote_drive 64081e84 on bh-50-special-smarton-for-reservation-133915 Wed Oct 14 01:21:13 UTC 2026
+0
+7
+tt-smi -ls rc=0
+=== dumpA arm=A 64081e84 01:21:14 load=1.68
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=12.3 p50_ms=12.2 min_ms=7.8 max_ms=17.9 n_views=30 warmup_s=13.5 out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-dumpA
+TTW_TIMING ms_view=12.255
+TTW_TIMING blend=12.255
+TTW_TIMING stage_head=0.014
+TTW_TIMING stage_project=0.187
+TTW_TIMING stage_tile_assign=0.016
+TTW_TIMING stage_sort=0.626
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=10.898
+TTW_TIMING stage_d2h=0.007
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.007
+TTW_TIMING stage_xview=0.380
+TTW_TIMING stage_view_total=12.138
+TTW_TIMING stage_pybind=0.118
+TTW_TIMING stage_sort_pread=0.004
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.068
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.400
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.239
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.061
+=== chkA arm=A 64081e84 01:21:40 load=2.02
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.224 fps=75.62 ms_frame_median=13.228 pass_ms_frame=13.230,13.227,13.229,13.231,13.223,13.225,13.226,13.226,13.220,13.218,13.235,13.226,13.223,13.230,13.244,13.230,13.234,13.229,13.233,13.141 check_pass_ms_frame=13.415 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.224 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-chkA
+TTW_TIMING b2b_ms_frame=13.224
+TTW_TIMING b2b_ms_frame_median=13.228
+=== chkA1 arm=A1 64081e84 01:21:56 load=2.38
+run rc=0
+[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.915 fps=126.34 ms_frame_median=7.917 pass_ms_frame=7.915,7.910,7.914,7.916,7.904,7.935,7.918,7.913,7.920,7.918,7.917,7.914,7.939,7.918,7.917,7.916,7.918,7.919,7.918,7.865 check_pass_ms_frame=8.019 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=7.915 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-chkA1
+TTW_TIMING b2b_ms_frame=7.915
+TTW_TIMING b2b_ms_frame_median=7.917
+=== dumpC arm=C 64081e84 01:22:21 load=2.93
+run rc=5
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 304.0 ms for 30 views = 10.133 ms/frame (coordinator 15.782; chip0 10.130 chip1 5.943 ms per own view)
+[run] AFR pass 1: 292.0 ms for 30 views = 9.732 ms/frame (coordinator 14.094; chip0 9.732 chip1 5.866 ms per own view)
+[run] AFR pass 2: 290.7 ms for 30 views = 9.690 ms/frame (coordinator 14.019; chip0 9.690 chip1 5.876 ms per own view)
+[run] AFR pass 3: 289.1 ms for 30 views = 9.635 ms/frame (coordinator 13.877; chip0 9.635 chip1 5.880 ms per own view)
+[run] AFR pass 4: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 13.881; chip0 9.641 chip1 5.864 ms per own view)
+[run] AFR pass 5: 290.1 ms for 30 views = 9.669 ms/frame (coordinator 13.911; chip0 9.669 chip1 5.878 ms per own view)
+[run] AFR pass 6: 289.3 ms for 30 views = 9.645 ms/frame (coordinator 13.891; chip0 9.645 chip1 5.859 ms per own view)
+[run] AFR pass 7: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 13.871; chip0 9.626 chip1 5.877 ms per own view)
+[run] AFR pass 8: 289.4 ms for 30 views = 9.647 ms/frame (coordinator 13.973; chip0 9.647 chip1 5.862 ms per own view)
+[run] AFR pass 9: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 13.879; chip0 9.640 chip1 5.858 ms per own view)
+[run] AFR pass 10: 289.4 ms for 30 views = 9.646 ms/frame (coordinator 13.926; chip0 9.646 chip1 5.861 ms per own view)
+[run] AFR pass 11: 289.6 ms for 30 views = 9.654 ms/frame (coordinator 13.973; chip0 9.654 chip1 5.864 ms per own view)
+[run] AFR pass 12: 293.6 ms for 30 views = 9.786 ms/frame (coordinator 14.255; chip0 9.786 chip1 5.859 ms per own view)
+[run] AFR pass 13: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 13.945; chip0 9.636 chip1 5.866 ms per own view)
+[run] AFR pass 14: 289.5 ms for 30 views = 9.650 ms/frame (coordinator 13.979; chip0 9.650 chip1 5.871 ms per own view)
+[run] AFR pass 15: 289.1 ms for 30 views = 9.637 ms/frame (coordinator 13.939; chip0 9.637 chip1 5.870 ms per own view)
+[run] AFR pass 16: 289.4 ms for 30 views = 9.648 ms/frame (coordinator 13.951; chip0 9.648 chip1 5.869 ms per own view)
+[run] AFR pass 17: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 13.935; chip0 9.634 chip1 5.862 ms per own view)
+[run] AFR pass 18: 289.3 ms for 30 views = 9.643 ms/frame (coordinator 13.947; chip0 9.643 chip1 5.862 ms per own view)
+[run] AFR pass 19: 288.9 ms for 30 views = 9.630 ms/frame (coordinator 13.932; chip0 9.630 chip1 5.860 ms per own view)
+[run] AFR pass 20: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 13.944; chip0 9.641 chip1 5.858 ms per own view)
+[run] AFR pass 21: 287.0 ms for 30 views = 9.566 ms/frame (coordinator 13.865; chip0 9.566 chip1 5.828 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.864
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:21 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-1chip-b2b.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:21 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-1chip.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:22 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-chip1.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:22 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-split.png
+=== correctness step failed: dumpC rc=5
+=== remote_drive done first_rc=5 01:22:49

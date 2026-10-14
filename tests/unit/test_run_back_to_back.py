@@ -94,6 +94,45 @@ def test_back_to_back_drop_skips_compare():
     assert rc == 0 and pipe.calls == 9
 
 
+class _StaleOutside(_FakePipeline):
+    """Split-frame worker stand-in: pixels outside the window change every call (t627)."""
+
+    def render(self, gauss, extr, K, H, W):
+        r = super().render(gauss, extr, K, H, W)
+        r.image[:, W // 2:] = self.calls % 251
+        return r
+
+
+class _FakeLink:
+    def __init__(self, window):
+        self.window, self.lockstep = window, False
+
+    def before_pass(self, p): pass
+    def mark_end(self): pass
+    def after_pass(self, p, digests=None, crops=None): pass
+    def save_crops(self, imgs, out_dir): return None
+
+
+def _run_window(run, pipe, window):
+    order = ["a", "b"]
+    cam = {"views": {n: {"c2w": np.eye(4, dtype=np.float32) * (i + 1)}
+                     for i, n in enumerate(order)}}
+    for n in order:
+        cam["views"][n]["c2w"][3, 3] = 1.0
+    args = argparse.Namespace(scene="t", b2b_passes=2, b2b_drop=False)
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        return run._back_to_back(args, pipe, None, cam, order, None, 64, 64, "a",
+                                 None, None, d, afr=_FakeLink(window))
+
+
+def test_back_to_back_split_window_ignores_stale_outside():
+    """A split worker compares only its window across passes (t627: rc 5 on bh-50)."""
+    run = _load_run()
+    assert _run_window(run, _StaleOutside(), (0, 1, 0, 2)) == 0   # left 32 px of 64
+    assert _run_window(run, _StaleOutside(), (0, 2, 0, 2)) == 5   # whole frame
+
+
 class _FakeClean:
     """stage_timings()/reset_stage_timings() like the C++ module (task #464)."""
 

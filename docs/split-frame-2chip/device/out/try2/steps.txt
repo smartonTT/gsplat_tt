@@ -1,0 +1,4 @@
+dumpA rc=0
+chkA rc=0
+chkA1 rc=0
+dumpC rc=5
