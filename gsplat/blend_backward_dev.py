@@ -148,8 +148,9 @@ def write(p: dict, out: str) -> None:
         json.dump(meta, f, indent=1)
 
 
-def emulate(p: dict) -> np.ndarray:
-    """numpy model of the device kernel (same planes, masks, lane math order)."""
+def emulate(p: dict, exp=np.exp) -> np.ndarray:
+    """numpy model of the device kernel (same planes, masks, lane math order). `exp` is the
+    kernel's exp (fp32-accurate on device; exp21f() models the forward's bf16-grade one)."""
     cfg = p["cfg"]
     lanes = vector_lanes().reshape(32, 32)
     xr, yr = p["ramps"][0][lanes], p["ramps"][1][lanes]
@@ -166,7 +167,7 @@ def emulate(p: dict) -> np.ndarray:
                     continue
                 u, v = xr[V] - mx, yr[V] - my
                 pw = Af * (u * u) + Bf * (u * v) + Cf * (v * v)
-                w = np.exp(np.minimum(pw, f32(0))).astype(f32)
+                w = exp(np.minimum(pw, f32(0))).astype(f32)
                 al = op * w
                 ga = np.where(pw > 0, f32(0), al)
                 cl = al > amax
@@ -193,6 +194,15 @@ def emulate(p: dict) -> np.ndarray:
             slots[int(rec[13])] = [A * Su + B * Sv, B * Su + C * Sv, f32(-0.5) * Suu, -Suv,
                                    f32(-0.5) * Svv, dw, ag0, ag1, ag2]
     return slots
+
+
+def exp21f(x: np.ndarray) -> np.ndarray:
+    """numpy model of _sfpu_exp_21f_bf16_ for x <= 0 (degree-2 2^f, ~1.7e-3 relative error)."""
+    z = np.floor(np.maximum(np.asarray(x, f32) * f32(1.442695) + f32(127), f32(0)).astype(np.float64) * 2**23)
+    z = z.astype(np.int64)
+    fr = (z & 0x7FFFFF).astype(np.float64)
+    poly = 1.0017248 + fr * (7.839635491371155e-08 + fr * 4.791750143340323e-15)
+    return (poly * np.exp2((z >> 23) - 127.0)).astype(f32)
 
 
 def load_dump(path: str):

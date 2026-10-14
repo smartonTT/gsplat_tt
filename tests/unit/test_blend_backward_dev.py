@@ -27,3 +27,28 @@ def test_emulator_matches_ref(path, tmp_path):
 
 def test_vector_lanes_cover_tile():
     assert sorted(dev.vector_lanes().ravel().tolist()) == list(range(1024))
+
+
+def test_bf16_grade_exp_fails_oracle():
+    """#693: the forward's exp_21f (~1.7e-3 rel) failed the device check on t0_sh0 (1.25e-1);
+    the backward needs the fp32-accurate exp."""
+    path = next(p for p in DUMPS if "sh0" in p)
+    d, cfg = dev.load_dump(path)
+    x = -np.linspace(0, 20, 4001, dtype=np.float32)
+    assert np.abs(dev.exp21f(x) / np.exp(x) - 1).max() > 1e-3
+    p = dev.prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
+                 d["image"], d["dL_dimage"], cfg)
+    assert dev.compare_slots(dev.emulate(p, exp=dev.exp21f), dev.ref_slots(d, cfg))["rel_err"] > 1e-2
+
+
+def test_synth_dump_emulates(tmp_path):
+    """docs/t685/synth.py (scaling dumps for the device runs) gives a consistent dump."""
+    import subprocess
+    out = tmp_path / "s.npz"
+    subprocess.run([sys.executable, str(ROOT / "docs/t685/synth.py"), str(out), "64", "96", "120", "3"],
+                   check=True, env={**os.environ, "PYTHONPATH": str(ROOT)})
+    d, cfg = dev.load_dump(str(out))
+    p = dev.prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
+                 d["image"], d["dL_dimage"], cfg)
+    assert p["n_slots"] > 100
+    assert dev.compare_slots(dev.emulate(p), dev.ref_slots(d, cfg))["rel_err"] < 1e-2

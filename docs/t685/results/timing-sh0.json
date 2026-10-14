@@ -1,1 +1,1 @@
-{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "cores": 4, "max_core_recs": 21, "device_ms_first": 4797.7260, "device_ms_min": 0.0790, "device_ms_med": 0.0863, "host_reduce_ms": 0.0308, "reps": 5}
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "cores": 4, "max_core_recs": 21, "device_ms_first": 24.5866, "device_ms_min": 0.0675, "device_ms_med": 0.0690, "host_reduce_ms": 0.0482, "reps": 5}
