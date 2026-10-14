@@ -70,6 +70,12 @@ def check_filt(out):
             if "-r" in tag:  # LOSS_RDIAG=c run: R[0] = c I, so G * x = c^2 x (split3 error ~2^-18)
                 c = float(np.float32(tag.split("-r", 1)[1]))
                 dref = c * c * x.astype(np.float64)
+                if c < 0:  # box: 11 taps of |c| each way, zero padding -> c^2 * 11x11 window sum
+                    xp = np.pad(x.astype(np.float64), ((5, 5), (5, 5), (0, 0)))
+                    cs = np.cumsum(np.cumsum(np.pad(xp, ((1, 0), (1, 0), (0, 0))), 0), 1)
+                    H, W = x.shape[:2]
+                    dref = c * c * (cs[11:11 + H, 11:11 + W] - cs[:H, 11:11 + W]
+                                    - cs[11:11 + H, :W] + cs[:H, :W])
                 rel = float(np.linalg.norm(g - dref) / np.linalg.norm(dref))
                 bias = float(np.mean((g - dref)[dref != 0] / dref[dref != 0]))
                 good = bool(np.isfinite(g).all() and rel < 2e-6)
