@@ -1787,6 +1787,24 @@ def two_chip_line() -> str:
         f" <a href='{_opt_href(d['doc'])}' target='_blank'>{html_escape(d['doc'])}</a>).</li>")
 
 
+# 2-chip split-frame and AFR on bh-50 (task #627, docs/split-frame-2chip/device/RESULTS.md @d936d343).
+SPLIT_2CHIP = {"split_latency_ms": 11.085, "afr_b2b_ms": 6.643, "one_chip_latency_ms": 13.137,
+               "psnr": 42.85, "doc": "docs/split-frame-2chip/device/RESULTS.md",
+               "hero": "docs/split-frame-2chip/device/out/run3/hero-split.png"}
+
+
+def split_2chip_line() -> str:
+    """'2 chips (split)' latency and '2 chips (AFR)' b2b from #627, next to the single-chip headline."""
+    d = SPLIT_2CHIP
+    return (
+        f"<li><b>2 chips (split), bh-50: {d['split_latency_ms']:.3f} ms/view latency</b> (1 chip on card 0:"
+        f" {d['one_chip_latency_ms']:.3f}); <b>2 chips (AFR), bh-50: {d['afr_b2b_ms']:.3f} ms/view b2b</b>"
+        f" ({1000.0 / d['afr_b2b_ms']:.1f} FPS). Caveat: bh-50 card 0 (fw 18.12.1) is 1.7&times; slower than"
+        f" card 1 and sets these numbers. Hero <a href='{_opt_href(d['hero'])}' target='_blank'>hero-split.png</a>,"
+        f" {d['psnr']:.2f} dB vs benchmarks/reference_v2/hero.png. Not an iteration; the headline above stays"
+        f" single-chip b2b (<a href='{_opt_href(d['doc'])}' target='_blank'>{d['doc']}</a>).</li>")
+
+
 def b2b_headline_section() -> str:
     """Headline: back-to-back ms/view, best per board, GPU G1 (published), keep gate."""
     rows = b2b_rows()
@@ -1839,7 +1857,7 @@ def b2b_headline_section() -> str:
   <h3>Current b2b per board</h3>
   <p>Per board: the newest kept or re-baseline row (not the lowest value, which on a noisy
   board picks noise), with the min-max spread of its passes.</p>
-  <ul>{''.join(best_lines) or '<li>none measured yet</li>'}{two_chip_line()}</ul>
+  <ul>{''.join(best_lines) or '<li>none measured yet</li>'}{two_chip_line()}{split_2chip_line()}</ul>
   {table}
   <p><b>Keep gate:</b> {html_escape(KEEP_GATE_TEXT)}</p>
 </section>
@@ -1923,7 +1941,10 @@ PUBLISHED_GPU_ROWS = [
 ]
 
 # RTX 4090 rows (user msg #346, 2026-10-13): Mip-NeRF360 bicycle at native
-# 1237x822 (~1.0 MPix, about our 1024x1024), full unpruned model.
+# 1237x822 (~1.0 MPix, about our 1024x1024). Task #665: Faster-GS (arXiv 2602.09999) renders
+# its own trained models and gives no per-scene Gaussian count; its Table 1 Mip-NeRF360 average is
+# 2.73M (3DGS 2.74M), with opacity pruning at 0.05. Ours (scenes/bicycle) has 5.56M, so its
+# bicycle model is likely smaller than ours; the scene label says so.
 RTX4090_ROWS = [
     ("G4", "INRIA 3DGS", "161.8 FPS", 6.18, "Faster-GS, CVPR 2026, Table 6 (test-set average)"),
     ("G5", "Faster-GS inference renderer", "547.1 FPS", 1.83, "Faster-GS, CVPR 2026, Table 6 (test-set average)"),
@@ -1931,7 +1952,10 @@ RTX4090_ROWS = [
     ("G7", "TileGS (end-to-end)", "%.1f FPS (derived from published 3.979 ms)" % (1000 / 3.979), 3.979, "TileGS, arXiv:2609.03613, Table 5"),
 ]
 PUBLISHED_GPU_ROWS += [
-    {"id": i, "renderer": name, "scene": "Mip-NeRF360 bicycle (full unpruned model)",
+    {"id": i, "renderer": name,
+     "scene": ("Mip-NeRF360 bicycle (their own trained model; per-scene Gaussian count not published, "
+               "Mip-NeRF360 avg 2.73M vs our 5.56M)" if i in ("G4", "G5") else
+               "Mip-NeRF360 bicycle (full unpruned model)"),
      "gpu": "NVIDIA RTX 4090", "res": "1237&times;822 (native, &asymp; our 1024&times;1024 pixel count)",
      "speed": speed, "ms": ms, "src": "", "src_label": src}
     for i, name, speed, ms, src in RTX4090_ROWS
