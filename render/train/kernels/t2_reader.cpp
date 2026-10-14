@@ -2,8 +2,8 @@
 // round-robin over the cores; a block whose PFWC_VIS words are all zero is skipped whole, a group
 // whose two words are zero too. Per group: header to compute (window count) and writer (group
 // index), the param / m / v pages, then one window per T1 v2 slot page of the group's span
-// [P[g0], P[g0+64]): the page's hi and lo halves (DRAM pages 2q, 2q+1; each 64 slots x 16 floats
-// = one fp32 tile, slot j = face j/16, row j%16, streams in columns) to CB_K, and four bf16 0/1 segment tiles to CB_A. Tile t row r,
+// [P[g0], P[g0+64]): the page's bf16 pieces hi, mid, lo (DRAM pages 3q..3q+2; each 64 slots x 16
+// streams = one bf16 tile, slot j = face j/16, row j%16, streams in columns) to CB_K, and four bf16 0/1 segment tiles to CB_A. Tile t row r,
 // column rho is 1 when slot sigma(rho) of the page belongs to the group and to lane 32*(t&1)+r;
 // tiles 0/1 cover the left column half of the page tile (slots 0-15, 32-47), tiles 2/3 the right
 // (16-31, 48-63). Slots of other groups get no 1. The compute does the segment sum as A x page on
@@ -17,7 +17,7 @@
 namespace {
 constexpr uint32_t CB_HDR = 0, CB_P = 1, CB_M = 2, CB_V = 3, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_A = 7;
 constexpr uint32_t A_TILE = 2048, A_ENTRY = 4 * A_TILE, BF16_ONE = 0x3F80u;
-constexpr uint32_t GPB = 16, SLOT_PAGE = 4096, SLOTS_PER_PAGE = 64;
+constexpr uint32_t GPB = 16, SLOT_PAGE = 2048, SLOTS_PER_PAGE = 64;
 constexpr uint32_t P_PAGE = 4096, MV_PAGE = 2048, META_PAGE = 512, VIS_PAGE = 128;
 }  // namespace
 
@@ -91,10 +91,10 @@ void kernel_main() {
             cb_push_back(CB_V, 1);
             uint32_t li = 0;  // lane cursor (slots are in lane order)
             for (uint32_t q = 0; q < npg; q++) {
-                cb_reserve_back(CB_K, 2);
+                cb_reserve_back(CB_K, 3);
                 const uint32_t kl1 = get_write_ptr(CB_K);
-                noc_async_read(get_noc_addr(2 * (pg0 + q), SL), kl1, SLOT_PAGE);
-                noc_async_read(get_noc_addr(2 * (pg0 + q) + 1, SL), kl1 + SLOT_PAGE, SLOT_PAGE);
+                for (uint32_t k = 0; k < 3; k++)
+                    noc_async_read(get_noc_addr(3 * (pg0 + q) + k, SL), kl1 + k * SLOT_PAGE, SLOT_PAGE);
                 cb_reserve_back(CB_A, 4);
                 const uint32_t al1 = get_write_ptr(CB_A);
                 volatile uint32_t* aw = reinterpret_cast<volatile uint32_t*>(al1);
@@ -116,7 +116,7 @@ void kernel_main() {
                     rec[j] = pos;
                 }
                 noc_async_read_barrier();
-                cb_push_back(CB_K, 2);
+                cb_push_back(CB_K, 3);
                 cb_push_back(CB_A, 4);
             }
         }

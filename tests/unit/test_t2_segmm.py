@@ -80,22 +80,40 @@ def tf32(x):  # matmul source registers keep 10 mantissa bits (truncation)
     return (np.asarray(x, np.float32).view(np.uint32) & np.uint32(0xFFFFE000)).view(np.float32)
 
 
-def hi_lo(x):  # t2_bench.cpp slot split: hi exact in tf32, lo = x - hi exact in fp32
+def srca(x):  # FPU SrcA at HiFi4: 8 explicit mantissa bits (tech_reports/matrix_engine)
+    return (np.asarray(x, np.float32).view(np.uint32) & np.uint32(0xFFFF8000)).view(np.float32)
+
+
+def bf16_trunc(x):
+    return (np.asarray(x, np.float32).view(np.uint32) & np.uint32(0xFFFF0000)).view(np.float32)
+
+
+def hi_lo(x):  # run-2 split: hi exact in tf32, lo = x - hi
     x = np.asarray(x, np.float32)
     hi = tf32(x)
     return hi, x - hi
 
 
-def test_hi_lo_split_precision():
-    # One raw fp32 page through tf32 loses ~2^-11 relative (#713 run 1 failed the T0 oracle, worst
-    # grad 0.17); the hi + lo pair keeps the fp32 slot to ~2^-21.
+def pieces(x):  # t2_bench.cpp slot split: three bf16 pieces, each the truncation of the rest
+    r, out = np.asarray(x, np.float32), []
+    for _ in range(3):
+        out.append(bf16_trunc(r))
+        r = (r - out[-1]).astype(np.float32)
+    return out
+
+
+def test_slot_split_precision():
+    # Slots sit in SrcA, which keeps 8 mantissa bits: a raw fp32 page (#713 run 1) and the tf32
+    # hi + fp32 lo pair (run 2) both lose ~2^-9 and failed the T0 oracle (worst grad 0.17 / 0.13);
+    # three bf16 pieces pass SrcA unchanged and sum back to the fp32 slot exactly.
     rng = np.random.default_rng(7131)
     x = (rng.standard_normal(1 << 16) * np.exp(rng.uniform(-20, 20, 1 << 16))).astype(np.float32)
-    hi, lo = hi_lo(x)
-    assert (tf32(hi) == hi).all()
-    assert (hi + lo == x).all()
     ref = x.astype(np.float64)
-    raw = np.abs(tf32(x).astype(np.float64) - ref) / np.abs(ref)
-    pair = np.abs(hi.astype(np.float64) + tf32(lo).astype(np.float64) - ref) / np.abs(ref)
-    assert raw.max() > 2.0 ** -12
-    assert pair.max() < 2.0 ** -20
+    rel = lambda y: (np.abs(y - ref) / np.abs(ref)).max()  # noqa: E731
+    hi, lo = hi_lo(x)
+    assert rel(srca(x).astype(np.float64)) > 2.0 ** -10
+    assert rel(srca(hi).astype(np.float64) + srca(lo)) > 2.0 ** -10
+    p = pieces(x)
+    for q in p:
+        assert (bf16_trunc(q) == q).all() and (srca(q) == q).all()
+    assert (sum(q.astype(np.float64) for q in p) == ref).all()

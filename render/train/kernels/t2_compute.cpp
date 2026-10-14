@@ -3,8 +3,8 @@
 // RNE moments rounded on the SFPU), pfwc epilogue. Model: gsplat/t2_param_backward.py; layout:
 // gsplat/t2_dev.py (one tile = 64 Gaussians x 16 streams, stream s = SFPU vectors 2s, 2s+1).
 // Per group: Dst tile 0 params, 1 m, 2 v, 3 g2d (then pfwc out), 4 grads, 5-7 scratch.
-// Segment reduce (#713): per slot page window, eight FPU matmuls (bf16 0/1 segment tiles from CB_A
-// x the page's tf32-exact hi and fp32 lo tiles from CB_K, HiFi4, fp32 Dst) accumulate into tiles 4-7 (lanes 0-31 /
+// Segment reduce (#713): per slot page window, twelve FPU matmuls (bf16 0/1 segment tiles from CB_A
+// x the page's exact bf16 pieces hi, mid, lo from CB_K, HiFi4, fp32 Dst) accumulate into tiles 4-7 (lanes 0-31 /
 // 32-63 of the left / right page column halves, rows = lanes, columns = streams); the right
 // halves fold into the left on the SFPU, tiles 4 and 5 are transposed in Dst, and SFPTRANSP
 // regroups the four 16-lane chunks into the stream layout of tile 3.
@@ -464,15 +464,15 @@ void kernel_main() {
         mm_init_short(CB_A, CB_K);
         for (uint32_t w = 0; w < nw; w++) {
             cb_wait_front(CB_A, 4);
-            cb_wait_front(CB_K, 2);
-#pragma GCC unroll 2
-            for (uint32_t k = 0; k < 2; k++) {
+            cb_wait_front(CB_K, 3);
+#pragma GCC unroll 3
+            for (uint32_t k = 0; k < 3; k++) {
                 matmul_tiles(CB_A, CB_K, 0, k, 4);
                 matmul_tiles(CB_A, CB_K, 1, k, 5);
                 matmul_tiles(CB_A, CB_K, 2, k, 6);
                 matmul_tiles(CB_A, CB_K, 3, k, 7);
             }
-            cb_pop_front(CB_K, 2);
+            cb_pop_front(CB_K, 3);
             cb_pop_front(CB_A, 4);
         }
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
