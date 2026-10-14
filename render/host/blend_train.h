@@ -62,6 +62,31 @@ inline bool opc_on_writer() {
 constexpr uint32_t kOpcReqCb = 14;
 constexpr uint32_t kOpcWriterArg = 11u;
 
+// Task #741: GSPLAT_TT_TRAIN_OPC_SIDE=1 (needs GSPLAT_TT_PFWC_REC32=0, whose
+// 64 B blendrec carries fp32 op, r, g, b in words 5..8). The TOWN emit writes
+// those 16 B per record into a side bucket ("train_opc_side": tile t, slot c at
+// entry t * tile_cap + c, 1 KB pages == the bucket's 2 KB pages) and stamps c + 1
+// in rec[6] bits 16..31 (the cull reads bits 0..15 only; train compute ignores
+// rec[6]). Materialize copies records verbatim, so the blend reader reads the
+// tile's side entries contiguously and permutes them by stamp. A record without
+// a stamp (another emit path, c + 1 > 0xFFFF) sends the subchunk to the gather.
+inline bool opc_side() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_TRAIN_OPC_SIDE");
+        return e != nullptr && e[0] == '1';
+    }();
+    return enabled() && on && !opc_on_writer();
+}
+constexpr uint32_t kSideBytes = 16u;
+constexpr uint32_t kSidePageBytes = 1024u;  // 64 entries == one 2 KB bucket page
+constexpr uint32_t kSideReaderArg = 29u;    // 29: side address (0 = gather), 30: tile cap
+// Tile cap of this frame's side bucket; 0 = no side data this frame (set by the
+// sort for each frame, read by the blend).
+inline uint32_t& side_tile_cap() {
+    static uint32_t cap = 0u;
+    return cap;
+}
+
 // Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
 // DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
 // and marker kind in the last two words. Flag off keeps 64 B slots.
