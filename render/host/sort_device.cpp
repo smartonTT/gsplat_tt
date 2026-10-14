@@ -2096,18 +2096,15 @@ static void publish_sort_downstream_metadata(
     }
 
     if (resident_blend_chain_enabled()) {
-        std::vector<uint32_t> mask_base(counts_pad, 0u);
-        uint64_t off = 0;
-        for (uint32_t t = 0; t < num_tiles; t++) {
-            mask_base[t] = static_cast<uint32_t>(off);
-            off += (static_cast<uint64_t>(counts[t]) + 15u) & ~static_cast<uint64_t>(15u);
-        }
         const std::size_t base_bytes = static_cast<std::size_t>(counts_pad) * 4;
         if (!ctx->buf_cull_mask_base || ctx->cap_cull_mask_base_bytes < base_bytes) {
             ctx->buf_cull_mask_base = make_dram(ctx->mesh_device.get(), base_bytes);
             ctx->cap_cull_mask_base_bytes = base_bytes;
             device_state::register_buffer("cull_mask_base", ctx->buf_cull_mask_base);
         }
+        // Grow-only: sized to capacity (#754, route mode's id count varies per view).
+        const std::vector<uint32_t> mask_base = sort_onelaunch::cull_mask_base_words(
+            counts, num_tiles, ctx->cap_cull_mask_base_bytes / 4);
         distributed::EnqueueWriteMeshBuffer(
             *ctx->cq, ctx->buf_cull_mask_base, mask_base, false);
     }

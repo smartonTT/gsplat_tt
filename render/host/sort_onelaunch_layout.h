@@ -145,6 +145,22 @@ inline void totals_from_k2_rows(const std::vector<uint32_t>& krow, uint32_t num_
     }
 }
 
+// Task #754: per-tile cull-mask base offsets (the 16-aligned running sum of
+// counts) sized to cap_elems, the grow-only buffer's capacity in words:
+// EnqueueWriteMeshBuffer writes the whole buffer, and in B1 route mode the id
+// count changes from view to view, so a view with fewer ids than an earlier
+// one must still send cap_elems words.
+inline std::vector<uint32_t> cull_mask_base_words(const std::vector<int64_t>& counts,
+                                                  uint32_t num_tiles, std::size_t cap_elems) {
+    std::vector<uint32_t> base(std::max<std::size_t>(cap_elems, num_tiles), 0u);
+    uint64_t off = 0;
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        base[t] = static_cast<uint32_t>(off);
+        off += (static_cast<uint64_t>(counts[t]) + 15u) & ~static_cast<uint64_t>(15u);
+    }
+    return base;
+}
+
 // Task #355: the fold K2's count rows are an interleaved buffer of 64 B pages
 // (page i in DRAM bank i % banks at offset (i / banks) * 64), so each bank
 // holds its pages back to back. The early path reads them on CQ1 through a

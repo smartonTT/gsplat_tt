@@ -9,7 +9,9 @@
 //  - lossless: for random parent lists (records with microblock boxes and cull
 //    masks inside them), every microblock sees the same records in the same
 //    order from its sub-tile's list as from the parent list;
-//  - the claim order (blend_claim_order.h) takes the mixed id space unchanged.
+//  - the claim order (blend_claim_order.h) takes the mixed id space unchanged;
+//  - task #754: the cull-mask base upload (sort_onelaunch_layout.h) fills the
+//    grow-only buffer's capacity when a view has fewer ids than an earlier one.
 
 #include <array>
 #include <cmath>
@@ -19,6 +21,7 @@
 #include <vector>
 
 #include "blend_claim_order.h"
+#include "sort_onelaunch_layout.h"
 #include "subtile_split.h"
 
 using namespace gsplat_tt;
@@ -222,8 +225,27 @@ static void check_plan_units(uint32_t num_tiles, uint32_t num_cores, uint32_t se
     }
 }
 
+// Task #754: route mode's id count (num_ids) changes per view; the grow-only
+// cull_mask_base buffer keeps the largest view's size, and the whole-buffer
+// write needs that many words (device: "Source vector is too small").
+static void check_cull_mask_base_cap() {
+    const uint32_t big_ids = 1040, small_ids = 1014;  // full res: split, then none
+    const std::size_t cap = (big_ids + 15u) / 16u * 16u;
+    std::vector<int64_t> counts(small_ids);
+    for (uint32_t t = 0; t < small_ids; ++t) counts[t] = (t * 37u) % 50u;
+    const std::vector<uint32_t> w = sort_onelaunch::cull_mask_base_words(counts, small_ids, cap);
+    CHECK(w.size() == cap);
+    uint64_t off = 0;
+    for (uint32_t t = 0; t < small_ids; ++t) {
+        CHECK(w[t] == off);
+        off += (static_cast<uint64_t>(counts[t]) + 15u) & ~15ull;
+    }
+    for (std::size_t i = small_ids; i < cap; ++i) CHECK(w[i] == 0u);
+}
+
 int main() {
     check_masks();
+    check_cull_mask_base_cap();
     for (uint32_t s = 1; s <= 6; ++s) {
         check_plan(70, 120, s, s % 2);    // 1/4 res
         check_plan(260, 120, s, s % 2);   // 1/2 res
