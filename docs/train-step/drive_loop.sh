@@ -39,14 +39,18 @@ hero_loop() {
   local src=${HERO_NPZ:-tmp/t750/hero.npz} L=tmp/t781 R=$T/tmp/t781 t0 rc i
   [ -s "$src" ] || { echo "no $src: run tmp/t750/hero_prep.sh (docs/t685/hero.py) first"; return 5; }
   mkdir -p "$L"
+  # The project venv has no PIL (#779): the system python decodes the JPG to raw RGB8.
+  local jpg=${HERO_JPG:-scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG}
+  "${PY_IMG:-/usr/bin/python3}" -c "
+import sys; from PIL import Image
+open(sys.argv[2], 'wb').write(Image.open(sys.argv[1]).convert('RGB').tobytes())" "$jpg" "$L/target.rgb8" || return 5
   python3 -c "
-import sys, numpy as np
-from PIL import Image
+import hashlib, sys, numpy as np
 d = np.load(sys.argv[1]); k = {n: d[n] for n in d.files}
-jpg = 'scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG'
-import hashlib; assert hashlib.md5(open(jpg, 'rb').read()).hexdigest() == str(k['target_md5']), 'target md5'
-k['target'] = np.asarray(Image.open(jpg).convert('RGB'), np.float32) / np.float32(255)
-np.savez(sys.argv[2], **k)" "$src" "$L/hero_chain.npz" || return 5
+assert hashlib.md5(open(sys.argv[3], 'rb').read()).hexdigest() == str(k['target_md5']), 'target md5'
+H, W = int(k['H']), int(k['W'])
+k['target'] = np.fromfile(sys.argv[4], np.uint8).reshape(H, W, 3).astype(np.float32) / np.float32(255)
+np.savez(sys.argv[2], **k)" "$src" "$L/hero_chain.npz" "$jpg" "$L/target.rgb8" || return 5
   t0=$(date +%s)
   COPYFILE_DISABLE=1 tar -C "$L" --no-xattrs -cf - hero_chain.npz | zstd -3 -T4 -q \
     | timeout 2400 "${SSH[@]}" "rm -rf $R && mkdir -p $R && zstd -dc | tar -C $R -xf - && df -h $R | tail -1"
