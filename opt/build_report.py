@@ -1802,7 +1802,12 @@ def b2b_headline_section() -> str:
             f"<li><b>{html_escape(board)}: {b2b:.3f} ms/view b2b ({1000.0 / b2b:.1f} FPS)</b>{sp_s}, "
             f"iter {r.get('iter')} @ <code>{html_escape(str(m.get('commit', '')))}</code>{lat_s}. "
             f"vs GPU G1 {g1} ms/view (RTX A6000, <b>published, not measured</b>): "
-            f"<b>{g1 / b2b:.2f}&times;</b> {'faster' if b2b < g1 else 'slower'}.</li>")
+            f"<b>{g1 / b2b:.2f}&times;</b> {'faster' if b2b < g1 else 'slower'} "
+            f"(G1 has 2&times; our pixel count, so this overstates our lead). "
+            + "RTX 4090 at 1237&times;822 (<b>published, not measured</b>): "
+            + "; ".join(f"{g['id']} {g['renderer']} {g['ms']} ms = {g['ms'] / b2b:.2f}&times;"
+                        for g in PUBLISHED_GPU_ROWS if g["gpu"] == "NVIDIA RTX 4090")
+            + " (GPU ms / TT ms; &lt;1 means the GPU is faster).</li>")
     body = []
     for r in sorted(rows, key=lambda r: r.get("iter") or 0, reverse=True):
         m = r["metrics"]
@@ -1891,6 +1896,7 @@ PUBLISHED_GPU_ROWS = [
         "ms": 10.75,
         "src": "https://arxiv.org/abs/2308.04079",
         "src_label": "arXiv:2308.04079",
+        "note": "1920&times;1080 is about 2&times; our 1024&times;1024 pixel count, so this row overstates how far ahead TT is.",
     },
     {
         "id": "G2",
@@ -1914,6 +1920,21 @@ PUBLISHED_GPU_ROWS = [
         "src": "",
         "src_label": "Slack DM D0C1CV1AJJV, 2026-09-14",
     },
+]
+
+# RTX 4090 rows (user msg #346, 2026-10-13): Mip-NeRF360 bicycle at native
+# 1237x822 (~1.0 MPix, about our 1024x1024), full unpruned model.
+RTX4090_ROWS = [
+    ("G4", "INRIA 3DGS", "161.8 FPS", 6.18, "Faster-GS, CVPR 2026, Table 6 (test-set average)"),
+    ("G5", "Faster-GS inference renderer", "547.1 FPS", 1.83, "Faster-GS, CVPR 2026, Table 6 (test-set average)"),
+    ("G6", "gsplat (end-to-end)", "%.1f FPS (derived from published 4.395 ms)" % (1000 / 4.395), 4.395, "TileGS, arXiv:2609.03613, Table 5"),
+    ("G7", "TileGS (end-to-end)", "%.1f FPS (derived from published 3.979 ms)" % (1000 / 3.979), 3.979, "TileGS, arXiv:2609.03613, Table 5"),
+]
+PUBLISHED_GPU_ROWS += [
+    {"id": i, "renderer": name, "scene": "Mip-NeRF360 bicycle (full unpruned model)",
+     "gpu": "NVIDIA RTX 4090", "res": "1237&times;822 (native, &asymp; our 1024&times;1024 pixel count)",
+     "speed": speed, "ms": ms, "src": "", "src_label": src}
+    for i, name, speed, ms, src in RTX4090_ROWS
 ]
 
 
@@ -2068,7 +2089,7 @@ def published_gpu_section() -> str:
     )
     rows = []
     for r in PUBLISHED_GPU_ROWS:
-        ms = "&mdash;" if r["ms"] is None else f"{r['ms']:.2f}"
+        ms = "&mdash;" if r["ms"] is None else f"{r['ms']:g}"
         ratio = (
             "&mdash;"
             if r["ms"] is None
@@ -2083,7 +2104,8 @@ def published_gpu_section() -> str:
         rows.append(
             f"<tr><td>{r['id']}</td><td>{r['renderer']}</td><td>{r['scene']}</td>"
             f"<td>{r['gpu']}</td><td>{r['res']}</td><td>{r['speed']}</td>"
-            f"<td>{ms}</td><td>{ratio}</td><td>{src}</td></tr>"
+            f"<td>{ms}</td><td>{ratio}</td><td>{src} &mdash; <i>published, not measured</i>"
+            + (f"<br><small>Note: {r['note']}</small>" if r.get("note") else "") + "</td></tr>"
         )
     body = "\n".join(rows)
     return f"""
