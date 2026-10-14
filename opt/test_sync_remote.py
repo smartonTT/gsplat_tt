@@ -103,7 +103,7 @@ def test_sync_sends_include_list_one_way(tmp_path):
     stage = repo / "tmp" / "sync-stage" / sha
     assert (stage / "SHA").read_text().strip() == sha
     assert f"source={repo.resolve()}" in (stage / "SYNC_STAMP").read_text()
-    assert "sent 2 of 5 files, 1234 bytes" in proc.stdout
+    assert "sent 2 of 7 files, 1234 bytes" in proc.stdout
     build = [c for c in calls if "bash -s" in c[0][-1]]
     assert len(build) == 1 and build[0][0][-1].startswith("DIR='/localdev/u/dst' ")
     # the scene md5 differs from the remote's: copied after the build step
@@ -130,7 +130,7 @@ def test_dry_run_and_list_do_not_build(tmp_path):
     proc, calls, _ = _run(tmp_path, "yyzo-bh-04", "--dry-run")
     assert proc.returncode == 0, proc.stderr
     assert len(calls) == 1 and "-n" in calls[0][0]
-    assert "would send 2 of 5 files" in proc.stdout
+    assert "would send 2 of 7 files" in proc.stdout
     proc, calls, _ = _run(tmp_path, "yyzo-bh-04", "--list", repo=tmp_path / "repo")
     assert proc.returncode == 0, proc.stderr
     assert calls == [] and "5 files" in proc.stdout
