@@ -152,6 +152,7 @@ for o in "$STAGE_ROOT"/*; do [ "$o" = "$STAGE" ] || rm -rf "$o"; done   # keep o
 echo "$SHA" > "$STAGE/SHA"
 printf 'sha=%s\nsource=%s\nsynced_utc=%s\nfiles=%s\nbytes=%s\n' "$SHA" "$TOP" "$(date -u +%FT%TZ)" "$NF" "$NB" > "$STAGE/SYNC_STAMP"
 printf 'SHA\nSYNC_STAMP\n' >> "$LIST"
+NT=$((NF + 2))  # the list plus the two stamp files
 
 RS=(-rlEc --files-from="$LIST" --mkpath --stats)
 if [ "$MODE" = dry ]; then
@@ -159,13 +160,13 @@ if [ "$MODE" = dry ]; then
   sed -n '/^Number of files:/q;p' <<<"$out" | grep -v -E '/$|^$' | sed 's/^/would send: /' || true
   n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
   b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
-  echo "[sync_remote] dry run $HOST:$DIR: would send ${n:-0} of $NF files, ${b:-0} bytes"
+  echo "[sync_remote] dry run $HOST:$DIR: would send ${n:-0} of $NT files, ${b:-0} bytes"
   exit 0
 fi
 out=$("${RSYNC[@]}" "${RS[@]}" "$STAGE/" "$HOST:$DIR/") || { echo "$out" >&2; die "rsync to $HOST:$DIR failed" 4; }
 n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
 b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
-echo "[sync_remote] synced $HOST:$DIR: sent ${n:-0} of $NF files, ${b:-0} bytes"
+echo "[sync_remote] synced $HOST:$DIR: sent ${n:-0} of $NT files, ${b:-0} bytes"
 
 # Scenes the bench needs (after the build step, which links $DIR/scenes): copied only when missing or their md5 differs. A local
 # scene is taken from this worktree, else the main checkout (not in git).

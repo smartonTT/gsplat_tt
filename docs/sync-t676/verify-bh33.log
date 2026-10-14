@@ -1,0 +1,41 @@
+SSH_PREFLIGHT=ok
+=== t676 best-iter-229=3702fbb5e02beb142cd0edb39e87705ce4520c70 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t676 to bh-33:/localdev/smarton/gstt2-sync Tue Oct 13 21:18:55 PDT 2026
+=== dry run
+dry rc=0
+1033
+[sync_remote] dry run bh-33:/localdev/smarton/gstt2-sync: would send 1032 of 1031 files, 63377925 bytes
+=== sync+build 21:19:28
+sync rc=0 in 124 s
+[sync_remote] 3702fbb5e02beb142cd0edb39e87705ce4520c70 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t676: 1031 files, 63377745 bytes listed
+[sync_remote] synced bh-33:/localdev/smarton/gstt2-sync: sent 1032 of 1031 files, 63377925 bytes
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=3702fbb5e02beb142cd0edb39e87705ce4520c70 so_md5=6884b42ce3cc20500567cc9d58236984 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+STAMP remote=3702fbb5e02beb142cd0edb39e87705ce4520c70 local=3702fbb5e02beb142cd0edb39e87705ce4520c70 MATCH
+=== b2b 21:21:36
+run r0 rc=0
+run r1 rc=0
+run r2 rc=0
+b2b rc=0
+[sync_remote] pulled bh-33:/localdev/smarton/gstt2-sync/tmp/t676 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t676/docs/sync-t676/out/remote: 3 files, 532806 bytes
+pull rc=0
+docs/sync-t676/out/remote/run-r0.log:B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.062 fps=124.04 ms_frame_median=8.065 pass_ms_frame=8.066,8.059,8.059,8.051,8.063,8.077,8.059,8.066,8.064,8.065,8.072,8.067,8.062,8.066,8.066,8.058,8.070,8.0
+docs/sync-t676/out/remote/run-r0.log:TTW_TIMING b2b_ms_frame_median=8.065
+docs/sync-t676/out/remote/run-r1.log:B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.064 fps=124.01 ms_frame_median=8.065 pass_ms_frame=8.067,8.059,8.063,8.072,8.072,8.064,8.070,8.065,8.063,8.067,8.064,8.088,8.071,8.065,8.055,8.066,8.074,8.0
+docs/sync-t676/out/remote/run-r1.log:TTW_TIMING b2b_ms_frame_median=8.065
+docs/sync-t676/out/remote/run-r2.log:B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.060 fps=124.07 ms_frame_median=8.062 pass_ms_frame=8.063,8.061,8.068,8.057,8.059,8.067,8.059,8.073,8.057,8.062,8.066,8.056,8.066,8.060,8.068,8.067,8.062,8.0
+docs/sync-t676/out/remote/run-r2.log:TTW_TIMING b2b_ms_frame_median=8.062
+=== resync (no change expected) 21:22:49
+resync rc=0
+[sync_remote] 3702fbb5e02beb142cd0edb39e87705ce4520c70 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t676: 1031 files, 63377745 bytes listed
+[sync_remote] synced bh-33:/localdev/smarton/gstt2-sync: sent 1 of 1031 files, 165 bytes
+[sync_remote] sha=3702fbb5e02beb142cd0edb39e87705ce4520c70 so_md5=6884b42ce3cc20500567cc9d58236984 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+=== remote size
+128M	/localdev/smarton/gstt2-sync
+112M	/localdev/smarton/.cache/ttmc-t676
+/dev/mapper/vg0-lv2  8.6T  3.4T  5.3T  39% /localdev/smarton
+/dev/mapper/vg0-lv0   94G   64G   30G  69% /proj_sw
+=== done Tue Oct 13 21:23:54 PDT 2026
