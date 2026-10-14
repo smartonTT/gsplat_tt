@@ -335,6 +335,20 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (gsplat_tt::blend_train::enabled()) {
         writer_defines["BLEND_TRAIN"] = "1";
         reader_defines["BLEND_TRAIN"] = "1";  // task #717: fp32 op/colour gather
+        // Task #727: gather knobs (reads per barrier, skip mask-0 records) and
+        // diagnostics (GSPLAT_TT_T727_DIAG 1/2: output wrong, timing attribution only).
+        const char* opc_batch = std::getenv("GSPLAT_TT_TRAIN_OPC_BATCH");
+        if (opc_batch != nullptr && opc_batch[0] != '\0') {
+            reader_defines["TRAIN_OPC_BATCH"] = std::to_string(std::strtoul(opc_batch, nullptr, 10)) + "u";
+        }
+        const char* opc_skip = std::getenv("GSPLAT_TT_TRAIN_OPC_SKIPDEAD");
+        if (opc_skip != nullptr && opc_skip[0] == '1') {
+            reader_defines["TRAIN_OPC_SKIP_DEAD"] = "1";
+        }
+        const char* t727_diag = std::getenv("GSPLAT_TT_T727_DIAG");
+        if (t727_diag != nullptr && (t727_diag[0] == '1' || t727_diag[0] == '2')) {
+            reader_defines["T727_DIAG"] = std::string(1, t727_diag[0]);
+        }
     }
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";

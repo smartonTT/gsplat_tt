@@ -74,7 +74,21 @@ constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk: bulk L1 sla
 // Task #717: fp32 [op, r, g, b] per bulk record (16 B each), same slot cadence
 // as CB_BUCKET_BULK. Reuses the unfused program's idle CB_BUCKET ring (id 9).
 constexpr uint32_t CB_TRAIN_OPC = BLEND_CB_BASE + 9;
-constexpr uint32_t TRAIN_OPC_STAGE = 128u * 1024u;  // DRAM page staging (64 x 64 B)
+constexpr uint32_t TRAIN_OPC_STAGE = 128u * 1024u;  // DRAM page staging (up to 2048 x 64 B)
+// Task #727: reads per barrier (the 256 KB slot holds 128 KB of entries + 128 KB of staging).
+#ifndef TRAIN_OPC_BATCH
+#define TRAIN_OPC_BATCH 64u
+#endif
+static_assert(TRAIN_OPC_BATCH >= 1u && TRAIN_OPC_BATCH * 64u <= 128u * 1024u, "staging overflows the slot");
+// Task #727: 1 = gather only records whose slab mask (rec[3]) is non-zero; the
+// compute reads op/colour only for mask != 0, so the skipped entries are never read.
+#ifndef TRAIN_OPC_SKIP_DEAD
+#define TRAIN_OPC_SKIP_DEAD 0
+#endif
+// Task #727 diagnostics (output wrong): 1 = no DRAM reads (copy only), 2 = no gather at all.
+#ifndef T727_DIAG
+#define T727_DIAG 0
+#endif
 #endif
 constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
@@ -472,26 +486,51 @@ void kernel_main() {
                 auto recs = reinterpret_cast<volatile uint32_t*>(buck);
                 auto dst = reinterpret_cast<volatile uint32_t*>(side);
                 auto stg = reinterpret_cast<volatile uint32_t*>(side + TRAIN_OPC_STAGE);
+#if T727_DIAG != 2
                 uint32_t g0 = 0;
                 while (g0 < L_sub) {
-                    const uint32_t g1 = (g0 + 64u < L_sub) ? g0 + 64u : L_sub;
-                    for (uint32_t g = g0; g < g1; ++g) {
-                        const uint32_t gid = recs[g * 8u + 7u];
+                    // Issue up to TRAIN_OPC_BATCH reads (stage slot n), one barrier, then copy.
+                    uint32_t n = 0;
+                    uint32_t g1 = g0;
+                    for (; g1 < L_sub && n < TRAIN_OPC_BATCH; ++g1) {
+#if TRAIN_OPC_SKIP_DEAD
+                        if (recs[g1 * 8u + 3u] == 0u) {
+                            continue;
+                        }
+#endif
+                        const uint32_t gid = recs[g1 * 8u + 7u];
+#if T727_DIAG == 0
                         noc_async_read(get_noc_addr(gid >> 2, opc_gen),
-                                       side + TRAIN_OPC_STAGE + (g - g0) * 64u, 64u);
+                                       side + TRAIN_OPC_STAGE + n * 64u, 64u);
+#else
+                        (void)gid;
+#endif
+                        ++n;
                     }
+#if T727_DIAG == 0
                     noc_async_read_barrier();
+#endif
                     invalidate_l1_cache();
+                    n = 0;
                     for (uint32_t g = g0; g < g1; ++g) {
+#if TRAIN_OPC_SKIP_DEAD
+                        if (recs[g * 8u + 3u] == 0u) {
+                            continue;
+                        }
+#endif
                         const uint32_t gid = recs[g * 8u + 7u];
-                        const uint32_t s = (g - g0) * 16u + (gid & 3u) * 4u;
+                        const uint32_t s = n * 16u + (gid & 3u) * 4u;
                         dst[g * 4u + 0u] = stg[s + 0u];
                         dst[g * 4u + 1u] = stg[s + 1u];
                         dst[g * 4u + 2u] = stg[s + 2u];
                         dst[g * 4u + 3u] = stg[s + 3u];
+                        ++n;
                     }
                     g0 = g1;
                 }
+#else
+                (void)recs; (void)dst; (void)stg; (void)opc_gen;
+#endif
                 mb_cb_commit_fence();
                 cb_push_back(CB_TRAIN_OPC, BULK_REC_SLOT);
             }
