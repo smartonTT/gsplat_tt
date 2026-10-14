@@ -30,7 +30,8 @@ import sys
 
 import numpy as np
 
-from gsplat.blend_backward_dev import TILE, cfg_from_dump, f32, fbits, tile_index, tilize
+from gsplat.blend_backward_dev import (TILE, cfg_from_dump, f32, fbits, pair_lists, tile_index, tile_rects_vec,
+                                      tilize)
 
 REC_WORDS = 8
 FULL_MASK = 0xFFFFFFFF
@@ -76,6 +77,42 @@ def prep(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
             "H": H, "W": W}
 
 
+def prep_binned(means2d, conic, opacity, colors, order, valid, H: int, W: int) -> dict:
+    """prep() with each Gaussian only in the tiles of its 3-sigma rectangle (blend_backward_dev
+    tile_rects_vec + pair_lists, the rule of forward_fast and the device T1), numpy-vectorised for
+    the hero view. Same layout: every screen tile row-major, each tile's PACK2 list front to back
+    starting on a page. Equal to prep() with each tile's list cut to its rectangle's Gaussians."""
+    m2 = np.asarray(means2d, f32)
+    con = np.asarray(conic, f32)
+    op16 = unorm16(opacity)
+    col16 = unorm16(colors)
+    tiles_x, tiles_y = (W + TILE - 1) // TILE, (H + TILE - 1) // TILE
+    nt = tiles_x * tiles_y
+    pl = pair_lists(tile_rects_vec(m2, valid, con, H, W, TILE), order, tiles_x)
+    g, tid = pl["g"], pl["tid"]
+    cnt = np.bincount(tid, minlength=nt).astype(np.int64)
+    pages = (cnt + 1) // 2
+    page0 = np.concatenate([[0], np.cumsum(pages)[:-1]]).astype(np.int64)
+    start = np.concatenate([[0], np.cumsum(cnt)[:-1]]).astype(np.int64)
+    row = 2 * page0[tid] + np.arange(g.size, dtype=np.int64) - start[tid]
+    ty, tx = np.divmod(tid, tiles_x)
+    bits = lambda v: np.asarray(v, f32).view(np.uint32)  # noqa: E731
+    recs = np.zeros((2 * int(pages.sum()), REC_WORDS), np.uint32)
+    recs[row, 0] = bits(f32(-0.5) * con[g, 0])
+    recs[row, 1] = bits(-con[g, 1])
+    recs[row, 2] = bits(f32(-0.5) * con[g, 2])
+    recs[row, 3] = FULL_MASK
+    recs[row, 4] = bits(m2[g, 0] - (tx * TILE).astype(f32))
+    recs[row, 5] = bits(m2[g, 1] - (ty * TILE).astype(f32))
+    recs[row, 6] = op16[g] | (col16[g, 0] << 16)
+    recs[row, 7] = col16[g, 1] | (col16[g, 2] << 16)
+    tiles = np.zeros((nt, 16), np.uint32)
+    tiles[:, 0], tiles[:, 1], tiles[:, 2] = np.arange(nt), page0, cnt
+    rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
+    ramps = np.stack([tilize(cc.astype(f32) + f32(0.5)), tilize(rr.astype(f32) + f32(0.5))])
+    return {"tiles": tiles, "recs": recs, "ramps": ramps, "H": H, "W": W}
+
+
 def write(p: dict, out: str) -> None:
     os.makedirs(out, exist_ok=True)
     p["tiles"].tofile(os.path.join(out, "tiles.u32"))
@@ -115,6 +152,42 @@ def emulate(p: dict, cfg) -> np.ndarray:
     return out
 
 
+def emulate_fast(p: dict, cfg) -> np.ndarray:
+    """emulate() vectorised across tiles (step k blends record k of every tile that has one);
+    the same fp32 operations per pixel, for the hero view."""
+    tiles = p["tiles"]
+    page, n = tiles[:, 1].astype(np.int64), tiles[:, 2].astype(np.int64)
+    s = np.argsort(-n, kind="stable")
+    page, n = page[s], n[s]
+    nt = len(tiles)
+    x, y = (np.asarray(v, f32)[None] for v in p["ramps"])
+    amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1.0)
+    R, G, Bc = (np.zeros((nt, 1024), f32) for _ in range(3))
+    T = np.ones((nt, 1024), f32)
+    col = lambda w: unorm16_decode(w)[:, None]  # noqa: E731
+    for k in range(int(n.max()) if nt else 0):
+        m = int(np.searchsorted(-n, -k, side="left"))   # tiles with n > k
+        w = p["recs"][2 * page[:m] + k]
+        A, B, C, _, mx, my = (np.ascontiguousarray(w[:, i]).view(f32)[:, None] for i in range(6))
+        op, cr, cg, cb = col(w[:, 6] & 0xFFFF), col(w[:, 6] >> 16), col(w[:, 7] & 0xFFFF), col(w[:, 7] >> 16)
+        dx, dy = x - mx, y - my
+        pw = A * (dx * dx) + B * (dx * dy) + C * (dy * dy)
+        pw = np.clip(pw, f32(-80.0), f32(0.0))
+        al = np.minimum(op * np.exp(pw).astype(f32), amax)
+        Tk = T[:m]
+        tn = Tk * (one - al)
+        live = (al >= amin) & (Tk >= 0)
+        acc = live & (tn >= tmin)
+        at = al * Tk
+        R[:m] = np.where(acc, R[:m] + at * cr, R[:m])
+        G[:m] = np.where(acc, G[:m] + at * cg, G[:m])
+        Bc[:m] = np.where(acc, Bc[:m] + at * cb, Bc[:m])
+        T[:m] = np.where(acc, tn, np.where(live, -np.abs(Tk), Tk)).astype(f32)
+    out = np.zeros((nt, 4, 1024), f32)
+    out[s] = np.stack([R, G, Bc, T], 1)
+    return out
+
+
 def to_image(train: np.ndarray, tiles: np.ndarray, H: int, W: int, background) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(image (H,W,3) = C + |T| bg, final_T (H,W) = |T|, stopped (H,W) bool) from the train pages."""
     tiles_x = (W + TILE - 1) // TILE
@@ -136,9 +209,10 @@ def to_image(train: np.ndarray, tiles: np.ndarray, H: int, W: int, background) -
 
 def compare(d, img: np.ndarray, fT: np.ndarray, bar: float) -> dict:
     ei = np.abs(img - d["image"])
-    eT = np.abs(fT - d["final_T"])
+    # The hero dump (docs/t685/hero.py) has no final_T: its image alone gates.
+    eT = np.abs(fT - d["final_T"]) if "final_T" in d.files else np.zeros(1)
     rep = {"max_abs_image": float(ei.max()), "max_abs_image_rgb": [float(ei[..., k].max()) for k in range(3)],
-           "max_abs_final_T": float(eT.max()), "bar": bar}
+           "max_abs_final_T": float(eT.max()), "bar": bar, "final_T_gated": "final_T" in d.files}
     rep["pass"] = bool(rep["max_abs_image"] <= bar and rep["max_abs_final_T"] <= bar)
     return rep
 
@@ -150,31 +224,36 @@ def main(argv=None) -> int:
     a.add_argument("npz")
     a.add_argument("out")
     a.add_argument("--emulate", action="store_true", help="also compare the numpy model with the oracle")
+    a.add_argument("--binned", action="store_true", help="3-sigma tile binning (prep_binned; hero size)")
     c = sub.add_parser("check")
     c.add_argument("npz")
     c.add_argument("prep_dir", help="prep dir holding the device train.f32")
     c.add_argument("--bar", type=float, default=1e-4, help="max abs error for image and final_T")
     c.add_argument("--image-out", help="write the device image (H,W,3 fp32) here for blend_backward_dev")
+    c.add_argument("--binned", action="store_true", help="the prep dir came from prep --binned")
+    c.add_argument("--no-model", action="store_true", help="skip the numpy model (minutes at hero size)")
     args = ap.parse_args(argv)
     d = np.load(args.npz, allow_pickle=False)
     cfg = cfg_from_dump(d)
     H, W = d["image"].shape[:2]
-    p = prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"], H, W)
+    p = (prep_binned if args.binned else prep)(d["means2d"], d["conic"], d["opacity"], d["colors"],
+                                               d["order"], d["valid"], H, W)
     if args.cmd == "prep":
         write(p, args.out)
         print(json.dumps({"n_tiles": len(p["tiles"]), "n_recs": len(p["recs"])}))
         if args.emulate:
-            img, fT, _ = to_image(emulate(p, cfg), p["tiles"], H, W, cfg.background)
+            img, fT, _ = to_image(emulate_fast(p, cfg), p["tiles"], H, W, cfg.background)
             print(json.dumps({"emulate_vs_oracle": compare(d, img, fT, 1e-4)}))
         return 0
     train = np.fromfile(os.path.join(args.prep_dir, "train.f32"), f32).reshape(-1, 4, 1024)
     img, fT, stop = to_image(train, p["tiles"], H, W, cfg.background)
     rep = compare(d, img, fT, args.bar)
-    model = to_image(emulate(p, cfg), p["tiles"], H, W, cfg.background)
-    rep["max_abs_image_vs_model"] = float(np.abs(img - model[0]).max())
-    rep["max_abs_final_T_vs_model"] = float(np.abs(fT - model[1]).max())
     rep["stopped_px"] = int(stop.sum())
-    rep["stopped_px_model"] = int(model[2].sum())
+    if not args.no_model:
+        model = to_image(emulate_fast(p, cfg), p["tiles"], H, W, cfg.background)
+        rep["max_abs_image_vs_model"] = float(np.abs(img - model[0]).max())
+        rep["max_abs_final_T_vs_model"] = float(np.abs(fT - model[1]).max())
+        rep["stopped_px_model"] = int(model[2].sum())
     if args.image_out:
         img.astype(f32).tofile(args.image_out)
     print(json.dumps({"npz": os.path.basename(args.npz), **rep}))
