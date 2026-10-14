@@ -37,12 +37,12 @@ inline uint32_t tidx(uint32_t r, uint32_t c) {
     return ((r >> 4) * 2 + (c >> 4)) * 256 + (r & 15) * 16 + (c & 15);
 }
 
-struct Layout {
+struct LossLayout {
     uint32_t H, W, nh, nw;
     uint32_t tiles() const { return 3 * nh * nw; }
 };
 
-std::vector<float> tilize(const std::vector<float>& hwc, const Layout& L) {
+std::vector<float> lb_tilize(const std::vector<float>& hwc, const LossLayout& L) {
     std::vector<float> out(size_t(L.tiles()) * TS * TS, 0.0f);
     for (uint32_t ch = 0; ch < 3; ch++)
         for (uint32_t r = 0; r < L.H; r++)
@@ -53,7 +53,7 @@ std::vector<float> tilize(const std::vector<float>& hwc, const Layout& L) {
     return out;
 }
 
-std::vector<float> untilize(const std::vector<float>& tl, const Layout& L) {
+std::vector<float> lb_untilize(const std::vector<float>& tl, const LossLayout& L) {
     std::vector<float> out(size_t(L.H) * L.W * 3);
     for (uint32_t ch = 0; ch < 3; ch++)
         for (uint32_t r = 0; r < L.H; r++)
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
     }
     const std::string in = argv[1], out = argv[2];
     const int iters = argc > 3 ? std::atoi(argv[3]) : 20;
-    Layout L{};
+    LossLayout L{};
     {
         std::ifstream f(in + "/hw.txt");
         if (!(f >> L.H >> L.W)) {
@@ -106,8 +106,8 @@ int main(int argc, char** argv) {
     L.nh = (L.H + TS - 1) / TS;
     L.nw = (L.W + TS - 1) / TS;
     const size_t npx = size_t(L.H) * L.W * 3;
-    const auto x = tilize(read_f32(in + "/image.f32", npx), L);
-    const auto y = tilize(read_f32(in + "/target.f32", npx), L);
+    const auto x = lb_tilize(read_f32(in + "/image.f32", npx), L);
+    const auto y = lb_tilize(read_f32(in + "/target.f32", npx), L);
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto& cq = dev->mesh_command_queue();
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
     for (float v : part) sum += v;
     const double loss = 0.8 * sum / double(npx);
     {
-        const auto gh = untilize(g, L);
+        const auto gh = lb_untilize(g, L);
         std::ofstream f(out + "/grad.f32", std::ios::binary);
         f.write(reinterpret_cast<const char*>(gh.data()), gh.size() * 4);
         char lb[64];

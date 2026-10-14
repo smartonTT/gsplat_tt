@@ -124,8 +124,11 @@ def target_stats(y: np.ndarray, scheme: str = "fp32", rmode: str = "rne"):
 
 
 def loss_and_grad_device(image: np.ndarray, target: np.ndarray, scheme: str = "fp32",
-                         rmode: str = "rne", lambda_dssim: float = LAMBDA):
-    """The device algorithm in fp32: (loss, l1, ssim, dL/dimage (H, W, 3))."""
+                         rmode: str = "rne", lambda_dssim: float = LAMBDA,
+                         bwd_scheme: str | None = None):
+    """The device algorithm in fp32: (loss, l1, ssim, dL/dimage (H, W, 3)).
+    bwd_scheme (default: scheme) rounds the three backward filters separately."""
+    bs = bwd_scheme or scheme
     H, W = image.shape[:2]
     x, y = pad_planes(image), pad_planes(target)
     mask = np.zeros(x.shape[1:], dtype=np.float32)
@@ -148,9 +151,9 @@ def loss_and_grad_device(image: np.ndarray, target: np.ndarray, scheme: str = "f
     d_mu = Sw * (f32(2) * mu_y / A - f32(2) * mu_y * rB - f32(2) * mu_x / C + f32(2) * mu_x * rD)
     d_xx = -Sw * rD
     d_xy = f32(2) * Sw * rB
-    P = filt_tiles(d_mu, scheme, rmode)
-    Q = filt_tiles(d_xx, scheme, rmode)
-    Rr = filt_tiles(d_xy, scheme, rmode)
+    P = filt_tiles(d_mu, bs, rmode)
+    Q = filt_tiles(d_xx, bs, rmode)
+    Rr = filt_tiles(d_xy, bs, rmode)
     diff = x - y
     g_l1 = f32((1.0 - lambda_dssim)) / n * np.sign(diff)
     grad = (P + f32(2) * x * Q + y * Rr + g_l1) * mask

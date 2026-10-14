@@ -27,7 +27,7 @@ timeout 900 "${SSH[@]}" "cd $T && export TT_METAL_HOME=/localdev/smarton/tt-meta
   TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=$MESH TT_METAL_CACHE=/localdev/smarton/.cache/ttmc-t690 PYTHONDONTWRITEBYTECODE=1 && \
   CXX=\$(grep '^CMAKE_CXX_COMPILER:' render/build-tt/CMakeCache.txt | cut -d= -f2) && \
   { cmake -G Ninja -S render/bench -B render/bench/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=\$CXX > tmp/t690cfg.log 2>&1 && \
-    nice -n 19 cmake --build render/bench/build --target loss_bench -j 8 > tmp/t690build.log 2>&1 || { tail -40 tmp/t690cfg.log tmp/t690build.log; exit 5; }; } && \
+    nice -n 19 cmake --build render/bench/build --target loss_bench -j 8 > tmp/t690build.log 2>&1 || { tail -n 40 tmp/t690cfg.log tmp/t690build.log; exit 5; }; } && \
   rm -rf tmp/t690 && source .venv/bin/activate && python3 opt/t690/loss_check.py prep tmp/t690 && \
   for c in dump64 syn; do mkdir -p tmp/t690/\$c/out; timeout 300 render/bench/build/loss_bench tmp/t690/\$c tmp/t690/\$c/out $ITERS > tmp/t690/\$c/run.log 2>&1; \
     echo \"run \$c rc=\$?\"; grep -E '^\[LOSS\]|TT_THROW|TT_FATAL|error' tmp/t690/\$c/run.log | head -5; tail -3 tmp/t690/\$c/run.log; done && \
