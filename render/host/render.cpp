@@ -539,6 +539,15 @@ py::tuple render_view(
         // stays seam-free); a view that fits never gets here. With the cull
         // disabled the floor changes nothing, so the overflow fails at once.
         const uint32_t over_n = gsplat_tt::sort_last_tile_overflow();
+        // Task #746: B1 route mode re-plans the overflow tile from this view's own
+        // totals (a split, or quarters -> bands) and re-runs at the same floor.
+        if (!sort_ok && over_n != 0 && attempt < gsplat_tt::overflow_retry::kMaxRetries &&
+            gsplat_tt::sort_b1_replan()) {
+            std::fprintf(stderr,
+                         "[render_clean] tile overflow (%u records): B1 re-plan from this "
+                         "view's totals, retrying the view\n", over_n);
+            continue;
+        }
         // Task #284: first grow the bucket (once per process) and re-render at
         // the same floor; the coarser floor is the fallback past kTileCapBig.
         if (!sort_ok && over_n != 0 && attempt < gsplat_tt::overflow_retry::kMaxRetries &&

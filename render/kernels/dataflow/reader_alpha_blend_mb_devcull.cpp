@@ -244,7 +244,14 @@ void kernel_main() {
     for (uint32_t c = 0; c < num_cores; ++c) {
         total_tiles += lpt_meta[c * 2u + 1u];
     }
-#if defined(BLEND_B1) && BLEND_B1
+#if defined(BLEND_B1_ROUTE) && BLEND_B1_ROUTE
+    // Task #746 (B1 full, GSPLAT_TT_B1_ROUTE): the sort binned split tiles into
+    // sub-tile buckets (ids >= num_tiles) and the LPT list covers every id. Arg 31:
+    // the host's id table (subtile::id_words): per id its unit (parent, code), or
+    // kSkip for a split parent (empty; its sub-tiles draw it).
+    const auto b1_ids_acc = TensorAccessor(tile_ids_args, get_arg_val<uint32_t>(31), 64);
+    constexpr uint32_t b1_units = 0;
+#elif defined(BLEND_B1) && BLEND_B1
     // Task #722 (B1'): heavy tiles become 4 or 16 units (parent tile + microblock
     // mask, subtile_unit.h), claimed before the rank-interleaved list; the list
     // then skips them. Every reader builds the same plan from this view's own
@@ -358,7 +365,12 @@ void kernel_main() {
         }
         uint32_t unit_code = 0;
         uint32_t tile_id;
-#if defined(BLEND_B1) && BLEND_B1
+#if defined(BLEND_B1_ROUTE) && BLEND_B1_ROUTE
+        uint32_t list_id;  // #746: the bucket id (ranges, subchunks, flags); tile_id = its parent
+#else
+        uint32_t& list_id = tile_id;
+#endif
+#if defined(BLEND_B1) && BLEND_B1 && !(defined(BLEND_B1_ROUTE) && BLEND_B1_ROUTE)
         if (claim < b1_units) {
             uint32_t i = 0, k = claim, n = 0;
             for (;; ++i) {
@@ -396,7 +408,20 @@ void kernel_main() {
             noc_async_read_barrier();
         }
         tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
-#if defined(BLEND_B1) && BLEND_B1
+#if defined(BLEND_B1_ROUTE) && BLEND_B1_ROUTE
+        list_id = tile_id;
+        {
+            BLEND_PZ("rd_tid");
+            noc_async_read_tile(list_id >> 4, b1_ids_acc, tid_scr);
+            noc_async_read_barrier();
+        }
+        const uint32_t uw = reinterpret_cast<volatile uint32_t*>(tid_scr)[list_id & 0xFu];
+        if (uw == 0xFFFFFFFFu) {
+            continue;  // a split parent: its sub-tiles draw it
+        }
+        tile_id = subtile_unit::tile_of(uw);
+        unit_code = subtile_unit::code_of(uw);
+#elif defined(BLEND_B1) && BLEND_B1
         // A split tile is blended by its units only.
         bool split = false;
         for (uint32_t i = 0; i < b1_n_heavy; ++i) {
@@ -436,7 +461,7 @@ void kernel_main() {
         {
             BLEND_PZ("rd_meta");
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-            const uint32_t elem0 = tile_id * 2u;
+            const uint32_t elem0 = list_id * 2u;
             const uint32_t page = elem0 >> 4;
             const uint32_t off = elem0 & 0xF;
             auto rng_ptr = reinterpret_cast<volatile uint32_t*>(scr);
@@ -459,7 +484,7 @@ void kernel_main() {
         uint32_t num_subchunks = 1;
         {
             BLEND_PZ("rd_meta");
-            const uint32_t e0 = tile_id * 2u;
+            const uint32_t e0 = list_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
@@ -507,7 +532,7 @@ void kernel_main() {
                 const uint32_t scr = get_write_ptr(CB_SCR_IDS);
                 auto fp = reinterpret_cast<volatile uint32_t*>(scr);
                 for (uint32_t it = 0; it < (1u << 22); ++it) {
-                    noc_async_read_tile(tile_id * 8u + sc, ready_acc, scr);
+                    noc_async_read_tile(list_id * 8u + sc, ready_acc, scr);
                     noc_async_read_barrier();
                     invalidate_l1_cache();
                     if (fp[0] == ready_epoch) break;

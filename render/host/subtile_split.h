@@ -161,6 +161,18 @@ inline std::vector<uint32_t> plan_words(const Plan& p) {
     return w;
 }
 
+// The blend/materialize id table (GSPLAT_TT_B1_ROUTE): per bucket id the unit it
+// draws, subtile_unit::word(parent, code); an unsplit tile is (t, 0), a split
+// parent kSkip (its own list is empty; its sub-tiles draw it).
+inline constexpr uint32_t kSkip = 0xFFFFFFFFu;
+inline std::vector<uint32_t> id_words(const Plan& p) {
+    std::vector<uint32_t> w(p.num_ids());
+    for (uint32_t t = 0; t < p.num_tiles; ++t) w[t] = p.first_id[t] == kNone ? t : kSkip;
+    for (uint32_t id = p.num_tiles; id < p.num_ids(); ++id)
+        w[id] = subtile_unit::word(p.parent[id - p.num_tiles], p.code[id - p.num_tiles]);
+    return w;
+}
+
 // The ids a record of tile t with microblock box mask `bm` is emitted to: t
 // itself when t is unsplit, else every sub-tile of t whose mask meets bm. Host
 // model of the device emit.

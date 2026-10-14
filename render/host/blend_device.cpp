@@ -343,8 +343,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         reader_defines["BLEND_LATE_CLAIM"] = "1";
     }
     // Task #722 (B1'): heavy-tile units (fused program only; subtile_unit.h).
-    const unsigned int b1_mode = fused ? gsplat_tt::env_config::b1_mode() : 0u;
+    const unsigned int b1_mode = fused ? gsplat_tt::env_config::b1_blend_mode() : 0u;
     if (b1_mode != 0u) {
+        // #746: B1 full reads each bucket's unit from the sort's id table (arg 31).
+        if (gsplat_tt::env_config::b1_route()) reader_defines["BLEND_B1_ROUTE"] = "1";
         reader_defines["BLEND_B1"] = std::to_string(b1_mode);
         reader_defines["BLEND_B1_MIN"] = std::to_string(gsplat_tt::env_config::b1_min()) + "u";
         writer_defines["BLEND_B1"] = std::to_string(b1_mode);
@@ -956,8 +958,12 @@ static double process_frame_mb_devcull_resident(
                         const mbf::CoreArgs& ma = pend.cores.at(mbf::core_key(x, y));
                         reader_args.push_back(pend.flags_addr);  // arg 28
                         reader_args.push_back(pend.epoch);       // arg 29
-                        if (gsplat_tt::env_config::b1_mode() != 0u) {
+                        if (gsplat_tt::env_config::b1_blend_mode() != 0u) {
                             reader_args.push_back(num_tiles);    // arg 30 (BLEND_B1)
+                        }
+                        if (gsplat_tt::env_config::b1_route()) {
+                            auto ids = gsplat_tt::device_state::get_buffer("sort_b1_ids");
+                            reader_args.push_back(ids ? static_cast<uint32_t>(ids->address()) : 0u);  // arg 31
                         }
                         std::vector<uint32_t> n = ma.n;
                         n.push_back(pend.flags_addr);  // mat arg 18

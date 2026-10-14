@@ -201,6 +201,17 @@ static void check_plan_units(uint32_t num_tiles, uint32_t num_cores, uint32_t se
             }
             CHECK(u == subtile::kFullMask);
         }
+        // #746: id table: unsplit tiles draw themselves, split parents are
+        // skipped, every sub id draws (parent, code)
+        const std::vector<uint32_t> ids = subtile::id_words(p);
+        CHECK(ids.size() == p.num_ids());
+        for (uint32_t t = 0; t < num_tiles; ++t)
+            CHECK(ids[t] == (p.first_id[t] == subtile::kNone ? t : subtile::kSkip));
+        for (uint32_t id = num_tiles; id < p.num_ids(); ++id) {
+            CHECK(subtile_unit::tile_of(ids[id]) == p.parent_of(id));
+            CHECK(subtile_unit::code_of(ids[id]) == p.code[id - num_tiles]);
+            CHECK(subtile_unit::mask(subtile_unit::code_of(ids[id])) == p.mask_of(id));
+        }
         // the heaviest tile always fits the smallest budget (4 extra ids: quarters)
         CHECK(p.first_id[seed % num_tiles] != subtile::kNone);
         if (max_ids == num_tiles + 4096u) {

@@ -567,6 +567,9 @@ void kernel_main() {
         // The work buffer is a flat u32 array; item i = {tile_id at 2i,
         // sc | part << 8 at 2i+1}, both in the same 64 B page (2i is even).
         uint32_t tile_id, sc, part;
+#if defined(MAT_B1_ROUTE) && MAT_B1_ROUTE
+        uint32_t org_tile;  // #746: a sub-tile bucket's records are parent-relative
+#endif
         {
             MAT_PZ("mat_meta");
             FZ_ACC(fz_meta);
@@ -577,9 +580,17 @@ void kernel_main() {
             const uint32_t w1 = scrp[u % ELEMS_PER_PAGE + 1u];
             sc = w1 & 0xFFu;
             part = (w1 >> 8) & 0xFFu;
+#if defined(MAT_B1_ROUTE) && MAT_B1_ROUTE
+            org_tile = w1 >> 16;
+#endif
         }
+#if defined(MAT_B1_ROUTE) && MAT_B1_ROUTE
+        const uint32_t tx = org_tile % tiles_x + win.x0;
+        const uint32_t ty = org_tile / tiles_x + win.y0;
+#else
         const uint32_t tx = tile_id % tiles_x + win.x0;
         const uint32_t ty = tile_id / tiles_x + win.y0;
+#endif
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
 

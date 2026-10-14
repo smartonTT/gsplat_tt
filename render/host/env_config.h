@@ -193,6 +193,15 @@ inline unsigned int b1_mode() {
     static const unsigned int v = env_uint("GSPLAT_TT_B1", 0u);
     return v;
 }
+// Task #744/#746 (B1 full): GSPLAT_TT_B1_ROUTE=1 bins split tiles into sub-tile
+// buckets in the sort (sort_device.cpp b1_route_on); the fused blend then draws
+// each bucket id as its unit (parent, code). Default off.
+inline bool b1_route() {
+    static const bool v = env_uint("GSPLAT_TT_B1_ROUTE", 0u) == 1u;
+    return v;
+}
+// The blend's unit mode: B1 full draws units as B1' mode 1 does.
+inline unsigned int b1_blend_mode() { return b1_route() ? 1u : b1_mode(); }
 // Minimum records for a tile to split (GSPLAT_TT_B1_MIN, default 256).
 inline unsigned int b1_min() {
     static const unsigned int v = env_uint("GSPLAT_TT_B1_MIN", 256u);
