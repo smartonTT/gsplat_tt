@@ -214,3 +214,16 @@ Open problems found (none of these numbers counts as a training ms/view yet):
    (max rel 0.57, l2rel 1.0e-2; Adam delta on means 0.26). The sh0 crop passes, so the likely gap is
    the SH-direction term of dL/dmeans (view-dependent colour) or the raw<0 colour mask on it
    (decision #763); `out/loop/loop-sh3/out/check.log`.
+
+## #795: sh3 dL/dmeans (step 3 of the #781 open problems), 2026-10-14
+
+Cause of the sh3 crop T0 miss on dL/dmeans (max rel 0.57): the #781 chain ran T2 alone, which
+owns SH band 0 and has no view-direction term (d colour / d means through the SH bands 1-3).
+The host reference with that term removed reproduces the device number exactly (0.5697952 vs
+0.5697944); with it, `t2_param_backward.check` on the sh3 dump gives means 1.4e-5 (bar 1e-2).
+Fix: merged the #751/#756 t2sh pre/post passes (bands 1-15, view-direction Jacobian, rest-band
+sparse Adam; train_step runs them when t2/sh_rest.f32 exists) into this chain, with the
+full-colour keep mask changed to raw >= 0 only (#763) in `sh_lanes` and `t2sh_compute.cpp`.
+`t2_dev.check` and `train_step_dev check` now compare every band the device owns, and T0 is
+gated on sh3 once the device owns all bands. Host check after the merge: sh0 and sh3 T2 gates
+pass. Not yet rebuilt or rerun on device (next run).
