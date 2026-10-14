@@ -293,13 +293,26 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     constexpr uint32_t CB_BMASK  = 11;
     constexpr uint32_t CB_BUCKET_BULK = 12;
     constexpr uint32_t rec_bytes = 64u;
+    // Task #755 (GSPLAT_TT_TRAIN_OPC_RING3): 3 bulk + op/colour slots, so the reader
+    // gathers two subchunks ahead; CB_BUCKET (= CB_TRAIN_OPC) holds 16 B entries only.
+    const bool opc_ring3 = gsplat_tt::blend_train::opc_ring3();
     if (!fused) {
-        cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
+        if (opc_ring3) {
+            cb_cfg(CB_BUCKET, 32u, kBucketFit / 2u * 3u, DataFormat::Float32);
+        } else {
+            cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
+        }
         cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
         // Depth 2x: double-buffer subchunks (iter 51 prefetch while blend). M3: the
         // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
-        const uint32_t bulk_rec_depth = kBucketFit;
+        const uint32_t bulk_rec_depth = opc_ring3 ? kBucketFit / 2u * 3u : kBucketFit;
         cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
+    }
+    if (opc_ring3) {
+        // One gather batch of 64 B DRAM pages (TRAIN_OPC_BATCH, default 64).
+        const char* b = std::getenv("GSPLAT_TT_TRAIN_OPC_BATCH");
+        const uint32_t batch = (b != nullptr && b[0] != '\0') ? std::strtoul(b, nullptr, 10) : 64u;
+        cb_cfg(gsplat_tt::blend_train::kOpcStageCb, 64u, batch, DataFormat::UInt32);
     }
     // Task #231: GSPLAT_TT_BLEND_DECODE_AHEAD (2 = S2, default; 1 = S2a; 0 = off): TRISC0
     // decodes the live records' SFPLOADI words into an L1 ring that TRISC1 reads.
@@ -348,6 +361,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         const char* opc_skip = std::getenv("GSPLAT_TT_TRAIN_OPC_SKIPDEAD");
         if (opc_skip != nullptr && opc_skip[0] == '1') {
             reader_defines["TRAIN_OPC_SKIP_DEAD"] = "1";
+        }
+        if (gsplat_tt::blend_train::opc_ring3()) {
+            reader_defines["TRAIN_OPC_RING3"] = "1";  // task #755: staging in its own CB
         }
         if (gsplat_tt::blend_train::opc_side()) {
             reader_defines["TRAIN_OPC_SIDE"] = "1";  // task #741: side bucket read, gather fallback

@@ -103,6 +103,16 @@ constexpr uint32_t CB_OPC_REQ = BLEND_CB_BASE + 14;
 #define TRAIN_OPC_SIDE 0
 #endif
 constexpr uint32_t TRAIN_OPC_SIDE_WIN = 128u;  // 128 KB staging
+// Task #755: 1 = CB_TRAIN_OPC holds the 16 B entries only (3 slots with
+// CB_BUCKET_BULK, the reader gathers two subchunks ahead); the gather stages its
+// 64 B pages in CB_OPC_STAGE (TRAIN_OPC_BATCH pages, never pushed).
+#ifndef TRAIN_OPC_RING3
+#define TRAIN_OPC_RING3 0
+#endif
+#if TRAIN_OPC_RING3 && (TRAIN_OPC_SIDE || TRAIN_OPC_WRITER)
+#error "TRAIN_OPC_RING3 needs the reader gather (no side bucket, no writer gather)"
+#endif
+constexpr uint32_t CB_OPC_STAGE = BLEND_CB_BASE + 15;
 #endif
 constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
@@ -514,7 +524,12 @@ void kernel_main() {
                 const InterleavedAddrGen<true> opc_gen{train_opc_addr, 64u};
                 auto recs = reinterpret_cast<volatile uint32_t*>(buck);
                 auto dst = reinterpret_cast<volatile uint32_t*>(side);
-                auto stg = reinterpret_cast<volatile uint32_t*>(side + TRAIN_OPC_STAGE);
+#if TRAIN_OPC_RING3
+                const uint32_t stage = get_write_ptr(CB_OPC_STAGE);
+#else
+                const uint32_t stage = side + TRAIN_OPC_STAGE;
+#endif
+                auto stg = reinterpret_cast<volatile uint32_t*>(stage);
 #if TRAIN_OPC_SIDE
                 bool side_ok = side_addr != 0u;
                 uint32_t cmin = 0xFFFFFFFFu, cmax = 0u;
@@ -576,7 +591,7 @@ void kernel_main() {
                         const uint32_t gid = recs[g1 * 8u + 7u];
 #if T727_DIAG == 0
                         noc_async_read(get_noc_addr(gid >> 2, opc_gen),
-                                       side + TRAIN_OPC_STAGE + n * 64u, 64u);
+                                       stage + n * 64u, 64u);
 #else
                         (void)gid;
 #endif

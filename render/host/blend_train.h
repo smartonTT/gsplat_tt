@@ -87,6 +87,20 @@ inline uint32_t& side_tile_cap() {
     return cap;
 }
 
+// Task #755: GSPLAT_TT_TRAIN_OPC_RING3=1 lets the blend reader run two subchunks
+// ahead of the compute instead of one: CB_BUCKET_BULK and CB_TRAIN_OPC get 3
+// slots. CB_TRAIN_OPC pages shrink to 32 B (a slot = 4096 x 32 B = 8192 x 16 B
+// entries) and the gather staging moves to its own CB kOpcStageCb (one batch).
+// Reader gather only (not with the writer gather or the side bucket).
+inline bool opc_ring3() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_TRAIN_OPC_RING3");
+        return e != nullptr && e[0] == '1';
+    }();
+    return enabled() && on && !opc_on_writer() && !opc_side();
+}
+constexpr uint32_t kOpcStageCb = 15;
+
 // Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
 // DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
 // and marker kind in the last two words. Flag off keeps 64 B slots.
