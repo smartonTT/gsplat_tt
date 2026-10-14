@@ -151,6 +151,16 @@ c() { \
 c() { [ -z "$(sj .pending_machine measure)" ] && [ -z "$(sj .release_job measure)" ]; }; check "state: no pending, no release left" c
 c() { [ "$(calls 'bh-30')" = 0 ] && [ "$(calls 'lock viewer')" = 0 ]; }; check "measure never touches bh-30 or the viewer lock" c
 
+# 2k. Same move with --keep-old (#687): the old p100 job is another task's: never extended or released.
+new_case keep_old
+echo '{"host":"yyzo-bh-04","pending_machine":"bh-50","pending_job":"777","pending_cluster":"tt_bgd"}' > "$F/state/measure.json"
+echo '3 tt_bgd bh-50 13:50:00 777' >> "$F/list"; echo 'tt_bgd 777 R bh-50' >> "$F/slurm"
+run measure --keep-old
+c() { [ "$RC" = 0 ] && [ "$(j .action)" = moved ] && [ "$(j .host)" = bh-50 ] && [[ $(j .note) == *"--keep-old"* ]]; }; check "keep-old: moved to bh-50, exit 0, noted" c
+c() { [ "$(calls 'ird change-timeout 2 ')" = 0 ] && [ "$(calls 'ird release')" = 0 ] \
+  && [ "$(calls 'ttp lock p100 -- opt/sync_remote.sh bh-50')" = 1 ]; }; check "keep-old: old job neither extended nor released; new box synced" c
+check "keep-old: no release_job in state" [ -z "$(sj .release_job measure)" ]
+
 # 2b. Adopted, but setup_box.sh failed on the new box: report (exit 6), keep and extend the old box.
 new_case setup_failed
 echo '{"host":"yyzo-bh-04","pending_machine":"bh-50","pending_job":"777","pending_cluster":"tt_bgd"}' > "$F/state/measure.json"
