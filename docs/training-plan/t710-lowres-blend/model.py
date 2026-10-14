@@ -160,7 +160,19 @@ def main():
                           s4_from_s12=[round(float(x), 3) for x in lro])
         print(name, "p(b0 ms, f ns, s ns, s_ov ns, m ns) =", np.round(p, 3).tolist(),
               "rms %.3f max %.3f" % (fits[name]["rms"], fits[name]["max"]), "s=4 out-of-sample resid", fits[name]["s4_from_s12"])
-    best = min(fits, key=lambda k: fits[k]["rms"])
+    # f (per-tile fixed ns) is weakly identified; refit with f pinned for a sensitivity band
+    for f_fix in (1000.0, 5000.0, 20000.0):
+        def funf(q):
+            pp = np.array([q[0], f_fix, q[1], 0.0, q[2]])
+            return resid(pp, lambda r: True)
+        sol = least_squares(funf, [0.1, 300.0, 50.0], bounds=(0, np.inf))
+        pp = np.array([sol.x[0], f_fix, sol.x[1], 0.0, sol.x[2]])
+        res = np.array(funf(sol.x))
+        fits[f"f pinned {f_fix:.0f} ns"] = dict(p=pp.tolist(), rms=float(np.sqrt(np.mean(res ** 2))),
+                                                max=float(np.abs(res).max()),
+                                                resid={r["cfg"]: round(float(x), 3) for r, x in zip(rows, res)})
+        print("f pinned", f_fix, np.round(pp, 3).tolist(), "rms %.3f" % fits[f"f pinned {f_fix:.0f} ns"]["rms"])
+    best = min((k for k in fits if not k.startswith("f pinned")), key=lambda k: fits[k]["rms"])
     p = np.array(fits[best]["p"])
     print("using", best)
 
@@ -215,10 +227,27 @@ def main():
             for k_, v_ in rec.items():
                 print("   %-45s %7.3f ms %s" % (k_, v_["ms"], "" if v_["ok"] else "FAILS (list %d > %d)" % (v_["max_list"], CAP)),
                       ("subtiles %.0f" % v_["subtiles"]) if "subtiles" in v_ else "")
+    sens = {}
+    for k in [k for k in fits if k.startswith("f pinned")]:
+        pp = np.array(fits[k]["p"])
+        for s_ in (2, 4):
+            for N in (1000000, 500000, 1500000):
+                vs = [v[s_][N] for v in data]
+                W, H = W0 // s_, H0 // s_
+                t32 = len(vs[0]["n32"]); t16 = len(vs[0]["n16"]); t8 = len(vs[0]["n8"])
+                o0 = np.mean([blend_view(pp, o["n32"], o["mb32"]) for o in vs]) + sort_ms(t32)
+                a16 = np.mean([blend_view(pp, o["n16"], o["mb16"]) for o in vs]) + sort_ms(t16)
+                a8 = np.mean([blend_view(pp, o["n8"], o["mb8"]) for o in vs]) + sort_ms(t8)
+                b1 = np.mean([pp[0] + makespan(hybrid(pp, o, subgrid(o, W, H), 0.25 * pp[2])[0]) * 1e-6
+                              for o in vs]) + sort_ms(t32)
+                add = other + b2b_gap
+                sens[f"{k} | {N}_s{s_}"] = {n_: round(float(x + add), 3) for n_, x in
+                                            (("O0", o0), ("A16", a16), ("A8", a8), ("B1 r=s/4", b1))}
+                print("sens", k, N, s_, sens[f"{k} | {N}_s{s_}"])
     # model check against D1 b2b
     chk = {r["cfg"]: dict(M=r["b2b"], model=opts[f'{r["N"]}_s{r["s"]}']["options"]["O0 today 32x32"]["ms"]) for r in rows}
     json.dump(dict(fits=fits, used=best, params=p.tolist(), other_ms=other, b2b_gap_ms=b2b_gap,
-                   check_b2b=chk, options=opts, views=T["views"]), open(a.out, "w"), indent=1)
+                   check_b2b=chk, options=opts, f_sensitivity=sens, views=T["views"]), open(a.out, "w"), indent=1)
     for k_, v_ in chk.items():
         print("check", k_, v_)
 
