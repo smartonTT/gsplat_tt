@@ -134,7 +134,11 @@ def main(argv=None):
             ap.error("--runtime-arg-only needs two distinct --arm labels")
         markers = dict(_kv(ap, args.marker, "marker"))
         logs = {}
+        log_owner = {}
         for lab, path in _kv(ap, args.log, "log"):
+            real = os.path.realpath(path)
+            if log_owner.setdefault(real, lab) != lab:
+                ap.error(f"--log {path} is used by both arms; each arm needs its own log")
             if not os.path.isfile(path):
                 ap.error(f"{path} not found")
             with open(path, errors="replace") as f:
@@ -142,8 +146,8 @@ def main(argv=None):
         if set(markers) != labels or set(logs) != labels:
             ap.error("--runtime-arg-only needs --marker and --log for each arm label")
         ma, mb = (markers[lab] for lab, _ in arms)
-        if not ma or not mb:
-            ap.error("--marker must not be empty")
+        if not ma.strip() or not mb.strip():
+            ap.error("--marker must not be empty or whitespace-only")
         if ma in mb or mb in ma:
             ap.error("--marker strings must differ and neither may contain the other")
         ok, lines = check_runtime_arg_only(arms, args.kernel, markers, logs)

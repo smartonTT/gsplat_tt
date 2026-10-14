@@ -80,7 +80,8 @@ import pytest
 
 
 @pytest.mark.parametrize("ma,mb", [("", ""), ("", "cap=64"), ("cap=64", "cap=64"),
-                                   ("cap=6", "cap=64"), ("cap=64", "cap=6")])
+                                   ("cap=6", "cap=64"), ("cap=64", "cap=6"),
+                                   ("   ", "cap=64"), ("cap=0", "\t ")])
 def test_rao_rejects_bad_markers(tmp_path, ma, mb):
     with pytest.raises(SystemExit) as e:
         _rao(tmp_path, {"blend": "1"}, {"blend": "1"}, "cap=64", "cap=64", ma, mb)
@@ -101,3 +102,14 @@ def test_default_mode_unchanged_same_hash_fails(tmp_path):
     a = _cache(tmp_path, "a", {"blend": "1"})
     b = _cache(tmp_path, "b", {"blend": "1"})
     assert j.main(["--arm", f"base={a}", "--arm", f"cand={b}", "--kernel", "blend"]) == 1
+
+
+def test_rao_rejects_shared_log(tmp_path):
+    a = _cache(tmp_path, "a", {"blend": "1"})
+    log = tmp_path / "a.log"
+    log.write_text("cap=0 cap=64")
+    with pytest.raises(SystemExit) as e:
+        j.main(["--runtime-arg-only", "--arm", f"base={a}", "--arm", f"cand={a}",
+                "--kernel", "blend", "--marker", "base=cap=0", "--marker", "cand=cap=64",
+                "--log", f"base={log}", "--log", f"cand={log}"])
+    assert e.value.code == 2
