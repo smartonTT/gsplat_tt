@@ -1,0 +1,6 @@
+run 3 (ec71ee0e, slots as bf16 hi+mid+lo, 12 matmuls/window), bh-49 p150a 110 cores, 2026-10-14
+syn K=8: device_ms_med 6.2128 (min 6.1431)   [t697 gather: 13.85]
+syn K=1: device_ms_med 2.7074 (min 2.6907)   [t697 gather: 3.18]
+oracle sh0: worst grad 1.17e-3 (bar 1e-2 ok), worst Adam 1.14e-3 (bar 1e-3 FAIL, delta_quats only; params 3.7e-6, m/v 0, m bf16 bits equal)
+oracle sh3: worst grad 2.70e-3, worst Adam 5.97e-4, PASS
+t697 baseline sh0: worst grad 9.8e-5, Adam 8.2e-6

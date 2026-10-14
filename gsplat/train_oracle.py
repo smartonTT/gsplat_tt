@@ -15,8 +15,9 @@ Conventions (same as rasterization.py unless noted):
     0.3 px low-pass added to the 2D covariance diagonal.
   * conic = inverse 2D covariance stored as (A, B, C);
     power = -0.5 * (A dx^2 + 2 B dx dy + C dy^2), alpha = min(alpha_max, o * exp(power)).
-  * colour = clamp(SH(dir) + 0.5, 0, 1), dir = normalize(mean - camera centre)
-    (3DGS SH basis; the clamp to 1 matches loading_gaussians.sh_to_rgb).
+  * colour = max(SH(dir) + 0.5, 0), dir = normalize(mean - camera centre)
+    (3DGS SH basis; training follows 3DGS/gsplat and clamps at 0 only, decision
+    2026-10-14 #763; the display renderer's clamp to [0, 1] is unchanged).
   * per pixel, front to back in depth order (3DGS rules): a pair with
     alpha < alpha_min is skipped; when T * (1 - alpha) < t_min the pixel stops
     and that pair is not blended. out = C + T * background.
@@ -167,8 +168,9 @@ def render(params: dict[str, torch.Tensor], cam: Camera, cfg: RenderConfig,
         color_lo, color_hi = raw_rgb < 0.0, raw_rgb > 1.0
     else:
         color_lo, color_hi = frozen.color_lo, frozen.color_hi
-    colors = torch.where(color_lo, torch.zeros_like(raw_rgb),
-                         torch.where(color_hi, torch.ones_like(raw_rgb), raw_rgb))
+    # 3DGS/gsplat training colour: max(raw, 0), no upper clamp (decision 2026-10-14, #763);
+    # color_hi is recorded for reporting only. The display renderer still clamps to [0, 1].
+    colors = torch.where(color_lo, torch.zeros_like(raw_rgb), raw_rgb)
 
     # Projection visibility for sparse Adam: the 3-sigma box overlaps the image
     # (project_gaussians' valid mask with opacities=None, max_radius=-1).
