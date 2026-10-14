@@ -33,14 +33,17 @@ timeout 1200 "${SSH[@]}" "cd $T && export TT_METAL_HOME=/localdev/smarton/tt-met
   rm -rf tmp/t720 $C-fpu $C-sfpu && source .venv/bin/activate && python3 opt/t720/sfilt_check.py prep tmp/t720 && \
   python3 opt/t690/loss_check.py prep tmp/t720/fpu > /dev/null && \
   B=render/bench/build/loss_bench && \
+  CM=1 && o=tmp/t720/probe && mkdir -p \$o && \
+  { TT_METAL_CACHE=$C-probe LOSS_MODE=sfilt LOSS_SF_CMODE=1 LOSS_NOOUT=1 timeout $RUN_TO \$B tmp/t720/dump64 \$o 2 > \$o/run.log 2>&1 || \
+    { grep -m4 -E 'error' \$o/run.log; CM=0; }; } && echo \"sfilt SF_CMODE=\$CM (1 = hoisted taps compiled)\" && rm -rf $C-probe && \
   for c in dump64 syncrop syn1; do o=tmp/t720/\$c/out; mkdir -p \$o; \
-    TT_METAL_CACHE=$C-sfpu LOSS_MODE=sfilt timeout $RUN_TO \$B tmp/t720/\$c \$o $ITERS > \$o/run.log 2>&1; \
+    TT_METAL_CACHE=$C-sfpu LOSS_SF_CMODE=\$CM LOSS_MODE=sfilt timeout $RUN_TO \$B tmp/t720/\$c \$o $ITERS > \$o/run.log 2>&1; \
     echo \"check-run \$c rc=\$?\"; grep -E '^\[LOSS\]|TT_THROW|TT_FATAL|error' \$o/run.log | head -8; done && \
   for r in \$(seq 1 $ROUNDS); do \
     o=tmp/t720/fpu/syn/r\$r; mkdir -p \$o; TT_METAL_CACHE=$C-fpu LOSS_MODE=filt LOSS_HIBITS=9 timeout $RUN_TO \$B tmp/t720/fpu/syn \$o $ITERS > \$o/run.log 2>&1; \
     echo \"round \$r fpu-syn rc=\$?\"; grep -E '^\[LOSS\] mode|TT_THROW|TT_FATAL' \$o/run.log | head -3; rm -f \$o/filt.f32; \
     for c in syn1 syn5 syn6; do o=tmp/t720/\$c/r\$r; mkdir -p \$o; \
-      TT_METAL_CACHE=$C-sfpu LOSS_MODE=sfilt LOSS_NOOUT=1 timeout $RUN_TO \$B tmp/t720/\$c \$o $ITERS > \$o/run.log 2>&1; \
+      TT_METAL_CACHE=$C-sfpu LOSS_SF_CMODE=\$CM LOSS_MODE=sfilt LOSS_NOOUT=1 timeout $RUN_TO \$B tmp/t720/\$c \$o $ITERS > \$o/run.log 2>&1; \
       echo \"round \$r sfpu-\$c rc=\$?\"; grep -E '^\[LOSS\] mode|TT_THROW|TT_FATAL' \$o/run.log | head -3; done; done; \
   for a in fpu sfpu; do find $C-\$a -maxdepth 8 -type d -path '*/kernels/*' > tmp/t720/jit-\$a.txt; done; \
   rm -f tmp/t720/*/planes.f32 tmp/t720/fpu/*/image.f32 tmp/t720/fpu/*/target.f32"

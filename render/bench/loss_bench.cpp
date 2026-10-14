@@ -319,6 +319,10 @@ int run_sfilt(distributed::MeshDevice* dev, const std::string& in, const std::st
         defs["SF_G" + std::to_string(i)] = b;
         tf << double(v) << "\n";
     }
+    // LOSS_SF_CMODE: 1 = taps g3..g5 hoisted into LRegs (default), 0 = reloaded per row (same op order).
+    const char* cm = std::getenv("LOSS_SF_CMODE");
+    defs["SF_CMODE"] = (cm && cm[0] == '0') ? "0" : "1";
+    std::fprintf(stderr, "[LOSS] sfilt SF_CMODE=%s\n", defs["SF_CMODE"].c_str());
     auto kc = CreateKernel(prog, kd + "sfilt_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,

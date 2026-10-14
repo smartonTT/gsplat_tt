@@ -46,7 +46,7 @@ constexpr uint32_t stackslot(int R) {
 
 // Natural <-> row layout of 4-row group g of dest tile t (SFPTRANSP is its own inverse).
 template <uint32_t t, uint32_t g>
-inline void tconv_group() {
+inline __attribute__((always_inline)) void tconv_group() {
     using namespace sfpi;
     constexpr uint32_t b = 32 * t + 16 * (g >> 2) + 2 * (g & 3);
     vFloat a0 = dst_reg[b], a1 = dst_reg[b + 1], a2 = dst_reg[b + 8], a3 = dst_reg[b + 9];
@@ -59,19 +59,33 @@ inline void tconv_group() {
 
 template <uint32_t t, uint32_t g, uint32_t g1>
 struct TConv {
-    static inline void run() {
+    static inline __attribute__((always_inline)) void run() {
         tconv_group<t, g>();
         TConv<t, g + 1, g1>::run();
     }
 };
 template <uint32_t t, uint32_t g1>
 struct TConv<t, g1, g1> {
-    static inline void run() {}
+    static inline __attribute__((always_inline)) void run() {}
 };
 
+// SFPU vectors live only in LRegs (no spill), so every helper is force-inlined. SF_CMODE 1 keeps
+// the taps g3..g5 in LRegs for all 32 rows (6 live); SF_CMODE 0 reloads them per row (4 live).
+#define SF_INL inline __attribute__((always_inline))
+#if SF_CMODE
+#define SF_CARGS const sfpi::vFloat c3, const sfpi::vFloat c4, const sfpi::vFloat c5
+#define SF_CPASS c3, c4, c5
+#define SF_CLOAD_ROW
+#else
+#define SF_CARGS
+#define SF_CPASS
+#define SF_CLOAD_ROW const vFloat c3 = SF_G3, c4 = SF_G4, c5 = SF_G5;
+#endif
+
 template <int r>
-inline void filt_row(const sfpi::vFloat& c3, const sfpi::vFloat& c4, const sfpi::vFloat& c5) {
+SF_INL void filt_row(SF_CARGS) {
     using namespace sfpi;
+    SF_CLOAD_ROW
     vFloat acc = (vFloat(dst_reg[stackslot(r - 5)]) + dst_reg[stackslot(r + 5)]) * vConstFloatPrgm0;
     acc = (vFloat(dst_reg[stackslot(r - 4)]) + dst_reg[stackslot(r + 4)]) * vConstFloatPrgm1 + acc;
     acc = (vFloat(dst_reg[stackslot(r - 3)]) + dst_reg[stackslot(r + 3)]) * vConstFloatPrgm2 + acc;
@@ -83,14 +97,14 @@ inline void filt_row(const sfpi::vFloat& c3, const sfpi::vFloat& c4, const sfpi:
 
 template <int r>
 struct FiltRows {
-    static inline void run(const sfpi::vFloat& c3, const sfpi::vFloat& c4, const sfpi::vFloat& c5) {
-        filt_row<r>(c3, c4, c5);
-        FiltRows<r + 1>::run(c3, c4, c5);
+    static SF_INL void run(SF_CARGS) {
+        filt_row<r>(SF_CPASS);
+        FiltRows<r + 1>::run(SF_CPASS);
     }
 };
 template <>
 struct FiltRows<32> {
-    static inline void run(const sfpi::vFloat&, const sfpi::vFloat&, const sfpi::vFloat&) {}
+    static SF_INL void run(SF_CARGS) {}
 };
 
 // dest 0..2 (natural layout, tile 1 = the output's rows) -> dest 3 = vertical filter (natural).
@@ -105,8 +119,10 @@ inline void vfilter_dest() {
     TConv<0, 6, 8>::run();
     TConv<1, 0, 8>::run();
     TConv<2, 0, 2>::run();
+#if SF_CMODE
     const vFloat c3 = SF_G3, c4 = SF_G4, c5 = SF_G5;
-    FiltRows<0>::run(c3, c4, c5);
+#endif
+    FiltRows<0>::run(SF_CPASS);
     TConv<3, 0, 8>::run();
     _llk_math_eltwise_unary_sfpu_done_();
 }
