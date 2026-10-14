@@ -101,7 +101,10 @@ inline float trunc_tf32(float v) {
 // 12 constant band tiles for filt_compute.cpp: Rh[-1,0,1], Rl[...], RTh[...], RTl[...].
 // R[k][a][b] = g[32 k + a - b + 5], g the normalized 11-tap Gaussian (sigma 1.5), as
 // gsplat/train_loss.py band_tiles(); h = fp32 & HI_MASK_U, l = (fp32 - h) & HI_MASK_U.
+// LOSS_RDIAG=<c> (#706 precision diagnostic): R[0] = c I, R[+-1] = 0, so G * x = c^2 x exactly.
 std::vector<float> band_consts() {
+    const char* rd = std::getenv("LOSS_RDIAG");
+    const double diag = rd ? std::atof(rd) : 0.0;
     double g[11], sum = 0.0;
     for (int i = 0; i < 11; i++) sum += g[i] = std::exp(-double((i - 5) * (i - 5)) / (2.0 * 1.5 * 1.5));
     std::vector<float> out(12 * TS * TS, 0.0f);
@@ -109,7 +112,8 @@ std::vector<float> band_consts() {
         for (uint32_t a = 0; a < TS; a++)
             for (uint32_t b = 0; b < TS; b++) {
                 const int off = int(TS) * k + int(a) - int(b) + 5;
-                const float r = (off >= 0 && off < 11) ? float(g[off] / sum) : 0.0f;
+                float r = (off >= 0 && off < 11) ? float(g[off] / sum) : 0.0f;
+                if (rd) r = (k == 0 && a == b) ? float(diag) : 0.0f;
                 const float h = trunc_tf32(r), l = trunc_tf32(r - h);
                 const size_t t = size_t(k + 1);
                 out[(0 + t) * TS * TS + tidx(a, b)] = h;

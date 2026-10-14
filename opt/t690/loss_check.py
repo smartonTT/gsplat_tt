@@ -66,6 +66,18 @@ def check_filt(out):
                 ok = False
                 continue
             g = np.fromfile(f, np.float32).reshape(x.shape)
+            tag = os.path.basename(o)
+            if "-r" in tag:  # LOSS_RDIAG=c run: R[0] = c I, so G * x = c^2 x (split3 error ~2^-18)
+                c = float(np.float32(tag.split("-r", 1)[1]))
+                dref = c * c * x.astype(np.float64)
+                rel = float(np.linalg.norm(g - dref) / np.linalg.norm(dref))
+                bias = float(np.mean((g - dref)[dref != 0] / dref[dref != 0]))
+                good = bool(np.isfinite(g).all() and rel < 2e-6)
+                ok &= good
+                print(f"[CHECK] mode=filt case={name} out={tag} rdiag={c!r} vs_c2x_l2rel={rel:.2e} "
+                      f"mean_rel_bias={bias:+.2e} exact_frac={float(np.mean(g == dref)):.3f} "
+                      f"{'PASS' if good else 'FAIL'}")
+                continue
             rel = float(np.linalg.norm(g - ref) / np.linalg.norm(ref))
             mx = float(np.abs(g - ref).max())
             mrel = float(np.linalg.norm(g - mod) / np.linalg.norm(ref))
