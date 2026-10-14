@@ -38,16 +38,24 @@ brc=$?; echo "build rc=$brc"
 if [ $brc = 0 ]; then
   for n in ${NPZS:-sh0 sh3}; do
     echo "=== run $n $(date +%T)"
-    timeout 600 "${SSH[@]}" "$ENV && rm -rf tmp/t693/$n && python3 -m gsplat.blend_backward_dev prep benchmarks/train_oracle/t0_${n}_64x64_n50.npz tmp/t693/$n \
+    # sh0/sh3: the T0 oracle dumps; name=H:W:N:seed: docs/t685/synth.py scaling dump made on the box
+    # (pulled back with the outputs and checked against the reference on the same inputs).
+    case "$n" in
+      *=*) nm=${n%%=*}; a=(${n#*=}); a=(${a//:/ }); src=tmp/t693/$nm.npz
+           mk="PYTHONPATH=. python3 docs/t685/synth.py $src ${a[*]} &&" ;;
+      *) nm=$n; src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz; mk= ;;
+    esac; n=$nm
+    timeout 600 "${SSH[@]}" "$ENV && rm -rf tmp/t693/$n && mkdir -p tmp/t693 && $mk python3 -m gsplat.blend_backward_dev prep $src tmp/t693/$n \
       && timeout ${RUN_TIMEOUT:-240} render/train/build/blend_bwd_bench tmp/t693/$n \${BWD_CORES:-} > tmp/t693/$n/run.log 2>&1; rc=\$?; tail -20 tmp/t693/$n/run.log; \
       if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > tmp/t693/$n/reset.log 2>&1; echo \"reset rc=\$?\"; fi; exit \$rc"
     echo "run $n rc=$?"
   done
 fi
 opt/sync_remote.sh --pull tmp/t693 "$O/remote" "$H" "$T"; echo "pull rc=$?"
-for n in sh0 sh3; do
+for n in ${NPZS:-sh0 sh3}; do
+  case "$n" in *=*) n=${n%%=*}; src=$O/remote/$n.npz ;; *) src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz ;; esac
   f=$O/remote/$n/slots.f32
-  if [ -s "$f" ]; then python3 -m gsplat.blend_backward_dev check benchmarks/train_oracle/t0_${n}_64x64_n50.npz "$f" --bar 1e-2 | tee "$O/check-$n.json"
+  if [ -s "$f" ]; then python3 -m gsplat.blend_backward_dev check "$src" "$f" --bar 1e-2 | tee "$O/check-$n.json"
   else echo "CHECK $n: no slots.f32"; fi
 done
 echo "=== done $(TZ=America/Los_Angeles date)"
