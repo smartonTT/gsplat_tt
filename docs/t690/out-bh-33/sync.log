@@ -1,0 +1,4 @@
+[sync_remote] 3c3fcd1c150cd4dc6856b042103b9efc73684b8c from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t690: 1065 files, 64660816 bytes listed
+[sync_remote] synced bh-33:/localdev/smarton/gstt2-sync: sent 5 of 1067 files, 19848 bytes
+[sync_remote] sha=3c3fcd1c150cd4dc6856b042103b9efc73684b8c so_md5=d3e7919776a8cb0ba542d71415e094ba 
+[sync_remote] WARNING: host sources changed but render_clean .so md5 did not -- stale build? rm render/render_clean*.so and rebuild
