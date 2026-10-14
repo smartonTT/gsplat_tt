@@ -1,5 +1,8 @@
 # #719 — B1 adaptive heavy-tile split: implementation plan
 
+Latest (2026-10-14 11:50 PDT, #754): B1 full route mode builds and runs on device; md5 and
+b2b gates fail (section 7.5).
+
 Status 2026-10-14: host planner and its unit test landed on this branch
 (`render/host/subtile_split.h`, `tests/unit/test_subtile_split.cpp`, PASS). No device
 code is changed yet, so there are **no device results**: no md5, b2b table, JIT check
@@ -183,3 +186,31 @@ Cost note: the count step's blendrec reads for split-tile pairs are new DRAM tra
 (one 64 B page per gaussian run, the same reads the emit already makes). If they show up
 in the sort time, keep the route mask per pair in a scratch plane from the count to the
 emit.
+
+### 7.5 Device gates (#754, 2026-10-14 11:15-11:50 PDT, p150a bh-49, 9a9968a4)
+
+Build: host and all JIT kernels compile with `GSPLAT_TT_B1_ROUTE=1`; tests/unit/test_subtile_{split,unit,route}
+PASS on the box (s0). Two device fixes: route mode turns PFWC_REC32 off (8fde7520), the cull_mask_base
+upload is sized to the grow-only buffer (9a9968a4). The BLEND_B1 writer uses subtile_unit
+row0/rows/col_byte0 (route mode sets BLEND_B1=1 on reader, writer and compute).
+
+| gate | off (B1_ROUTE=0) | route (B1_ROUTE=1) | result |
+|---|---|---|---|
+| s4 1.5M runs | device sort failed (overflow past 65472) | runs, 39.79 ms/view, re-plan on 336 of 1352 views | runs, not without overflow |
+| s4 3M runs | device sort failed | runs, 66.51 ms/view, 273 re-plans | runs, not without overflow |
+| s2 6.13M runs | device sort failed | runs, 55.16 ms/view, 680 re-plans | runs, not without overflow |
+| md5 p0 s4 1M | e50cf545 | f017c8c2, passes differ | FAIL |
+| md5 p0 s2 3M | d56f6f98 | 9a168d40, passes differ | FAIL |
+| md5 p0 s1 | 87e8ad77 | 422b41cc, passes differ | FAIL |
+| b2b s1 (4 alternated rounds) | 7.984 ms/view | 12.176 ms/view | +4.19 ms/view, JIT-HASH OK |
+| hero (30 views) | 7.29 ms/view | 13.54 ms/view, 7 views differ from pass 0 | FAIL |
+| hero.png PSNR vs reference_v2 | 42.85 dB | 42.85 dB, bit-identical to off | OK (pass 0 only) |
+
+Findings: (1) sort_bin_emit goes from 0.20 to 6.73 ms/view at the hero (blend 6.69 -> 6.21): route
+mode's plain emit (OL ring, TRISC writers and fold off, one 32 B write per record) is the whole
+slowdown. (2) Output depends on the plan: the hero view is bit-exact in pass 0 (initial plan), but the
+same 7 views differ in every later pass, where the plan comes from the previous view, and the md5s
+differ from off. A split tile does not reproduce the unsplit tile's pixels (suspect the route box
+cull `box_mask_global` or the blend's (parent, code) unit path). (3) The previous view's plan misses
+on 25-50% of views at the heavy configs; each miss renders the view twice.
+Logs: worktree tmp/t754/s2 (run-*.log, hero-b0.png, hero-br.png, hero-br-diff.png).
