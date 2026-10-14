@@ -11,10 +11,15 @@ Each arm is a JIT cache directory, or a text file with one path per line
   python3 opt/ab_jit_check.py --arm base=<cache|listing> --arm cand=<cache|listing> \
       --kernel <name> [--kernel <name> ...]
 
+Also compares the md5 of each kernel's trisc/brisc/ncrisc ELFs per arm (directory
+arms only). The tt-metal hash ignores source text, so an in-place source swap with
+a per-arm cache can keep the hash but change the ELFs: that passes ("OK (ELF)").
+
 Exit 0: every --kernel differs between the arms. 1: some --kernel is identical
 or missing (the gate must fail or be flagged A/A). 2: usage error.
 """
 import argparse
+import hashlib
 import os
 import re
 import sys
@@ -43,22 +48,45 @@ def kernel_hashes(src):
     return out
 
 
-def check(arms, kernels):
-    """Return (ok, report lines). arms: list of (label, {name: hashes})."""
+def elf_md5s(src):
+    """Map kernel name -> {<risc dir>/<file>: set of md5} for *.elf under a cache dir."""
+    out = {}
+    if not os.path.isdir(src):
+        return out
+    for root, _, files in os.walk(src):
+        m = _KERNEL_RE.search(root + "/")
+        if not m:
+            continue
+        for f in files:
+            if f.endswith(".elf"):
+                with open(os.path.join(root, f), "rb") as fh:
+                    d = hashlib.md5(fh.read()).hexdigest()
+                key = os.path.join(os.path.basename(root), f)
+                out.setdefault(m.group(1), {}).setdefault(key, set()).add(d)
+    return out
+
+
+def check(arms, kernels, elfs=None):
+    """Return (ok, report lines). arms: list of (label, {name: hashes}).
+    elfs: optional [elf_md5s(arm a), elf_md5s(arm b)]."""
     lines, ok = [], True
     (la, a), (lb, b) = arms
+    ea, eb = elfs or ({}, {})
     for k in kernels:
         ha, hb = a.get(k, set()), b.get(k, set())
         if not ha or not hb:
             ok = False
             lines.append(f"MISSING {k}: {la}={sorted(ha)} {lb}={sorted(hb)}")
+        elif ha == hb and ea.get(k) and eb.get(k) and ea[k] != eb[k]:
+            diff = sorted(n for n in set(ea[k]) | set(eb[k]) if ea[k].get(n) != eb[k].get(n))
+            lines.append(f"OK (ELF) {k}: same hashes {sorted(ha)} but ELFs differ: {diff}")
         elif ha == hb:
             ok = False
             lines.append(f"A/A {k}: same hashes {sorted(ha)} in {la} and {lb}")
         else:
             lines.append(f"OK {k}: {la}={sorted(ha)} {lb}={sorted(hb)}")
     same = sorted(n for n in set(a) & set(b) if a[n] == b[n])
-    if set(a) == set(b) and len(same) == len(a):
+    if set(a) == set(b) and len(same) == len(a) and ea == eb:
         ok = False
         lines.append(f"A/A all {len(a)} kernels identical between {la} and {lb}")
     return ok, lines
@@ -71,13 +99,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if len(args.arm) != 2 or any("=" not in x for x in args.arm):
         ap.error("need exactly two --arm label=path")
-    arms = []
+    arms, elfs = [], []
     for spec in args.arm:
         label, path = spec.split("=", 1)
         if not os.path.exists(path):
             ap.error(f"{path} not found")
         arms.append((label, kernel_hashes(path)))
-    ok, lines = check(arms, args.kernel)
+        elfs.append(elf_md5s(path))
+    ok, lines = check(arms, args.kernel, elfs)
     print("\n".join(lines))
     print("JIT-HASH OK" if ok else "JIT-HASH FAIL: gate is A/A for the edited kernel(s)")
     return 0 if ok else 1
