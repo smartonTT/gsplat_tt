@@ -37,6 +37,10 @@
 # under nice -n 19 ionice -c3 with half the remote cores, so it does not starve the
 # live viewer (user, 2026-10-07). SYNC_REMOTE_DRY_RUN=1 prints the build settings
 # and exits without any ssh.
+# Hosts without rsync (the tt_bgd p150 hosts, task #687) get the same one-way,
+# changed-files-only copy over ssh+tar: md5s of the listed files are compared on
+# both sides and only differing ones are sent (fresh mtimes, nothing deleted).
+# SYNC_TRANSPORT=auto|rsync|tar (default auto: tar only when the host lacks rsync).
 set -euo pipefail
 MODE=sync PULL_R= PULL_L=
 while [ $# -gt 0 ]; do
@@ -94,13 +98,36 @@ cd "$TOP"
 SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 RSH="ssh ${SSH_OPTS[*]}"
 RSYNC=(rsync -e "$RSH")
+pick_transport() {  # sets TRANSPORT; one ssh probe unless SYNC_TRANSPORT is set
+  TRANSPORT=${SYNC_TRANSPORT:-auto}
+  if [ "$TRANSPORT" = auto ]; then
+    TRANSPORT=rsync
+    [ "$(ssh "${SSH_OPTS[@]}" "$HOST" 'command -v rsync >/dev/null 2>&1 || echo NO_RSYNC')" = NO_RSYNC ] && TRANSPORT=tar
+  fi
+  case $TRANSPORT in rsync|tar) ;; *) die "SYNC_TRANSPORT must be auto, rsync or tar: $TRANSPORT" ;; esac
+  if [ "$TRANSPORT" = tar ]; then echo "[sync_remote] $HOST has no rsync: copying changed files with ssh+tar"; fi
+}
+# md5<TAB>path of the regular files and links named on stdin (links hash their target); same code both sides.
+HASHPY='import hashlib,os,sys
+for p in sys.stdin.read().split("\n"):
+    if p and os.path.islink(p): print(hashlib.md5(b"L:"+os.readlink(p).encode()).hexdigest()+"\t"+p)
+    elif p and os.path.isfile(p): print(hashlib.md5(open(p,"rb").read()).hexdigest()+"\t"+p)'
+TARC=(env COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs)   # bsdtar on the Mac: no ._ files
+tar --no-mac-metadata --no-xattrs -cf /dev/null -T /dev/null 2>/dev/null || TARC=(env COPYFILE_DISABLE=1 tar)
+TARX='W=; tar --version 2>/dev/null | grep -q GNU && W=--warning=no-unknown-keyword; tar $W'   # quiet GNU tar on bsdtar pax headers
 
 if [ "$MODE" = pull ]; then
+  pick_transport
   case "/$PULL_R/" in /|//|*/../*) die "--pull remote_out must be a relative path inside $DIR: $PULL_R" ;; esac
   case $PULL_R in /*) die "--pull remote_out must be relative: $PULL_R" ;; esac
   mkdir -p "$PULL_L"
   L=$(real "$PULL_L") || die "cannot resolve $PULL_L"
   case "$L/" in "$TOP"/*) ;; *) die "--pull local_out must be inside this worktree ($TOP): $L" ;; esac
+  if [ "$TRANSPORT" = tar ]; then
+    out=$(ssh "${SSH_OPTS[@]}" "$HOST" "cd '$DIR/${PULL_R%/}' && tar -cf - ." | tar -C "$L" -xvf - 2>&1) || { echo "$out" >&2; die "pull of $HOST:$DIR/$PULL_R failed" 4; }
+    echo "[sync_remote] pulled $HOST:$DIR/$PULL_R -> $L: $(grep -cv '/$' <<<"$out" || true) entries (tar)"
+    exit 0
+  fi
   out=$("${RSYNC[@]}" -rlt --stats "$HOST:$DIR/${PULL_R%/}/" "$L/") || { echo "$out" >&2; die "pull of $HOST:$DIR/$PULL_R failed" 4; }
   n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
   b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
@@ -141,6 +168,7 @@ if [ "$MODE" = list ]; then
   exit 0
 fi
 
+pick_transport
 # Stage the listed files at $SHA (own index, so the worktree and its index are untouched).
 if [ ! -f "$STAGE/.complete" ]; then
   rm -rf "$STAGE"; mkdir -p "$STAGE"
@@ -155,18 +183,37 @@ printf 'SHA\nSYNC_STAMP\n' >> "$LIST"
 NT=$((NF + 2))  # the list plus the two stamp files
 
 RS=(-rlEc --files-from="$LIST" --mkpath --stats)
-if [ "$MODE" = dry ]; then
+if [ "$TRANSPORT" = tar ]; then
+  (cd "$STAGE" && python3 -c "$HASHPY" < "$LIST") | LC_ALL=C sort > "$LIST.lmd5"
+  ssh "${SSH_OPTS[@]}" "$HOST" "mkdir -p '$DIR' && cd '$DIR' && python3 -c '$HASHPY'" < "$LIST" | LC_ALL=C sort > "$LIST.rmd5" \
+    || die "remote md5 listing on $HOST:$DIR failed" 4
+  LC_ALL=C comm -23 "$LIST.lmd5" "$LIST.rmd5" | cut -f2- > "$LIST.send"
+  n=$(wc -l < "$LIST.send" | tr -d ' ')
+  # Sizes of what goes (links count as their name): a dangling link must not fail the count under pipefail.
+  b=$(cd "$STAGE" && python3 -c 'import os,sys; print(sum(len(os.readlink(p)) if os.path.islink(p) else os.path.getsize(p) for p in sys.stdin.read().split("\n") if os.path.lexists(p)))' < "$LIST.send")
+  if [ "$MODE" = dry ]; then
+    sed 's/^/would send: /' "$LIST.send"
+    echo "[sync_remote] dry run $HOST:$DIR: would send $n of $NT files, $b bytes"
+    exit 0
+  fi
+  if [ "$n" -gt 0 ]; then
+    "${TARC[@]}" -C "$STAGE" -cf - -T "$LIST.send" | ssh "${SSH_OPTS[@]}" "$HOST" "cd '$DIR' && $TARX -xmf -" \
+      || die "tar copy to $HOST:$DIR failed" 4
+  fi
+  echo "[sync_remote] synced $HOST:$DIR: sent $n of $NT files, $b bytes (tar)"
+elif [ "$MODE" = dry ]; then
   out=$("${RSYNC[@]}" "${RS[@]}" -n --out-format='%n' "$STAGE/" "$HOST:$DIR/") || { echo "$out" >&2; die "rsync --dry-run to $HOST:$DIR failed" 4; }
   sed -n '/^Number of files:/q;p' <<<"$out" | grep -v -E '/$|^$' | sed 's/^/would send: /' || true
   n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
   b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
   echo "[sync_remote] dry run $HOST:$DIR: would send ${n:-0} of $NT files, ${b:-0} bytes"
   exit 0
+else
+  out=$("${RSYNC[@]}" "${RS[@]}" "$STAGE/" "$HOST:$DIR/") || { echo "$out" >&2; die "rsync to $HOST:$DIR failed" 4; }
+  n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
+  b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
+  echo "[sync_remote] synced $HOST:$DIR: sent ${n:-0} of $NT files, ${b:-0} bytes"
 fi
-out=$("${RSYNC[@]}" "${RS[@]}" "$STAGE/" "$HOST:$DIR/") || { echo "$out" >&2; die "rsync to $HOST:$DIR failed" 4; }
-n=$(sed -nE 's/^Number of regular files transferred: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
-b=$(sed -nE 's/^Total transferred file size: ([0-9,]+).*/\1/p' <<<"$out" | tr -d ,)
-echo "[sync_remote] synced $HOST:$DIR: sent ${n:-0} of $NT files, ${b:-0} bytes"
 
 # Scenes the bench needs (after the build step, which links $DIR/scenes): copied only when missing or their md5 differs. A local
 # scene is taken from this worktree, else the main checkout (not in git).
@@ -180,7 +227,12 @@ sync_scenes() {
     rm_=$(ssh "${SSH_OPTS[@]}" "$HOST" "md5sum '$DIR/scenes/$sc' 2>/dev/null | cut -d' ' -f1" || true)
     if [ "$rm_" = "$lm" ]; then echo "[sync_remote] scene $sc ok ($lm)"; continue; fi
     echo "[sync_remote] scene $sc ${rm_:+md5 $rm_ != }${rm_:-missing}: copying $(wc -c < "$src" | tr -d ' ') bytes"
-    "${RSYNC[@]}" -t --mkpath "$src" "$HOST:$DIR/scenes/$sc" || die "scene copy of $sc failed" 4
+    if [ "$TRANSPORT" = tar ]; then
+      ssh "${SSH_OPTS[@]}" "$HOST" "mkdir -p '$DIR/scenes' && cat > '$DIR/scenes/$sc.tmp' && mv '$DIR/scenes/$sc.tmp' '$DIR/scenes/$sc'" < "$src" \
+        || die "scene copy of $sc failed" 4
+    else
+      "${RSYNC[@]}" -t --mkpath "$src" "$HOST:$DIR/scenes/$sc" || die "scene copy of $sc failed" 4
+    fi
   done
 }
 [ "$MODE" = nobuild ] && exit 0   # scenes need the links the build step makes

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "opt" / "sync_remote.sh"
 
 FAKE_SSH = """#!/usr/bin/env bash
+case "$*" in *"command -v rsync"*) exit 0 ;; esac
 n=$(find "$CAP" -name '*.argv' | wc -l | tr -d ' ')
 printf '%s\\n' "$@" > "$CAP/$n.argv"
 case "$*" in
@@ -223,3 +224,55 @@ def test_remote_default_links_gstt2_from_user(tmp_path):
     assert proc.returncode == 1
     assert os.readlink(d / ".venv") == "/localdev/u/gstt2/.venv"
     assert os.readlink(d / "scenes") == "/localdev/u/gstt2/scenes"
+
+
+FAKE_SSH_NO_RSYNC = """#!/usr/bin/env bash
+# A host without rsync: the remote command runs here, against a local remote_dir.
+while [ "${1#-}" != "$1" ]; do case $1 in -o) shift 2 ;; *) shift ;; esac; done
+shift  # host
+case "$*" in *"command -v rsync"*) echo NO_RSYNC; exit 0 ;; esac
+echo "$*" >> "$CAP/ssh.log"
+exec bash -c "$*"
+"""
+
+
+def test_host_without_rsync_gets_changed_files_by_tar(tmp_path):
+    repo = _repo(tmp_path)
+    fake, cap, dst = tmp_path / "fake", tmp_path / "cap", tmp_path / "remote" / "dst"
+    fake.mkdir()
+    cap.mkdir()
+    _exe(fake / "ssh", FAKE_SSH_NO_RSYNC)
+    _exe(fake / "rsync", "#!/bin/sh\necho rsync must not run >&2; exit 9\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GSTT2_", "SYNC_", "REMOTE_TT_METAL"))}
+    env.update(CAP=str(cap), PATH=f"{fake}:{env['PATH']}", USER="u",
+               SYNC_REMOTE_ALLOWED_ROOTS=str(repo.resolve()))
+
+    os.symlink("../no/such/file.log", repo / "render" / "dangling.log")   # the real tree has one (.ttw/logs)
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "dangling link")
+
+    def sync(*a):
+        return subprocess.run(["bash", str(SCRIPT), *a, "yyzo-bh-49", str(dst), "HEAD"],
+                              cwd=repo, env=env, capture_output=True, text=True)
+
+    p = sync("--no-build")
+    assert p.returncode == 0, p.stderr
+    assert "has no rsync" in p.stdout and "sent 8 of 8 files" in p.stdout, p.stdout
+    assert (dst / "render/kernels/k.cpp").read_text() == "x"
+    assert not (dst / "opt/metal-screenshots").exists() and not (dst / "a.tracy").exists()
+    assert not list(dst.rglob("._*"))
+    p = sync("--dry-run")
+    assert p.returncode == 0, p.stderr
+    assert "would send 1 of 8 files" in p.stdout, p.stdout   # only SYNC_STAMP's time changes
+    (repo / "render" / "a.cpp").write_text("y")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "edit")
+    p = sync("--no-build")
+    assert p.returncode == 0, p.stderr
+    assert "sent 3 of 8 files" in p.stdout, p.stdout   # a.cpp, SHA, SYNC_STAMP
+    assert (dst / "render/a.cpp").read_text() == "y"
+    (dst / "out").mkdir()
+    (dst / "out" / "r.json").write_text("{}")
+    p = subprocess.run(["bash", str(SCRIPT), "--pull", "out", "tmp/got", "yyzo-bh-49", str(dst)],
+                       cwd=repo, env=env, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert (repo / "tmp/got/r.json").read_text() == "{}"
