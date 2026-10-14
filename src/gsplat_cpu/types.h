@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -127,7 +128,21 @@ inline Cov2f project_cov2d(const Mat3f& cov_cam, const float* jacobian) {
     return out;
 }
 
-inline void build_jacobian(float fx, float fy, float tx, float ty, float tz, float* jacobian) {
+// 3DGS/gsplat Jacobian clamp (#786): the camera-space mean the projection Jacobian
+// sees is clamped to k_jclamp x tan(half FOV) per axis (lim = k_jclamp W / (2 fx));
+// means_2d keep the unclamped mean. Without it near-camera Gaussians far outside
+// the view get huge 2D covariances. Device: project_pfwc_compute.cpp (PFWC_JCLAMP).
+constexpr float k_jclamp = 1.3f;
+inline float jclamp_lim(float extent, float f) { return k_jclamp * extent / (2.0f * f); }
+inline float jclamp(float t, float tz, float lim) {
+    const float l = lim * tz;
+    return std::min(std::max(t, -l), l);
+}
+
+inline void build_jacobian(float fx, float fy, float tx, float ty, float tz, float* jacobian,
+                           float lim_x, float lim_y) {
+    tx = jclamp(tx, tz, lim_x);
+    ty = jclamp(ty, tz, lim_y);
     const float tz2 = tz * tz;
     jacobian[0] = fx / tz;
     jacobian[1] = 0.0f;

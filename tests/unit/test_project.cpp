@@ -90,7 +90,10 @@ TEST_CASE("build_jacobian matches analytic formula", "[project]") {
     const float tz = 4.0f;
 
     float jacobian[6];
-    gsplat_cpu::build_jacobian(fx, fy, tx, ty, tz, jacobian);
+    // lim 1.3 x tan(half FOV) of a 1000 x 960 image: |tx / tz|, |ty / tz| are inside.
+    const float lim_x = gsplat_cpu::jclamp_lim(1000.0f, fx);
+    const float lim_y = gsplat_cpu::jclamp_lim(960.0f, fy);
+    gsplat_cpu::build_jacobian(fx, fy, tx, ty, tz, jacobian, lim_x, lim_y);
 
     const float tz2 = tz * tz;
     REQUIRE(jacobian[0] == Catch::Approx(fx / tz));
@@ -99,6 +102,23 @@ TEST_CASE("build_jacobian matches analytic formula", "[project]") {
     REQUIRE(jacobian[3] == Catch::Approx(0.0f));
     REQUIRE(jacobian[4] == Catch::Approx(fy / tz));
     REQUIRE(jacobian[5] == Catch::Approx(-fy * ty / tz2));
+}
+
+TEST_CASE("build_jacobian clamps the mean to 1.3 x tan(half FOV) like 3DGS", "[project]") {
+    // #786: a 100 x 80 image at fx = fy = 50 has lim_x = 1.3, lim_y = 1.04; tx / tz = 2.5
+    // and ty / tz = -1.5 are past it, so J sees tx = 1.3 tz and ty = -1.04 tz.
+    const float fx = 50.0f, fy = 50.0f, tz = 2.0f;
+    const float lim_x = gsplat_cpu::jclamp_lim(100.0f, fx);
+    const float lim_y = gsplat_cpu::jclamp_lim(80.0f, fy);
+    REQUIRE(lim_x == Catch::Approx(1.3f));
+    REQUIRE(lim_y == Catch::Approx(1.04f));
+    float jacobian[6];
+    gsplat_cpu::build_jacobian(fx, fy, 2.5f * tz, -1.5f * tz, tz, jacobian, lim_x, lim_y);
+    REQUIRE(jacobian[0] == Catch::Approx(fx / tz));
+    REQUIRE(jacobian[2] == Catch::Approx(-fx * (lim_x * tz) / (tz * tz)));
+    REQUIRE(jacobian[4] == Catch::Approx(fy / tz));
+    REQUIRE(jacobian[5] == Catch::Approx(fy * (lim_y * tz) / (tz * tz)));
+    REQUIRE(gsplat_cpu::jclamp(0.5f, tz, lim_x) == 0.5f);
 }
 
 TEST_CASE("project: 3-Gaussian synthetic smoke", "[project]") {

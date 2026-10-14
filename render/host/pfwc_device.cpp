@@ -462,6 +462,13 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Task #489: GSPLAT_TT_PFWC_ACQ_FUSE bit 0 / 1 (pfwc_fuse_sfpu.h), bit-identical.
     if (env_config::pfwc_acq_fuse() & 1u) vis_defines["PFWC_FUSE_PROJ"] = "1";
     if (env_config::pfwc_acq_fuse() & 2u) vis_defines["PFWC_FUSE_CCAC"] = "1";
+    // Task #786: GSPLAT_TT_JCLAMP (default 1), 3DGS Jacobian clamp; args 67 / 68.
+    if (env_config::jclamp_on()) {
+        if (!(env_config::pfwc_acq_fuse() & 1u))
+            throw std::runtime_error("pfwc: GSPLAT_TT_JCLAMP=1 needs GSPLAT_TT_PFWC_ACQ_FUSE bit 0 "
+                                     "(set GSPLAT_TT_JCLAMP=0 for the unfused projection)");
+        vis_defines["PFWC_JCLAMP"] = "1";
+    }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2
@@ -1035,6 +1042,12 @@ double pfwc_tt(
     const uint32_t k_bits      = fp32_bits(K_RADII);
     const uint32_t neg_fx_bits = fp32_bits(-fx);
     const uint32_t neg_fy_bits = fp32_bits(-fy);
+    // Task #786: lim = 1.3 W / (2 fx), 1.3 H / (2 fy) as gsplat_cpu::jclamp_lim; without
+    // the vis params the image is taken as 2 cx x 2 cy.
+    const float jc_w = vis ? vis->image_width : 2.0f * cx;
+    const float jc_h = vis ? vis->image_height : 2.0f * cy;
+    const uint32_t jclamp_x_bits = fp32_bits(1.3f * jc_w / (2.0f * fx));
+    const uint32_t jclamp_y_bits = fp32_bits(1.3f * jc_h / (2.0f * fy));
 
     setup_span.stop();
     gsplat_tt::hostprof::on_pfwc_dispatch_start();
@@ -1080,6 +1093,11 @@ double pfwc_tt(
         compute_args.push_back(neg_fx_bits);   // arg 54
         compute_args.push_back(neg_fy_bits);   // arg 55
         for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..66 (PFWC_VIS)
+        if (env_config::jclamp_on()) {
+            compute_args.resize(67, 0u);          // args 56..66 absent without PFWC_VIS
+            compute_args.push_back(jclamp_x_bits);  // arg 67
+            compute_args.push_back(jclamp_y_bits);  // arg 68
+        }
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
         if (fuse_on) {

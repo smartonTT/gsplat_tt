@@ -263,6 +263,8 @@ ProjectPrepared project_prepare_geometry(
     const float cy = intrinsics[5];
 
     constexpr float k_near = 0.2f;
+    const float lim_x = jclamp_lim(static_cast<float>(image_width), fx);
+    const float lim_y = jclamp_lim(static_cast<float>(image_height), fy);
 
     ProjectPrepared prep;
     prep.N = N;
@@ -288,7 +290,7 @@ ProjectPrepared project_prepare_geometry(
         prep.means_2d[i * 2 + 0] = fx * tx * inv_tz + cx;
         prep.means_2d[i * 2 + 1] = fy * ty * inv_tz + cy;
 
-        build_jacobian(fx, fy, tx, ty, tz, prep.jacobian.data() + i * 6);
+        build_jacobian(fx, fy, tx, ty, tz, prep.jacobian.data() + i * 6, lim_x, lim_y);
     };
 
     if (pool != nullptr && pool->size() > 1 && N >= 4096) {
@@ -509,6 +511,8 @@ ProjectResult project_full_fused(
     const float fx = intrinsics[0], fy = intrinsics[4];
     const float cx = intrinsics[2], cy = intrinsics[5];
     constexpr float k_near = 0.2f;
+    const float lim_x = jclamp_lim(static_cast<float>(image_width), fx);
+    const float lim_y = jclamp_lim(static_cast<float>(image_height), fy);
     const int max_radius = (max_radius_param < 0)
         ? std::numeric_limits<int>::max()
         : ((max_radius_param > 0)
@@ -591,8 +595,8 @@ ProjectResult project_full_fused(
 
         // Jacobian (kept in registers — never stored to memory).
         const float tz2 = tz * tz;
-        const float j00 = fx / tz, j02 = -fx * tx / tz2;
-        const float j11 = fy / tz, j12 = -fy * ty / tz2;
+        const float j00 = fx / tz, j02 = -fx * jclamp(tx, tz, lim_x) / tz2;
+        const float j11 = fy / tz, j12 = -fy * jclamp(ty, tz, lim_y) / tz2;
 
         // iter-044: cov_cam = R @ cov3d @ R^T exploiting cov3d symmetry.
         // cov3d is stored as 9 floats but only the upper triangle (6 entries)
@@ -833,6 +837,8 @@ ProjectResult project_finish_with_cov_cam(
     const float fx = intrinsics[0], fy = intrinsics[4];
     const float cx = intrinsics[2], cy = intrinsics[5];
     constexpr float k_near = 0.2f;
+    const float lim_x = jclamp_lim(static_cast<float>(image_width), fx);
+    const float lim_y = jclamp_lim(static_cast<float>(image_height), fy);
     const int max_radius = (max_radius_param < 0)
         ? std::numeric_limits<int>::max()
         : ((max_radius_param > 0)
@@ -871,8 +877,8 @@ ProjectResult project_finish_with_cov_cam(
         const float ty = (mean_y - cy) * tz * inv_fy;
 
         const float tz2 = tz * tz;
-        const float j00 = fx / tz,  j02 = -fx * tx / tz2;
-        const float j11 = fy / tz,  j12 = -fy * ty / tz2;
+        const float j00 = fx / tz,  j02 = -fx * jclamp(tx, tz, lim_x) / tz2;
+        const float j11 = fy / tz,  j12 = -fy * jclamp(ty, tz, lim_y) / tz2;
 
         const float cc00 = cov_cam_precomp[i * 6 + 0];
         const float cc01 = cov_cam_precomp[i * 6 + 1];

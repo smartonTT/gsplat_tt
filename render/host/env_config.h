@@ -364,6 +364,15 @@ inline bool pfwc_recip_newton() {
     return v;
 }
 
+// Task #786 (GSPLAT_TT_JCLAMP): the 3DGS/gsplat Jacobian clamp in the fused pfwc
+// projection (project_pfwc_compute.cpp PFWC_JCLAMP; CPU ref gsplat_cpu::jclamp): J sees
+// tx / ty clamped to +-1.3 tan(half FOV) tz. Default 1; =0 restores the unclamped
+// projection. Needs GSPLAT_TT_PFWC_ACQ_FUSE bit 0 (the host refuses otherwise).
+inline bool jclamp_on() {
+    static const bool v = env_uint("GSPLAT_TT_JCLAMP", 1u) != 0u;
+    return v;
+}
+
 // Task #489 (GSPLAT_TT_PFWC_ACQ_FUSE; not lever B's PFWC_FUSE): fewer pfwc compute acquires (pfwc_fuse_sfpu.h), bit-identical. Bit 0: steps
 // 1-5 (transform, 1/tz, depth, means) in one acquire instead of seven. Bit 1 (needs
 // COVCAM_SFPU and COV2D_SFPU): cov_cam and S_AC in one acquire. Default 3 since the
