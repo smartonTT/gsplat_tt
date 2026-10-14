@@ -81,8 +81,11 @@ def check(dump: str, indir: Path, outdir: Path, slot_bar=1e-2, grad_bar=1e-2,
     t0["worst_grad"] = max(t0.get("grads", {"-": 0.0}).values())
     t0["worst_param"] = max(max(t0["params"].values()), max(t0["delta"].values()))
     t0["pass"] = bool(t0["worst_grad"] <= grad_bar and t0["worst_param"] <= adam_bar)
+    # T2 owns SH band 0 only: with sh_degree > 0 the oracle's dL/dmeans has the view-direction
+    # term of bands 1-3 and its dL/dsh0 uses the full-colour clamp mask, so T0 is reported, not gated.
+    t0["gated"] = int(d.get("sh_degree", 0)) == 0
     rep["t0"] = t0
-    rep["pass"] = bool(s["pass"] and rep["t2"]["pass"] and t0["pass"])
+    rep["pass"] = bool(s["pass"] and rep["t2"]["pass"] and (t0["pass"] or not t0["gated"]))
     return rep
 
 
