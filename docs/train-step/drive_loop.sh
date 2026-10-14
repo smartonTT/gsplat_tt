@@ -40,7 +40,7 @@ hero_loop() {
   [ -s "$src" ] || { echo "no $src: run tmp/t750/hero_prep.sh (docs/t685/hero.py) first"; return 5; }
   mkdir -p "$L"
   # The project venv has no PIL (#779): the system python decodes the JPG to raw RGB8.
-  local jpg=${HERO_JPG:-scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG}
+  local jpg=${HERO_JPG:-$(dirname "$TP")/scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG}
   "${PY_IMG:-/usr/bin/python3}" -c "
 import sys; from PIL import Image
 open(sys.argv[2], 'wb').write(Image.open(sys.argv[1]).convert('RGB').tobytes())" "$jpg" "$L/target.rgb8" || return 5

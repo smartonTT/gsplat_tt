@@ -1,3 +1,3 @@
-[sync_remote] 650d41db8599fc990fc975acdd70180fae218039 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t781: 1267 files, 65514192 bytes listed
+[sync_remote] 3b7c4cf4684184bb6e4b3c97c493251ef30375a5 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t781: 1267 files, 65514535 bytes listed
 [sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
-[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 26 of 1269 files, 695694 bytes (tar)
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 3 of 1269 files, 6390 bytes (tar)
