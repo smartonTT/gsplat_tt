@@ -414,60 +414,66 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
                          "n_live_px": n_live}
 
 
-def ref_slots_fast(d, cfg) -> np.ndarray:
+def ref_slots_fast(d, cfg, dt=f32) -> np.ndarray:
     """blend_backward_ref.blend_backward's slots (same fp32 expressions, microblock and
-    lane sum orders), vectorised across tiles for hero-size dumps (tested against it)."""
-    img, gimg = np.asarray(d["image"], f32), np.asarray(d["dL_dimage"], f32)
+    lane sum orders), vectorised across tiles for hero-size dumps (tested against it).
+    dt=np.float64 (#728): the same math in float64 on the fp32 inputs (plain power polynomial
+    in absolute pixel coordinates), the exact gradient the fp32 forms approximate."""
+    img, gimg = np.asarray(d["image"], dt), np.asarray(d["dL_dimage"], dt)
     H, W = img.shape[:2]
-    m2, con, op, col = (np.asarray(d[k], f32) for k in ("means2d", "conic", "opacity", "colors"))
+    m2, con, op, col = (np.asarray(d[k], dt) for k in ("means2d", "conic", "opacity", "colors"))
     rects = tile_rects_vec(d["means2d"], d["valid"], d["conic"], H, W, TILE)
     pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, d["order"], H, W)
     nt = utid.size
-    slots = np.zeros((int(pl["counts"].sum()), 9), f32)
+    slots = np.zeros((int(pl["counts"].sum()), 9), dt)
     alive = tile_planes(np.ones((H, W), bool), H, W, tiles_x, tiles_y)[utid]
     Gp = tile_planes(gimg, H, W, tiles_x, tiles_y)[utid]
-    Ig = (tile_planes(img, H, W, tiles_x, tiles_y)[utid] * Gp).sum(-1, dtype=f32)
-    T = np.ones((nt, TILE, TILE), f32)
-    s_acc = np.zeros((nt, TILE, TILE), f32)
-    amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1)
+    Ig = (tile_planes(img, H, W, tiles_x, tiles_y)[utid] * Gp).sum(-1, dtype=dt)
+    T = np.ones((nt, TILE, TILE), dt)
+    s_acc = np.zeros((nt, TILE, TILE), dt)
+    amax, amin, tmin, one = dt(cfg.alpha_max), dt(cfg.alpha_min), dt(cfg.t_min), dt(1)
     for k in range(int(cnt.max()) if nt else 0):
         n = int(np.searchsorted(-cnt, -k, side="left"))
         idx = start[:n] + k
         g = pl["g"][idx]
         mxl, myl = m2[g, 0][:, None, None] - ox[:n], m2[g, 1][:, None, None] - oy[:n]
         u, v = xx - mxl, yy - myl
-        cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)), mxl, myl)
-        power = centred_power(*cf, xx - f32(16), yy - f32(16))
-        wgt = np.exp(np.minimum(power, f32(0.0))).astype(f32)
+        if dt is f32:
+            cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)), mxl, myl)
+            power = centred_power(*cf, xx - dt(16), yy - dt(16))
+        else:
+            A_, B_, C_ = (con[g, i][:, None, None] for i in range(3))
+            power = -0.5 * A_ * u * u - B_ * u * v - 0.5 * C_ * v * v
+        wgt = np.exp(np.minimum(power, dt(0.0))).astype(dt)
         raw = op[g][:, None, None] * wgt
         clamp = raw > amax
-        alpha = np.where(clamp, amax, raw).astype(f32)
+        alpha = np.where(clamp, amax, raw).astype(dt)
         Tk = T[:n]
         live = alive[:n] & (alpha >= amin)
         stop = live & (Tk * (one - alpha) < tmin)
         live &= ~stop
         alive[:n] &= ~stop
-        at = np.where(live, alpha * Tk, f32(0.0)).astype(f32)
+        at = np.where(live, alpha * Tk, dt(0.0)).astype(dt)
         Gk = Gp[:n]
-        cg = (col[g][:, None, None, :] * Gk).sum(-1, dtype=f32)
+        cg = (col[g][:, None, None, :] * Gk).sum(-1, dtype=dt)
         s_acc[:n] = s_acc[:n] + at * cg
         behind = Ig[:n] - s_acc[:n]
         dalpha = Tk * cg - behind / (one - alpha)
-        T[:n] = np.where(live, Tk * (one - alpha), Tk).astype(f32)
-        act = live & ~clamp & (power <= f32(0.0))
-        G = np.where(act, dalpha * alpha, f32(0.0)).astype(f32)
-        terms = np.stack([np.where(live & ~clamp, dalpha * wgt, f32(0.0)),
+        T[:n] = np.where(live, Tk * (one - alpha), Tk).astype(dt)
+        act = live & ~clamp & (power <= dt(0.0))
+        G = np.where(act, dalpha * alpha, dt(0.0)).astype(dt)
+        terms = np.stack([np.where(live & ~clamp, dalpha * wgt, dt(0.0)),
                           at * Gk[..., 0], at * Gk[..., 1], at * Gk[..., 2],
-                          G * u * u, G * u * v, G * v * v, G * u, G * v], axis=-1).astype(f32)
+                          G * u * u, G * u * v, G * v * v, G * u, G * v], axis=-1).astype(dt)
         mb = terms.reshape(n, 8, 4, 4, 8, 9).transpose(0, 1, 3, 2, 4, 5).reshape(n, 32, 32, 9)
-        mb = mb.sum(2, dtype=f32)
-        s = np.zeros((n, 9), f32)
+        mb = mb.sum(2, dtype=dt)
+        s = np.zeros((n, 9), dt)
         for q in range(32):
             s += mb[:, q]
         Ac, Bc, Cc = con[g, 0], con[g, 1], con[g, 2]
         Suu, Suv, Svv, Su, Sv = s[:, 4], s[:, 5], s[:, 6], s[:, 7], s[:, 8]
         slots[pl["P"][g] + pl["j"][idx]] = np.stack(
-            [Ac * Su + Bc * Sv, Bc * Su + Cc * Sv, f32(-0.5) * Suu, -Suv, f32(-0.5) * Svv,
+            [Ac * Su + Bc * Sv, Bc * Su + Cc * Sv, dt(-0.5) * Suu, -Suv, dt(-0.5) * Svv,
              s[:, 0], s[:, 1], s[:, 2], s[:, 3]], 1)
     return slots
 
