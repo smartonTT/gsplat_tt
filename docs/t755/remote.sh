@@ -45,7 +45,7 @@ for arm in "$@"; do
   case $arm in dump*)
     ls -l $S/train-v0-*.bin
     b=$S/train-v0-${arm#dump}.bin; [ "$arm" = dump ] && b=$S/train-v0-on.bin
-    python3 docs/t708/check_dump.py "$b" "$T/tmp/t755-$tag/view00_hero.png" > $S/check_dump-$arm.txt 2>&1
+    python3 docs/t708/check_dump.py "$b" "$T/tmp/t755-$arm/view00_hero.png" > $S/check_dump-$arm.txt 2>&1
     tail -1 $S/check_dump-$arm.txt ;;
   esac
 done

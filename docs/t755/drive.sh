@@ -72,13 +72,14 @@ step r1 500 1 on r3 aa
 step r2 500 2 r3 aa on
 step r3 500 3 aa on r3
 step r4 500 4 r3 on aa
-# Per-arm JIT listings, for
-# python3 opt/ab_jit_check.py --arm on=$O/jit-on.txt --arm r3=$O/jit-r3.txt \
-#   --kernel reader_alpha_blend_mb_devcull
+# Per-arm JIT listings; JIT check only baseline (on) vs candidate (r3), on the kernel t755 edits.
 for a in on aa r3; do
   $SSH "$H" "find $T/tmp/ttm-eth12-cache-t755-$a /localdev/smarton/.cache/ttmc-t755-$a -maxdepth 8 -path '*/kernels/*' -type d > $T/tmp/t755/jit-$a.txt 2>/dev/null; wc -l < $T/tmp/t755/jit-$a.txt"
 done
 scp -q -o BatchMode=yes "$H:$T/tmp/t755/*.*" "$O/" || rc=4
+python3 opt/ab_jit_check.py --arm on="$O/jit-on.txt" --arm r3="$O/jit-r3.txt" \
+  --kernel reader_alpha_blend_mb_devcull > "$O/jit-check.txt" 2>&1
+s=$?; cat "$O/jit-check.txt"; [ $s = 0 ] || rc=6
 $SSH "$H" "du -sxh $T /localdev/smarton/.cache 2>/dev/null; df -h /localdev/smarton | tail -1" > "$O/disk.txt" 2>&1; cat "$O/disk.txt"
 echo "=== drive t755 done rc=$rc $(TZ=America/Los_Angeles date)"
 exit $rc
