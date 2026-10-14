@@ -7,8 +7,10 @@
 // #707: reps default 6 (first = JIT/warm-up; device_ms_med is the median of the rest).
 // BWD_STATS=1 (default; 0 = off) builds the kernels with in-kernel stage counters and writes
 // stats.json (per core: MATH wall-clock cycles per stage and counts, see blend_bwd_compute.cpp).
-// BWD_PRESTAGE=1 (default; 0 = #747 staging) (#767): the reader turns each record's 12 floats into
-// their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp.
+// BWD_PRESTAGE=0 (default: #747 staging), 1 or 2 (#767): the reader turns each record's 12 floats
+// into their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp; 2 also loads all
+// words before the first instruction-buffer store. 1 measured slower on bh-49 (setup 172.9 -> 198.2
+// cycles/pair, hero 82.66 -> 83.33 ms).
 // Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
@@ -94,7 +96,7 @@ int main(int argc, char** argv) {
     const bool stats = !(st_env && std::string(st_env) == "0");
     constexpr uint32_t ST_PAGE = 128, ST_N = 11;
     const char* ps_env = std::getenv("BWD_PRESTAGE");
-    const bool prestage = !(ps_env && std::string(ps_env) == "0");
+    const int prestage = ps_env ? std::atoi(ps_env) : 0;
 
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
@@ -156,7 +158,7 @@ int main(int argc, char** argv) {
         {"BWD_TMIN_BITS", std::to_string(meta_int(js, "t_min_bits")) + "u"},
     };
     if (stats) cdef["BWD_STATS"] = "1";
-    if (prestage) cdef["BWD_PRESTAGE"] = "1";
+    if (prestage) cdef["BWD_PRESTAGE"] = std::to_string(prestage);
     auto kc = CreateKernel(prog, kd + "blend_bwd_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,

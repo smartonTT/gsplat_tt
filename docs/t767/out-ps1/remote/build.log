@@ -1,0 +1,10 @@
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/blend_bwd_bench.dir/blend_bwd_bench.cpp.o
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp: In function ‘int main(int, char**)’:
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:90:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+   90 |     want = std::max<uint32_t>(1, std::min<uint32_t>({want, grid.x * grid.y, std::max<uint32_t>(n_tiles, 1)}));
+      |                                                            ~~~~~~~^~~~~~~~
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:90:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+[2/2] Linking CXX executable blend_bwd_bench

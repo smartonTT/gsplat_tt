@@ -15,15 +15,15 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
 H=${H:-bh-49} T=${T:-/localdev/smarton/gstt2-sync} ROUNDS=${ROUNDS:-5} REPS=${REPS:-8}
-O=docs/t767/out
-if [ "${2:-}" != --locked ]; then exec ttp lock p100 -- "$PWD/docs/t767/ab.sh" "$rev" --locked; fi
+O=${O:-docs/t767/out} CAND_PS=${CAND_PS:-1}  # cand arm's BWD_PRESTAGE mode (1 or 2)
+if [ "${2:-}" != --locked ]; then exec ttp lock p100 -- env O="$O" CAND_PS="$CAND_PS" "$PWD/docs/t767/ab.sh" "$rev" --locked; fi
 case "$H" in bh-30|*bh-30.*) echo "=== refusing the viewer box $H"; exit 2 ;; esac
 mkdir -p "$O"
 PRE=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
 "$PRE" @p100 || { p=$?; echo "=== ssh preflight failed rc=$p"; exit $p; }
 SSH=(ssh -o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$H")
 sha=$(git rev-parse "$rev^{commit}")
-echo "=== t767 $rev=$sha to $H:$T $(TZ=America/Los_Angeles date)"
+echo "=== t767 cand BWD_PRESTAGE=$CAND_PS $rev=$sha to $H:$T $(TZ=America/Los_Angeles date)"
 opt/sync_remote.sh --no-build "$H" "$T" "$rev" > "$O/sync.log" 2>&1; rc=$?
 echo "sync rc=$rc"; grep '^\[sync_remote\]' "$O/sync.log"
 [ $rc = 0 ] || { tail -30 "$O/sync.log"; exit 3; }
@@ -50,7 +50,7 @@ for n in sh0 sh3 s1 s2 hero; do
 done
 # run <arm> <dump> <outdir> <reps>
 run() {
-  local ps=1; [ "$1" = base ] && ps=0
+  local ps=$CAND_PS; [ "$1" = base ] && ps=0
   timeout 600 "${SSH[@]}" "$ENV && export TT_METAL_CACHE=$C-$1 BWD_PRESTAGE=$ps \
     && mkdir -p $3 && timeout 240 render/train/build/blend_bwd_bench tmp/t767in/$2 0 $4 $3 > $3/run.log 2>&1; rc=\$?; \
     tail -3 $3/run.log; md5sum $3/slots.f32 | tee $3/slots.md5; \
