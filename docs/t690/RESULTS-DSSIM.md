@@ -379,3 +379,17 @@ to all printed digits.
 | bike_top | +1.73e-8 | 1.15e-5 | 4.67e-5 | PASS |
 | bike_mid | -6.29e-9 | 2.11e-6 | 1.42e-5 | PASS |
 | syn | -6.02e-8 | 7.52e-6 | 2.91e-5 | PASS |
+
+Where the remaining 0.954 ms goes (bound for the next step, from the ablations above): compute
+without any DRAM reads is 0.70 ms/view (t736 kernels), so the cheaper reader leaves about 0.25 ms
+of exposed reads. Inside the 0.70: about 0.33 ms SFPU (all filter + transpose + pointwise work)
+and about 0.37 ms unpack/pack/CB round trips and launch. The SFPU filter itself (FMA rows + TConv,
+all 18 planes) is only about 0.04 ms exposed today.
+
+Next levers, largest first:
+1. Wider strips (one core walks 2-4 adjacent tile columns): each extra column shares the
+   neighbour faces, cutting the H-halo reads again (the 0.25 ms of exposed reads).
+2. Fewer Dst <-> CB round trips in `v_pass` (CB_M, CB_F, CB_PQ re-copies: each tile is packed and
+   unpacked again within the same step), part of the 0.37 ms unpack/pack cost.
+3. Fuse the loss into the end of the device rasterizer backward so the rendered image never goes
+   through DRAM.
