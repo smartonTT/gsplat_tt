@@ -2,6 +2,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from gsplat import t2_dev as td
 from gsplat import t2_param_backward as t2
@@ -26,8 +27,10 @@ def _emulate(indir, outdir):
     pf.tofile(outdir / "pfwc.f32")
 
 
-def test_dump_roundtrip(tmp_path):
-    td.prep_dump("benchmarks/train_oracle/t0_sh0_64x64_n50.npz", tmp_path / "in")
+@pytest.mark.parametrize("dump", ["t0_sh0_64x64_n50.npz", "t0_sh3_64x64_n50.npz"])
+def test_dump_roundtrip(tmp_path, dump):
+    # sh3: the reference carries 16 SH bands, the device only SH0; check() compares band 0.
+    td.prep_dump(f"benchmarks/train_oracle/{dump}", tmp_path / "in")
     _emulate(tmp_path / "in", tmp_path / "out")
     rep = td.check(tmp_path / "in", tmp_path / "out")
     assert rep["pass"] and rep["worst_adam"] == 0.0 and rep["m_bits_equal"]

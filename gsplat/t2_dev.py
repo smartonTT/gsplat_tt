@@ -188,6 +188,10 @@ def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     meta = json.loads((indir / "meta.json").read_text())
     N, ng = meta["n"], meta["n_groups"]
     ref = reference(indir)
+    # T2 owns SH0 only (higher SH bands are another pass): compare the band-0 slice.
+    for w in ("grads", "params", "m", "v"):
+        if w in ref:
+            ref[w] = {**ref[w], "sh": np.asarray(ref[w]["sh"])[:, :1, :]}
     rd = lambda n, dt: np.fromfile(outdir / n, dt).reshape(ng, 1024)  # noqa: E731
     p = from_cols(from_pages(rd("params_out.f32", f32), N, STREAMS))
     m = from_cols(from_pages(bits_bf16(rd("m_out.u16", np.uint16)), N, STREAMS))

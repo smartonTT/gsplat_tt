@@ -36,7 +36,7 @@ RUNS=${RUNS:-"sh0 sh3 syn"}
 if [ $brc = 0 ]; then
   for n in $RUNS; do
     echo "=== run $n $(date +%T)"
-    if [ "$n" = syn ]; then mk="python3 -m gsplat.t2_dev prep-synth tmp/t697/in-$n --n ${SYN_N:-1048576} --mean-count ${SYN_K:-8} --no-ref"; ex="${T2_CORES:-} ${REPS:-10}"
+    if [ "$n" = syn ]; then mk="python3 -m gsplat.t2_dev prep-synth tmp/t697/in-$n --n ${SYN_N:-1048576} --mean-count ${SYN_K:-8} --no-ref"; ex="${T2_CORES:-130} ${REPS:-10}"
     else mk="python3 -m gsplat.t2_dev prep-dump benchmarks/train_oracle/t0_${n}_64x64_n50.npz tmp/t697/in-$n"; ex="${T2_CORES:-130} 3 grads"; fi
     timeout 900 "${SSH[@]}" "$ENV && rm -rf tmp/t697/in-$n tmp/t697/out-$n && mkdir -p tmp/t697/out-$n && $mk \
       && timeout ${RUN_TIMEOUT:-300} render/train/build/t2_bench tmp/t697/in-$n tmp/t697/out-$n $ex > tmp/t697/out-$n/run.log 2>&1; rc=\$?; tail -20 tmp/t697/out-$n/run.log; \
