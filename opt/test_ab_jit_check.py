@@ -35,3 +35,44 @@ def test_missing_kernel_fails_and_listing_file(tmp_path):
     lst.write_text("/x/ttmc-a/k/kernels/blend/111\n")
     b = _cache(tmp_path, "b", {"sort": "9"})
     assert j.main(["--arm", f"a={lst}", "--arm", f"b={b}", "--kernel", "blend"]) == 1
+
+
+def _rao(tmp, ka, kb, la, lb, ma="cap=0", mb="cap=64"):
+    a = _cache(tmp, "a", ka)
+    b = _cache(tmp, "b", kb)
+    (tmp / "a.log").write_text(la)
+    (tmp / "b.log").write_text(lb)
+    return j.main(["--runtime-arg-only", "--arm", f"base={a}", "--arm", f"cand={b}",
+                   "--kernel", "blend", "--marker", f"base={ma}", "--marker", f"cand={mb}",
+                   "--log", f"base={tmp / 'a.log'}", "--log", f"cand={tmp / 'b.log'}"])
+
+
+def test_rao_pass_same_hash_markers_present(tmp_path):
+    assert _rao(tmp_path, {"blend": "1"}, {"blend": "1"}, "x cap=0 y", "cap=64\n") == 0
+
+
+def test_rao_fails_on_hash_diff(tmp_path):
+    assert _rao(tmp_path, {"blend": "1"}, {"blend": "2"}, "cap=0", "cap=64") == 1
+
+
+def test_rao_fails_on_missing_marker(tmp_path):
+    assert _rao(tmp_path, {"blend": "1"}, {"blend": "1"}, "cap=0", "cap=0") == 1
+
+
+def test_rao_fails_on_missing_kernel(tmp_path):
+    assert _rao(tmp_path, {"sort": "1"}, {"sort": "1"}, "cap=0", "cap=64") == 1
+
+
+def test_rao_requires_marker_and_log_per_arm(tmp_path):
+    import pytest
+    a = _cache(tmp_path, "a", {"blend": "1"})
+    with pytest.raises(SystemExit) as e:
+        j.main(["--runtime-arg-only", "--arm", f"base={a}", "--arm", f"cand={a}",
+                "--kernel", "blend", "--marker", "base=x"])
+    assert e.value.code == 2
+
+
+def test_default_mode_unchanged_same_hash_fails(tmp_path):
+    a = _cache(tmp_path, "a", {"blend": "1"})
+    b = _cache(tmp_path, "b", {"blend": "1"})
+    assert j.main(["--arm", f"base={a}", "--arm", f"cand={b}", "--kernel", "blend"]) == 1
