@@ -13,7 +13,7 @@ static const char* const kKnobs[] = {
     "GSPLAT_TT_PFWC_REC32",   "GSPLAT_TT_PFWC_WRITER_SPLIT", "GSPLAT_TT_EMIT_PUBOC",
     "GSPLAT_TT_OL_EMIT_TOWN", "GSPLAT_TT_OL_RING",           "GSPLAT_TT_SORT_ONELAUNCH",
     "GSPLAT_TT_OL_BREC_BULK", "GSPLAT_TT_PFWC_FUSE",         "GSPLAT_TT_SFPU_VIS",
-    "GSPLAT_TT_OL_PB",
+    "GSPLAT_TT_OL_PB",        "GSPLAT_TT_B1_ROUTE",
 };
 
 int main(int argc, char** argv) {
@@ -32,6 +32,7 @@ int main(int argc, char** argv) {
         {"GSPLAT_TT_OL_RING", "0"},        {"GSPLAT_TT_SORT_ONELAUNCH", "0"},
         {"GSPLAT_TT_OL_BREC_BULK", "0"},   {"GSPLAT_TT_PFWC_FUSE", "0"},
         {"GSPLAT_TT_SFPU_VIS", "2"},       {"GSPLAT_TT_OL_PB", "16"},
+        {"GSPLAT_TT_B1_ROUTE", "1"},  // #754: route mode turns the TOWN emit off
     };
     for (const auto& o : offs) {
         setenv(o.knob, o.val, 1);

@@ -328,11 +328,12 @@ inline bool pfwc_writer_split() {
 // #471 (p150 b2b 9.495 -> 9.356 ms/view, same md5); GSPLAT_TT_PFWC_REC32=0 is the
 // kill switch. Needs the default chain: off (not refused) when any kill switch
 // of it is set (writer split, EMIT_PUBOC, TOWN emit, one-launch sort, bulk brec,
-// fused pfwc, OL_PB * 16 <= sort_ol_town::LIST_MAX).
+// fused pfwc, B1_ROUTE, OL_PB * 16 <= sort_ol_town::LIST_MAX).
 inline bool pfwc_rec32() {
     static const bool v = [] {
         if (env_uint("GSPLAT_TT_PFWC_REC32", 1u) == 0u) return false;
         if (!pfwc_writer_split() || !emit_puboc() || !ol_emit_town()) return false;
+        if (b1_route()) return false;  // #754: route mode turns the TOWN emit off (sort_device.cpp)
         if (env_uint("GSPLAT_TT_SORT_ONELAUNCH", 1u) == 0u) return false;
         if (env_uint("GSPLAT_TT_OL_BREC_BULK", 1u) == 0u) return false;
         if (env_uint("GSPLAT_TT_PFWC_FUSE", 1u) == 0u) return false;
