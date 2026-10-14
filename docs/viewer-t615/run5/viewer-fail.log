@@ -1,0 +1,96 @@
+[supervisor 2026-10-14T00:44:47Z pid 5872] starting viewer_clean.py port 8080
+[eth] GSPLAT_TT_DISPATCH=worker: worker dispatch (override)
+[viewer_clean] sha=4c9bfc26c48ed4a48c9952362b5bffbc92f396df loading scenes/bicycle.ply
+╭────── viser (listening *:8080) ───────╮
+│             ╷                         │
+│   HTTP      │ http://localhost:8080   │
+│   Websocket │ ws://localhost:8080     │
+│             ╵                         │
+╰───────────────────────────────────────╯
+Viewer running at http://localhost:8080 (backend=tt_clean, render=1024x1024)
+[viewer_clean] watchdog limit=5 s (first render per size 600 s) stall_hook=off
+2026-10-14 00:44:51.149 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 00:44:51.149 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 00:44:51.150 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 00:44:51.151 | info     |             UMD | Established firmware bundle version: 19.7.0 (topology_discovery.cpp:544)
+2026-10-14 00:44:51.151 | info     |             UMD | Firmware bundle version 19.7.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 00:44:51.151 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 00:44:51.152 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-14 00:44:51.152 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-14 00:44:51.153 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-14 00:44:51.153 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-14 00:44:51.154 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-14 00:44:51.155 | info     |             UMD | Established firmware bundle version: 19.7.0 (topology_discovery.cpp:544)
+2026-10-14 00:44:51.155 | info     |             UMD | Firmware bundle version 19.7.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-14 00:44:51.155 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-14 00:44:51.155 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-14 00:44:51.155 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-14 00:44:51.155 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-14 00:44:51.189 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[7] and remote chip ids {} (cluster.cpp:153)
+2026-10-14 00:44:51.189 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-14 00:44:51.189 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-14 00:44:51.189 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-14 00:44:51.190 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-14 00:44:52.190 | warning  |             UMD | Waiting for lock 'CHIP_IN_USE_7_PCIe' which is currently held by thread TID: 4096, PID: 4096 (robust_mutex.cpp:449)
+2026-10-14 00:45:11.474 | error    |             UMD | Expected NOC address: 0x1000000000000000, but got 0x1000000040000000 (silicon_sysmem_manager.cpp:387)
+2026-10-14 00:45:11.475 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 00:45:11.475 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+Traceback (most recent call last):
+  File "/localdev/smarton/nosync/t582/viewer/tree/opt/viewer/viewer_clean.py", line 189, in <module>
+    main()
+  File "/localdev/smarton/nosync/t582/viewer/tree/opt/viewer/viewer_clean.py", line 149, in main
+    viewer.pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/nosync/t582/viewer/tree/gsplat/render_watchdog.py", line 132, in guarded
+    return render(gaussians, extrinsics, intrinsics, image_height, image_width,
+  File "/localdev/smarton/nosync/t582/viewer/tree/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/nosync/t582/viewer/tree/render/run.py", line 160, in render_fused
+    means, cov3d, opac, colors = self._pruned_scene(means, cov3d, opac, colors)
+  File "/localdev/smarton/nosync/t582/viewer/tree/render/run.py", line 184, in _pruned_scene
+    ncores = int(self._clean.pfwc_num_cores())
+RuntimeError: Proceeding could lead to undefined behavior
+Location: /localdev/smarton/nosync/t582/tt-metal/tt_metal/third_party/umd/device/chip_helpers/silicon_sysmem_manager.cpp:388
+ 1. tt::umd::LocalChip::start_device(unsigned int)
+ 2. tt::umd::Cluster::start_device(tt::umd::DeviceParams const&)
+ 3. tt::Cluster::start_driver(tt::umd::DeviceParams&) const
+ 4. tt::Cluster::initialize_device_drivers()
+ 5. tt::Cluster::Cluster(tt::llrt::RunTimeOptions&)
+ 6. tt::tt_metal::MetalEnvImpl::initialize_base_objects()
+ 7. tt::tt_metal::MetalEnvImpl::MetalEnvImpl(tt::tt_metal::MetalEnvDescriptor)
+ 8. tt::tt_metal::MetalEnv::MetalEnv(tt::tt_metal::MetalEnvDescriptor)
+ 9. tt::tt_metal::MetalContext::create_default_instance_implicit_locked()
+10. tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+11. tt::tt_metal::hal::get_max_worker_l1_unreserved_size()
+12. gsplat_tt::device_state::get_device()
+13. /localdev/smarton/nosync/t582/viewer/tree/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x648e9) [0x7fbdf74358e9]
+14. /localdev/smarton/nosync/t582/viewer/tree/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x4f2e4) [0x7fbdf74202e4]
+15. .venv/bin/python(+0x17ec7f) [0x55fd5bdb3c7f]
+16. _PyEval_EvalFrameDefault
+17. _PyFunction_Vectorcall
+18. _PyEval_EvalFrameDefault
+19. _PyFunction_Vectorcall
+20. _PyEval_EvalFrameDefault
+21. .venv/bin/python(+0x198d4e) [0x55fd5bdcdd4e]
+22. _PyEval_EvalFrameDefault
+23. _PyFunction_Vectorcall
+24. _PyEval_EvalFrameDefault
+25. _PyFunction_Vectorcall
+26. _PyEval_EvalFrameDefault
+27. .venv/bin/python(+0x25b036) [0x55fd5be90036]
+28. PyEval_EvalCode
+29. .venv/bin/python(+0x281a88) [0x55fd5beb6a88]
+30. .venv/bin/python(+0x27c0df) [0x55fd5beb10df]
+31. .venv/bin/python(+0x281825) [0x55fd5beb6825]
+32. _PyRun_SimpleFileObject
+33. _PyRun_AnyFileObject
+34. Py_RunMain
+35. Py_BytesMain
+36. /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7fbe6a16ad90]
+37. __libc_start_main
+38. _start
+
+(viser) Server stopped
+[supervisor 2026-10-14T00:45:11Z pid 5872] viewer exited rc=1 after 24s
+[supervisor 2026-10-14T00:45:11Z pid 5872] restart 1/6 this hour in 5s
+[supervisor 2026-10-14T00:45:16Z pid 5872] starting viewer_clean.py port 8080
+[eth] GSPLAT_TT_DISPATCH=worker: worker dispatch (override)
