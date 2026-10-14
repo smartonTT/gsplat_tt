@@ -247,24 +247,28 @@ def test_host_without_rsync_gets_changed_files_by_tar(tmp_path):
     env.update(CAP=str(cap), PATH=f"{fake}:{env['PATH']}", USER="u",
                SYNC_REMOTE_ALLOWED_ROOTS=str(repo.resolve()))
 
+    os.symlink("../no/such/file.log", repo / "render" / "dangling.log")   # the real tree has one (.ttw/logs)
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "dangling link")
+
     def sync(*a):
         return subprocess.run(["bash", str(SCRIPT), *a, "yyzo-bh-49", str(dst), "HEAD"],
                               cwd=repo, env=env, capture_output=True, text=True)
 
     p = sync("--no-build")
     assert p.returncode == 0, p.stderr
-    assert "has no rsync" in p.stdout and "sent 7 of 7 files" in p.stdout, p.stdout
+    assert "has no rsync" in p.stdout and "sent 8 of 8 files" in p.stdout, p.stdout
     assert (dst / "render/kernels/k.cpp").read_text() == "x"
     assert not (dst / "opt/metal-screenshots").exists() and not (dst / "a.tracy").exists()
     assert not list(dst.rglob("._*"))
     p = sync("--dry-run")
     assert p.returncode == 0, p.stderr
-    assert "would send 1 of 7 files" in p.stdout, p.stdout   # only SYNC_STAMP's time changes
+    assert "would send 1 of 8 files" in p.stdout, p.stdout   # only SYNC_STAMP's time changes
     (repo / "render" / "a.cpp").write_text("y")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "edit")
     p = sync("--no-build")
     assert p.returncode == 0, p.stderr
-    assert "sent 3 of 7 files" in p.stdout, p.stdout   # a.cpp, SHA, SYNC_STAMP
+    assert "sent 3 of 8 files" in p.stdout, p.stdout   # a.cpp, SHA, SYNC_STAMP
     assert (dst / "render/a.cpp").read_text() == "y"
     (dst / "out").mkdir()
     (dst / "out" / "r.json").write_text("{}")
