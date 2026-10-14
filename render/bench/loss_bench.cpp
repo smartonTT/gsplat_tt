@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -140,8 +141,13 @@ int main(int argc, char** argv) {
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                               .noc = NOC::RISCV_0_default, .compile_args = ct_w});
     // fp32 operands must reach DEST unrounded (the default unpack path rounds to TF32).
+    // LOSS_U2D=0 keeps the default path (diagnostic A/B for the #690 launch hang).
+    const char* u2d_env = std::getenv("LOSS_U2D");
+    const bool use_u2d = !(u2d_env && u2d_env[0] == '0');
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    for (uint32_t cb : {0u, 1u, 3u}) u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+    if (use_u2d)
+        for (uint32_t cb : {0u, 1u, 3u}) u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+    std::fprintf(stderr, "[LOSS] stage=program u2d=%d tiles=%u cores=%u\n", int(use_u2d), T, ncores);
     auto kc = CreateKernel(prog, kd + "loss_l1_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
@@ -167,6 +173,7 @@ int main(int argc, char** argv) {
         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     };
     launch();  // first launch: JIT compile + check
+    std::fprintf(stderr, "[LOSS] stage=launch1_done\n");
     std::vector<float> g, part;
     distributed::EnqueueReadMeshBuffer(cq, g, bg, true);
     distributed::EnqueueReadMeshBuffer(cq, part, bp, true);
@@ -183,8 +190,10 @@ int main(int argc, char** argv) {
     }
     // Back-to-back: `iters` launches enqueued without waiting, one Finish (the trainer's
     // pattern); plus per-launch wall times for the spread.
+    std::fprintf(stderr, "[LOSS] stage=outputs_written\n");
     std::vector<double> ms;
     for (int i = 0; i < iters; i++) ms.push_back(launch());
+    std::fprintf(stderr, "[LOSS] stage=timed_launches_done\n");
     const auto b0 = std::chrono::steady_clock::now();
     for (int i = 0; i < iters; i++) distributed::EnqueueMeshWorkload(cq, wl, false);
     distributed::Finish(cq);

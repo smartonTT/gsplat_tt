@@ -45,25 +45,36 @@ def prep(out):
 
 
 def check(out, mode="l1"):
+    """Checks every <out>/<case>/out*/ run dir (one per bench variant, e.g. out-u0, out-u1)."""
+    import glob
     from gsplat.train_loss import loss_and_grad_l1, loss_and_grad_device
     ok = True
     for name, x, y in cases():
-        o = os.path.join(out, name, "out")
-        g = np.fromfile(os.path.join(o, "grad.f32"), np.float32).reshape(x.shape)
-        loss = float(open(os.path.join(o, "loss.txt")).read().split()[0])
         if mode == "l1":
             rl, rg = loss_and_grad_l1(x, y)
         else:
             rl, _, _, rg = loss_and_grad_device(x, y, scheme="split3")
-        err = np.abs(g - rg)
-        rel = float(np.linalg.norm(g - rg) / max(np.linalg.norm(rg), 1e-30))
-        lerr = abs(loss - rl) / max(abs(rl), 1e-30)
-        tol_g = 0.0 if mode == "l1" else 1e-4
-        good = rel <= tol_g + 1e-12 and lerr < 1e-5 and np.isfinite(g).all()
-        ok &= good
-        print(f"[CHECK] mode={mode} case={name} shape={x.shape} loss={loss:.9g} ref={rl:.9g} "
-              f"loss_rel={lerr:.2e} grad_l2rel={rel:.2e} grad_maxabs={err.max():.3e} "
-              f"mismatch={int((err > 0).sum())} {'PASS' if good else 'FAIL'}")
+        outs = sorted(glob.glob(os.path.join(out, name, "out*")))
+        if not outs:
+            print(f"[CHECK] case={name} no output dir FAIL")
+            ok = False
+        for o in outs:
+            tag = os.path.basename(o)
+            if not os.path.exists(os.path.join(o, "grad.f32")):
+                print(f"[CHECK] case={name} out={tag} no grad.f32 (run did not finish) FAIL")
+                ok = False
+                continue
+            g = np.fromfile(os.path.join(o, "grad.f32"), np.float32).reshape(x.shape)
+            loss = float(open(os.path.join(o, "loss.txt")).read().split()[0])
+            err = np.abs(g - rg)
+            rel = float(np.linalg.norm(g - rg) / max(np.linalg.norm(rg), 1e-30))
+            lerr = abs(loss - rl) / max(abs(rl), 1e-30)
+            tol_g = 0.0 if mode == "l1" else 1e-4
+            good = rel <= tol_g + 1e-12 and lerr < 1e-5 and np.isfinite(g).all()
+            ok &= good
+            print(f"[CHECK] mode={mode} case={name} out={tag} shape={x.shape} loss={loss:.9g} ref={rl:.9g} "
+                  f"loss_rel={lerr:.2e} grad_l2rel={rel:.2e} grad_maxabs={err.max():.3e} "
+                  f"mismatch={int((err > 0).sum())} {'PASS' if good else 'FAIL'}")
     return ok
 
 
