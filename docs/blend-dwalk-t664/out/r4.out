@@ -1,0 +1,27 @@
+================ BUILD ID ================
+  cpp : #124 sha=33e38f1f bin=da1a9401520fb69f t664 33e38f1f BLEND_DWALK A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t664-r4  timeout=400s  worry=600s  ts=2026-10-13T19:52:49-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/blend-dwalk-t664/remote.sh 4 base aa new
+-----------------------------------------
+=== r4-base 33e38f1f  --back-to-back 02:52:52 load=0.94
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.059 fps=124.09 ms_frame_median=8.062 pass_ms_frame=8.062,8.071,8.063,8.060,8.051,8.059,8.065,8.058,8.063,8.061,8.063,8.054,8.065,8.062,8.059,8.064,8.063,8.061,8.062,8.004 check_pass_ms_frame=9.517 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.059
+TTW_TIMING b2b_ms_frame_median=8.062
+LEVER r4-base cache_defines=[define BLEND_DWALK 0 ]
+=== r4-aa 33e38f1f  --back-to-back 02:53:06 load=1.11
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.063 fps=124.02 ms_frame_median=8.066 pass_ms_frame=8.072,8.062,8.067,8.062,8.066,8.069,8.062,8.067,8.072,8.073,8.066,8.071,8.059,8.066,8.066,8.071,8.061,8.064,8.058,8.012 check_pass_ms_frame=9.567 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.063
+TTW_TIMING b2b_ms_frame_median=8.066
+LEVER r4-aa cache_defines=[define BLEND_DWALK 0 ]
+=== r4-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:53:20 load=1.40
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.949 fps=125.80 ms_frame_median=7.952 pass_ms_frame=7.945,7.957,7.962,7.976,7.958,7.953,7.959,7.953,7.941,7.953,7.942,7.952,7.955,7.950,7.948,7.946,7.947,7.953,7.943,7.889 check_pass_ms_frame=9.456 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=7.949
+TTW_TIMING b2b_ms_frame_median=7.952
+LEVER r4-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 4 02:53:34
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t664/tmp/ttw-state/logs/t664-r4-20261013-195243.log

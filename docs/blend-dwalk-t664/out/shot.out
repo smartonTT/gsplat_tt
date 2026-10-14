@@ -1,0 +1,12 @@
+================ BUILD ID ================
+=========================================
+=== shot ttw-t664-hero sha=33e38f1 env: GSPLAT_TT_BLEND_DWALK=1 02:47:19
+run rc=0
+      1 TILE_ASSIGN_STAGES n=30 setup=0.008 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.009 tile_assign=0.010 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.5 max_ms=10.9 n_views=30 warmup_s=6.7 out=/localdev/smarton/gstt2-t513/tmp/shot-ttw-t664-hero
+      1 STAGES n=30 head=0.007 project=0.139 tile_assign=0.010 sort=0.903 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.415 d2h=0.012 assemble=0.000 tail=0.005 xview=0.407 | sum=7.897 view_total=7.899 resid_in_view=+0.002 avg_frame_ms=7.978 resid_vs_frame=+0.081 xview_hits=29 xview_misses=0
+      1 SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.085 upload=0.000 bin_emit=0.424 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.347 publish_wait=0.000 mat=0.120 pre=0.002 log=0.010 cont_prep=0.047 cont_rtargs=0.107 cont_other=-0.245 | sum=0.901 sort=0.903 resid=+0.003
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.006 pfwc_rtargs=0.093 pfwc_chunkcull=0.000 pfwc_enqueue=0.059 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.128 gather_result=0.000 | sum=0.290 project=0.139 resid=-0.152
+VIEWS=30 SWEEP_MD5=077caaba
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/ttw-t664/hero.png diff=opt/metal-screenshots/ttw-t664/hero_diff10.png commit=33e38f1f env='GSPLAT_TT_BLEND_DWALK=1' size=1024x1024 sweep_md5=077caaba ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.85 golden_match=true max_lsb_vs_golden=0

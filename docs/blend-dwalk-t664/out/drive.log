@@ -1,0 +1,98 @@
+SSH_PREFLIGHT=ok
+=== drive t664 33e38f1f on bh-33:/localdev/smarton/gstt2-t513 Tue Oct 13 19:34:46 PDT 2026
+[sync_remote] sha=33e38f1f2e54fa8c07f192f5bcbffaa714dac9e4 so_md5=5b946da963f6df93bf4628e2b63fda85 
+cpp#124 33e38f1f t664 33e38f1f BLEND_DWALK A/B (bh-33) bin=da1a9401520fb69f
+=== shot 19:47:00
+================ BUILD ID ================
+=========================================
+=== shot ttw-t664-hero sha=33e38f1 env: GSPLAT_TT_BLEND_DWALK=1 02:47:19
+run rc=0
+VIEWS=30 SWEEP_MD5=077caaba
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/ttw-t664/hero.png diff=opt/metal-screenshots/ttw-t664/hero_diff10.png commit=33e38f1f env='GSPLAT_TT_BLEND_DWALK=1' size=1024x1024 sweep_md5=077caaba ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.85 golden_match=true max_lsb_vs_golden=0
+shot rc=0
+================ BUILD ID ================
+=========================================
+=== r0-base 33e38f1f  --back-to-back 02:48:26 load=0.74
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.060 fps=124.07 ms_frame_median=8.064 pass_ms_frame=8.067,8.064,8.065,8.067,8.069,8.064,8.044,8.067,8.066,8.061,8.061,8.063,8.060,8.057,8.073,8.064,8.062,8.061,8.061,8.006 check_pass_ms_frame=9.488 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r0-base cache_defines=[define BLEND_DWALK 0 ]
+=== r0-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:48:59 load=1.31
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.953 fps=125.73 ms_frame_median=7.957 pass_ms_frame=7.950,7.958,7.957,7.953,7.959,7.955,7.959,7.958,7.959,7.960,7.957,7.957,7.957,7.962,7.952,7.939,7.955,7.958,7.957,7.906 check_pass_ms_frame=9.492 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r0-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 0 02:49:31
+================ BUILD ID ================
+=========================================
+=== r1-base 33e38f1f  --back-to-back 02:49:41 load=1.80
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.068 fps=123.95 ms_frame_median=8.064 pass_ms_frame=8.069,8.056,8.063,8.060,8.071,8.066,8.067,8.064,8.205,8.065,8.066,8.069,8.065,8.062,8.067,8.061,8.051,8.064,8.063,8.003 check_pass_ms_frame=9.577 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r1-base cache_defines=[define BLEND_DWALK 0 ]
+=== r1-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:49:55 load=2.00
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.955 fps=125.71 ms_frame_median=7.954 pass_ms_frame=7.950,7.952,7.949,7.953,7.952,7.955,7.949,8.023,7.966,7.958,7.959,7.960,7.953,7.960,7.952,7.955,7.952,7.957,7.955,7.890 check_pass_ms_frame=9.421 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r1-new cache_defines=[define BLEND_DWALK 1 ]
+=== r1-aa 33e38f1f  --back-to-back 02:50:08 load=2.01
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.059 fps=124.08 ms_frame_median=8.060 pass_ms_frame=8.062,8.052,8.065,8.072,8.058,8.067,8.059,8.057,8.061,8.067,8.060,8.066,8.061,8.060,8.058,8.059,8.056,8.062,8.071,8.009 check_pass_ms_frame=9.565 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r1-aa cache_defines=[define BLEND_DWALK 0 ]
+=== done 1 02:50:22
+================ BUILD ID ================
+=========================================
+=== r2-aa 33e38f1f  --back-to-back 02:50:53 load=1.16
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.065 fps=124.00 ms_frame_median=8.067 pass_ms_frame=8.082,8.065,8.064,8.068,8.067,8.067,8.069,8.068,8.068,8.067,8.078,8.066,8.068,8.064,8.067,8.060,8.068,8.063,8.063,8.011 check_pass_ms_frame=9.519 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r2-aa cache_defines=[define BLEND_DWALK 0 ]
+=== r2-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:51:07 load=1.30
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.960 fps=125.64 ms_frame_median=7.957 pass_ms_frame=7.964,7.960,7.964,7.957,7.955,7.955,7.953,7.963,7.952,7.952,7.960,8.045,7.957,7.960,7.958,7.955,7.948,7.963,7.955,7.913 check_pass_ms_frame=9.495 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r2-new cache_defines=[define BLEND_DWALK 1 ]
+=== r2-base 33e38f1f  --back-to-back 02:51:20 load=1.30
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.063 fps=124.02 ms_frame_median=8.065 pass_ms_frame=8.073,8.067,8.066,8.060,8.065,8.065,8.067,8.059,8.061,8.060,8.061,8.067,8.068,8.064,8.054,8.068,8.077,8.074,8.066,8.019 check_pass_ms_frame=9.509 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r2-base cache_defines=[define BLEND_DWALK 0 ]
+=== done 2 02:51:34
+================ BUILD ID ================
+=========================================
+=== r3-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:51:49 load=1.04
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.947 fps=125.83 ms_frame_median=7.948 pass_ms_frame=7.957,7.945,7.947,7.971,7.944,7.947,7.954,7.946,7.952,7.950,7.953,7.952,7.947,7.942,7.967,7.949,7.939,7.950,7.941,7.892 check_pass_ms_frame=9.457 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r3-new cache_defines=[define BLEND_DWALK 1 ]
+=== r3-aa 33e38f1f  --back-to-back 02:52:03 load=1.03
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.059 fps=124.09 ms_frame_median=8.061 pass_ms_frame=8.064,8.058,8.068,8.060,8.063,8.071,8.056,8.064,8.062,8.060,8.061,8.057,8.061,8.060,8.047,8.055,8.067,8.070,8.064,8.011 check_pass_ms_frame=9.482 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r3-aa cache_defines=[define BLEND_DWALK 0 ]
+=== r3-base 33e38f1f  --back-to-back 02:52:16 load=1.10
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.061 fps=124.05 ms_frame_median=8.064 pass_ms_frame=8.066,8.062,8.064,8.058,8.065,8.068,8.064,8.070,8.068,8.056,8.066,8.062,8.061,8.060,8.067,8.066,8.072,8.054,8.060,8.012 check_pass_ms_frame=9.569 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r3-base cache_defines=[define BLEND_DWALK 0 ]
+=== done 3 02:52:30
+================ BUILD ID ================
+=========================================
+=== r4-base 33e38f1f  --back-to-back 02:52:52 load=0.94
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.059 fps=124.09 ms_frame_median=8.062 pass_ms_frame=8.062,8.071,8.063,8.060,8.051,8.059,8.065,8.058,8.063,8.061,8.063,8.054,8.065,8.062,8.059,8.064,8.063,8.061,8.062,8.004 check_pass_ms_frame=9.517 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r4-base cache_defines=[define BLEND_DWALK 0 ]
+=== r4-aa 33e38f1f  --back-to-back 02:53:06 load=1.11
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.063 fps=124.02 ms_frame_median=8.066 pass_ms_frame=8.072,8.062,8.067,8.062,8.066,8.069,8.062,8.067,8.072,8.073,8.066,8.071,8.059,8.066,8.066,8.071,8.061,8.064,8.058,8.012 check_pass_ms_frame=9.567 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r4-aa cache_defines=[define BLEND_DWALK 0 ]
+=== r4-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:53:20 load=1.40
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.949 fps=125.80 ms_frame_median=7.952 pass_ms_frame=7.945,7.957,7.962,7.976,7.958,7.953,7.959,7.953,7.941,7.953,7.942,7.952,7.955,7.950,7.948,7.946,7.947,7.953,7.943,7.889 check_pass_ms_frame=9.456 raw_md5=1d372b94 gap_ms=0.00 render_
+LEVER r4-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 4 02:53:34
+================ BUILD ID ================
+=========================================
+=== r5-lat-base 33e38f1f   02:53:50 load=1.19
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.4 max_ms=11.1 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t664-r5-lat-base
+LEVER r5-lat-base cache_defines=[define BLEND_DWALK 0 ]
+=== r5-lat-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1  02:53:55 load=1.17
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.9 p50_ms=7.9 min_ms=5.4 max_ms=11.0 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t664-r5-lat-new
+LEVER r5-lat-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 5 02:54:00
+OK matblend_compute: base=['8820795738948860400'] new=['5512001582297800429']
+JIT-HASH OK
+=== drive t664 done rc=0 Tue Oct 13 19:57:10 PDT 2026

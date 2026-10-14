@@ -1,0 +1,27 @@
+================ BUILD ID ================
+  cpp : #124 sha=33e38f1f bin=da1a9401520fb69f t664 33e38f1f BLEND_DWALK A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t664-r1  timeout=400s  worry=600s  ts=2026-10-13T19:49:38-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/blend-dwalk-t664/remote.sh 1 base new aa
+-----------------------------------------
+=== r1-base 33e38f1f  --back-to-back 02:49:41 load=1.80
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.068 fps=123.95 ms_frame_median=8.064 pass_ms_frame=8.069,8.056,8.063,8.060,8.071,8.066,8.067,8.064,8.205,8.065,8.066,8.069,8.065,8.062,8.067,8.061,8.051,8.064,8.063,8.003 check_pass_ms_frame=9.577 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.068
+TTW_TIMING b2b_ms_frame_median=8.064
+LEVER r1-base cache_defines=[define BLEND_DWALK 0 ]
+=== r1-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:49:55 load=2.00
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.955 fps=125.71 ms_frame_median=7.954 pass_ms_frame=7.950,7.952,7.949,7.953,7.952,7.955,7.949,8.023,7.966,7.958,7.959,7.960,7.953,7.960,7.952,7.955,7.952,7.957,7.955,7.890 check_pass_ms_frame=9.421 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=7.955
+TTW_TIMING b2b_ms_frame_median=7.954
+LEVER r1-new cache_defines=[define BLEND_DWALK 1 ]
+=== r1-aa 33e38f1f  --back-to-back 02:50:08 load=2.01
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.059 fps=124.08 ms_frame_median=8.060 pass_ms_frame=8.062,8.052,8.065,8.072,8.058,8.067,8.059,8.057,8.061,8.067,8.060,8.066,8.061,8.060,8.058,8.059,8.056,8.062,8.071,8.009 check_pass_ms_frame=9.565 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.059
+TTW_TIMING b2b_ms_frame_median=8.060
+LEVER r1-aa cache_defines=[define BLEND_DWALK 0 ]
+=== done 1 02:50:22
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t664/tmp/ttw-state/logs/t664-r1-20261013-194934.log

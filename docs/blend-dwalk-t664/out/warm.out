@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=33e38f1f bin=da1a9401520fb69f t664 33e38f1f BLEND_DWALK A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t664-warm  timeout=400s  worry=600s  ts=2026-10-13T19:48:25-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/blend-dwalk-t664/remote.sh 0 base new
+-----------------------------------------
+=== r0-base 33e38f1f  --back-to-back 02:48:26 load=0.74
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.060 fps=124.07 ms_frame_median=8.064 pass_ms_frame=8.067,8.064,8.065,8.067,8.069,8.064,8.044,8.067,8.066,8.061,8.061,8.063,8.060,8.057,8.073,8.064,8.062,8.061,8.061,8.006 check_pass_ms_frame=9.488 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=8.060
+TTW_TIMING b2b_ms_frame_median=8.064
+LEVER r0-base cache_defines=[define BLEND_DWALK 0 ]
+=== r0-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1 --back-to-back 02:48:59 load=1.31
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.953 fps=125.73 ms_frame_median=7.957 pass_ms_frame=7.950,7.958,7.957,7.953,7.959,7.955,7.959,7.958,7.959,7.960,7.957,7.957,7.957,7.962,7.952,7.939,7.955,7.958,7.957,7.906 check_pass_ms_frame=9.492 raw_md5=1d372b94 gap_ms=0.00 render_
+TTW_TIMING b2b_ms_frame=7.953
+TTW_TIMING b2b_ms_frame_median=7.957
+LEVER r0-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 0 02:49:31
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t664/tmp/ttw-state/logs/t664-warm-20261013-194824.log

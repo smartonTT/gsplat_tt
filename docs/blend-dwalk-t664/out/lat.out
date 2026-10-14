@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #124 sha=33e38f1f bin=da1a9401520fb69f t664 33e38f1f BLEND_DWALK A/B (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t664-lat  timeout=400s  worry=600s  ts=2026-10-13T19:53:45-0700
+cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/blend-dwalk-t664/remote.sh 5 lat-base lat-new
+-----------------------------------------
+=== r5-lat-base 33e38f1f   02:53:50 load=1.19
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.0 p50_ms=8.0 min_ms=5.4 max_ms=11.1 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t664-r5-lat-base
+TTW_TIMING ms_view=7.994
+LEVER r5-lat-base cache_defines=[define BLEND_DWALK 0 ]
+=== r5-lat-new 33e38f1f GSPLAT_TT_BLEND_DWALK=1  02:53:55 load=1.17
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.9 p50_ms=7.9 min_ms=5.4 max_ms=11.0 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t513/tmp/t664-r5-lat-new
+TTW_TIMING ms_view=7.887
+LEVER r5-lat-new cache_defines=[define BLEND_DWALK 1 ]
+=== done 5 02:54:00
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t664/tmp/ttw-state/logs/t664-lat-20261013-195343.log

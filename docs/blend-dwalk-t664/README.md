@@ -41,3 +41,32 @@ issue-bound (t219 F, t646 SWAP_FILL -0.163 ms for 4 NOP slots).
 `ttp detach t664 -- docs/blend-dwalk-t664/drive.sh <rev>`; arms base (defaults, DWALK 0) /
 new (GSPLAT_TT_BLEND_DWALK=1) / aa (base again, same JIT cache), 4 rotated b2b rounds.
 Results: see RESULT below (filled in after the run).
+
+## RESULT (t679, from the t664 drive on bh-33 p100, 2026-10-13 19:34-19:57 PDT)
+
+Code: 33e38f1f (= best-iter-229 + DWALK, parent is best-iter-229 exactly), on
+ttp/t679-r1-at-229. One build, arms differ only by GSPLAT_TT_BLEND_DWALK (JIT define).
+render/run.py --back-to-back, 30 bicycle views, 20 passes, 4 rotated rounds (r0 = warm-up).
+
+| round | base (DWALK 0) | new (DWALK 1) | aa (base again) |
+|---|---|---|---|
+| r1 | 8.068 | 7.955 | 8.059 |
+| r2 | 8.063 | 7.960 | 8.065 |
+| r3 | 8.061 | 7.947 | 8.059 |
+| r4 | 8.059 | 7.949 | 8.063 |
+| mean | **8.063** | **7.953** | 8.062 |
+| spread (max-min) | 0.009 | 0.013 | 0.006 |
+
+b2b delta new - base: **-0.110 ms/view (-1.4 %, 124.0 -> 125.7 FPS)**. A/A delta -0.001,
+A/A spread 0.006, so the delta is ~10x the same-day noise. Every round of new is below every
+round of base and aa. Paper projection was -0.15 (got 73 % of it).
+Latency (no --dump-views, secondary): 7.994 -> 7.887 ms/view (-0.107).
+JIT check (opt/ab_jit_check.py): JIT-HASH OK (matblend_compute base 8820795738948860400,
+new 5512001582297800429; only the blend kernel differs).
+Correctness: raw_md5 1d372b94 in every arm; 30-view sweep md5 077caaba (= best-iter-229),
+0 of 30 views differ; hero opt/metal-screenshots/ttw-t664/hero.png + hero_diff10.png,
+PSNR 42.85 dB vs benchmarks/reference_v2/hero.png, golden match, max 0 LSB. Hero inspected
+by eye: no tile seams or block artifacts; diff shows only edge detail (spokes), as before.
+Outputs: docs/blend-dwalk-t664/out/ (drive.log, r1-r4.out, lat.out, shot.out, jit-*).
+
+Verdict: KEEP (needs review; then flip the default to 1 and land as the next iteration).
