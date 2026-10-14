@@ -189,7 +189,8 @@ if [ "$TRANSPORT" = tar ]; then
     || die "remote md5 listing on $HOST:$DIR failed" 4
   LC_ALL=C comm -23 "$LIST.lmd5" "$LIST.rmd5" | cut -f2- > "$LIST.send"
   n=$(wc -l < "$LIST.send" | tr -d ' ')
-  b=$(cd "$STAGE" && tr '\n' '\0' < "$LIST.send" | xargs -0 cat 2>/dev/null | wc -c | tr -d ' ')
+  # Sizes of what goes (links count as their name): a dangling link must not fail the count under pipefail.
+  b=$(cd "$STAGE" && python3 -c 'import os,sys; print(sum(len(os.readlink(p)) if os.path.islink(p) else os.path.getsize(p) for p in sys.stdin.read().split("\n") if os.path.lexists(p)))' < "$LIST.send")
   if [ "$MODE" = dry ]; then
     sed 's/^/would send: /' "$LIST.send"
     echo "[sync_remote] dry run $HOST:$DIR: would send $n of $NT files, $b bytes"
