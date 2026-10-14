@@ -270,7 +270,7 @@ static_assert(TT_OP_SFPLOADI(0, 8, 0) == K_LOAD_HI, "SFPLOADI UPPER word (bwd_re
 constexpr uint32_t dr_addr(uint32_t i) { return 2u * i; }
 #define BWD_STAGE(k, dr)                                         \
     do {                                                         \
-        const uint32_t lo_ = w[2 * (k)], hi_ = w[2 * (k) + 1];   \
+        const uint32_t lo_ = a[2 * (k)], hi_ = a[2 * (k) + 1];   \
         ib[0] = lo_;                                             \
         ib[0] = hi_;                                             \
         TTI_SFPSTORE(0, 0, 7, dr_addr(dr));                      \
@@ -279,9 +279,18 @@ constexpr uint32_t dr_addr(uint32_t i) { return 2u * i; }
 // Stage the pair scalars from the record page, free the page for UNPACK, zero the term sums.
 inline uint32_t bwd_stage_record(uint32_t ra) {
     asm volatile("fence" ::: "memory");
-    // Plain loads: the compiler may issue them ahead of the instruction-buffer stores.
-    const uint32_t* w = reinterpret_cast<const uint32_t*>(ra);
     volatile uint32_t* ib = ckernel::instrn_buffer;
+#if BWD_PRESTAGE == 2
+    // All 25 L1 loads back to back before the first instruction-buffer store, as
+    // bwd_read_record does for its 13 (mode 1 interleaves them and measured slower).
+    const volatile uint32_t* vw = reinterpret_cast<const volatile uint32_t*>(ra);
+    uint32_t a[REC_MASK_W + 1];
+#pragma GCC unroll 25
+    for (uint32_t k = 0; k <= REC_MASK_W; k++) a[k] = vw[k];
+#else
+    // Plain loads: the compiler may issue them ahead of the instruction-buffer stores.
+    const uint32_t* a = reinterpret_cast<const uint32_t*>(ra);
+#endif
     BWD_STAGE(0, DR_S + 0);
     BWD_STAGE(1, DR_S + 1);
     BWD_STAGE(2, DR_S + 2);
@@ -294,7 +303,7 @@ inline uint32_t bwd_stage_record(uint32_t ra) {
     BWD_STAGE(9, DR_P0);
     BWD_STAGE(10, DR_LX);
     BWD_STAGE(11, DR_LY);
-    const uint32_t mask = w[REC_MASK_W];
+    const uint32_t mask = a[REC_MASK_W];
     asm volatile("" ::: "memory");  // every page read before the page goes back to UNPACK
     ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, 1u);
     using namespace sfpi;

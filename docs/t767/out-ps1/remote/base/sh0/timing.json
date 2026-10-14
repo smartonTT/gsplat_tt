@@ -1,0 +1,1 @@
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "cores": 4, "max_core_recs": 21, "device_ms_first": 2225.1501, "device_ms_min": 0.0609, "device_ms_med": 0.0678, "host_reduce_ms": 0.0001, "reps": 3, "stats": 1, "prestage": 0, "version": "v2"}

@@ -1,0 +1,209 @@
+SSH_PREFLIGHT=ok
+=== t767 fbc13ee478987946eda8bffbc56d7ea71510acb6=fbc13ee478987946eda8bffbc56d7ea71510acb6 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 11:55:50 PDT 2026
+sync rc=0
+[sync_remote] fbc13ee478987946eda8bffbc56d7ea71510acb6 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t767: 1187 files, 65127393 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 44 of 1189 files, 856687 bytes (tar)
+STAMP remote=fbc13ee478987946eda8bffbc56d7ea71510acb6 local=fbc13ee478987946eda8bffbc56d7ea71510acb6 MATCH
+=== build 11:56:25
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:90:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+   90 |     want = std::max<uint32_t>(1, std::min<uint32_t>({want, grid.x * grid.y, std::max<uint32_t>(n_tiles, 1)}));
+      |                                                            ~~~~~~~^~~~~~~~
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:90:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+[2/2] Linking CXX executable blend_bwd_bench
+build rc=0
+=== push inputs 11:56:32
+push hero.npz rc=0
+push s1.npz rc=0
+push s2.npz rc=0
+4cd991367631f0a2b9f45dd15c2e7dcd  hero.npz
+4630304daef1b7a7cb463c35fbea36e5  s1.npz
+d5f5b75c6df6da31ed77ac19c317ca06  s2.npz
+prep sh0 rc=0
+prep sh3 rc=0
+prep s1 rc=0
+prep s2 rc=0
+prep hero rc=0
+2026-10-14 18:59:41.043 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 18:59:41.043 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 18:59:41.043 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+734d6d8efed6a63eceefc0035a5efd19  tmp/t767/base/sh0/slots.f32
+run base sh0 -> tmp/t767/base/sh0 rc=0
+2026-10-14 18:59:45.543 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 18:59:45.543 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 18:59:45.543 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+35a9eb6d288ecf5a0e0dda17dbbcb606  tmp/t767/base/sh3/slots.f32
+run base sh3 -> tmp/t767/base/sh3 rc=0
+2026-10-14 18:59:50.344 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 18:59:50.344 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 18:59:50.344 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+ebf4dfcb51ad08049f01923e06ec429d  tmp/t767/base/s1/slots.f32
+run base s1 -> tmp/t767/base/s1 rc=0
+2026-10-14 18:59:54.945 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 18:59:54.945 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 18:59:54.945 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+48669462eaeca91798e6ef2a5dc0024e  tmp/t767/base/s2/slots.f32
+run base s2 -> tmp/t767/base/s2 rc=0
+2026-10-14 19:00:03.346 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:00:03.346 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:00:03.346 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+4671a6860eb17cddb98c52e144a311d6  tmp/t767/cand/sh0/slots.f32
+run cand sh0 -> tmp/t767/cand/sh0 rc=0
+2026-10-14 19:00:07.846 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:00:07.846 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:00:07.846 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+a9ded8c0ff36a8cc587948d6af0c7878  tmp/t767/cand/sh3/slots.f32
+run cand sh3 -> tmp/t767/cand/sh3 rc=0
+2026-10-14 19:00:12.447 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:00:12.447 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:00:12.447 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+51d8b26b3d5f56037fa60d243408fe83  tmp/t767/cand/s1/slots.f32
+run cand s1 -> tmp/t767/cand/s1 rc=0
+2026-10-14 19:00:17.047 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:00:17.048 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:00:17.048 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+30bb3d522acdcd74a799a477741d461f  tmp/t767/cand/s2/slots.f32
+run cand s2 -> tmp/t767/cand/s2 rc=0
+same9 tmp/t767/base/sh0 tmp/t767/cand/sh0 slots 74 identical
+check sh0 base rc=0
+05, "per_term": {"dmx": 1.7047779242623994e-05, "dmy": 0.00012742471019980194, "dA": 3.209390820179437e-06, "dB": 1.749279070264653e-05, "dC": 1.874854560914576e-05, "dop": 7.703000501478388e-06, "dr": 3.793160071960973e-05, "dg": 1.4896332981168743e-05, "db": 1.4411581671088403e-05}, "pass": true}
+check sh0 cand rc=0
+05, "per_term": {"dmx": 1.7047779242623994e-05, "dmy": 0.00012742471019980194, "dA": 3.209390820179437e-06, "dB": 1.749279070264653e-05, "dC": 1.874854560914576e-05, "dop": 7.703000501478388e-06, "dr": 3.793160071960973e-05, "dg": 1.4896332981168743e-05, "db": 1.4411581671088403e-05}, "pass": true}
+same9 tmp/t767/base/sh3 tmp/t767/cand/sh3 slots 74 identical
+check sh3 base rc=0
+6, "per_term": {"dmx": 1.0462707423174665e-05, "dmy": 1.2137195388906083e-05, "dA": 1.2924113681197851e-05, "dB": 4.792300854698595e-06, "dC": 5.612381597049546e-06, "dop": 0.00012752916746640766, "dr": 3.260414788452915e-05, "dg": 1.6596885433433856e-05, "db": 2.378394851441097e-06}, "pass": true}
+check sh3 cand rc=0
+6, "per_term": {"dmx": 1.0462707423174665e-05, "dmy": 1.2137195388906083e-05, "dA": 1.2924113681197851e-05, "dB": 4.792300854698595e-06, "dC": 5.612381597049546e-06, "dop": 0.00012752916746640766, "dr": 3.260414788452915e-05, "dg": 1.6596885433433856e-05, "db": 2.378394851441097e-06}, "pass": true}
+same9 tmp/t767/base/s1 tmp/t767/cand/s1 slots 7975 identical
+check s1 base rc=0
+894398, "per_term": {"dmx": 0.003786171360188257, "dmy": 0.0026810441341111307, "dA": 0.00046791183204193383, "dB": 0.0010361191361894398, "dC": 0.0011927506856107644, "dop": 0.0024725797379565907, "dr": 0.0011984385636142252, "dg": 0.0007976429367216794, "db": 0.0008562342466498631}, "pass": true}
+check s1 cand rc=0
+894398, "per_term": {"dmx": 0.003786171360188257, "dmy": 0.0026810441341111307, "dA": 0.00046791183204193383, "dB": 0.0010361191361894398, "dC": 0.0011927506856107644, "dop": 0.0024725797379565907, "dr": 0.0011984385636142252, "dg": 0.0007976429367216794, "db": 0.0008562342466498631}, "pass": true}
+same9 tmp/t767/base/s2 tmp/t767/cand/s2 slots 35052 identical
+check s2 base rc=0
+98406727, "per_term": {"dmx": 0.0032790830254711568, "dmy": 0.0035544982196558063, "dA": 0.0018641591645978802, "dB": 0.0013447992336137276, "dC": 0.0014098447444440608, "dop": 0.004071561496474461, "dr": 0.0019994201853623873, "dg": 0.003695954812457392, "db": 0.0037909257523040508}, "pass": true}
+check s2 cand rc=0
+98406727, "per_term": {"dmx": 0.0032790830254711568, "dmy": 0.0035544982196558063, "dA": 0.0018641591645978802, "dB": 0.0013447992336137276, "dC": 0.0014098447444440608, "dop": 0.004071561496474461, "dr": 0.0019994201853623873, "dg": 0.003695954812457392, "db": 0.0037909257523040508}, "pass": true}
+=== round 1 base 12:00:57
+2026-10-14 19:01:03.654 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:03.654 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:03.654 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+97f7d6b4048679ca9455da57df211140  tmp/t767/base/hero-r1/slots.f32
+run base hero -> tmp/t767/base/hero-r1 rc=0
+=== round 1 cand 12:01:04
+2026-10-14 19:01:09.855 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:09.855 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:09.855 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+881371c5b49dd234e9d53f3a3d8fa4d3  tmp/t767/cand/hero-r1/slots.f32
+run cand hero -> tmp/t767/cand/hero-r1 rc=0
+same9 tmp/t767/base/hero-r1 tmp/t767/cand/hero-r1 slots 4478225 identical
+=== round 2 cand 12:01:17
+2026-10-14 19:01:22.957 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:22.957 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:22.957 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+7370bc795611ff1db22622091ef1953e  tmp/t767/cand/hero-r2/slots.f32
+run cand hero -> tmp/t767/cand/hero-r2 rc=0
+=== round 2 base 12:01:23
+2026-10-14 19:01:29.158 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:29.158 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:29.158 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+72c8c0f06353336508cc6c56295da730  tmp/t767/base/hero-r2/slots.f32
+run base hero -> tmp/t767/base/hero-r2 rc=0
+same9 tmp/t767/base/hero-r2 tmp/t767/cand/hero-r2 slots 4478225 identical
+=== round 3 base 12:01:36
+2026-10-14 19:01:42.260 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:42.260 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:42.260 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+0b3048765efa44100999e32c07797f06  tmp/t767/base/hero-r3/slots.f32
+run base hero -> tmp/t767/base/hero-r3 rc=0
+=== round 3 cand 12:01:42
+2026-10-14 19:01:48.661 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:01:48.661 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:01:48.661 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+d62d3b2ca44a28ea47685de8d8b7b58c  tmp/t767/cand/hero-r3/slots.f32
+run cand hero -> tmp/t767/cand/hero-r3 rc=0
+same9 tmp/t767/base/hero-r3 tmp/t767/cand/hero-r3 slots 4478225 identical
+=== round 4 cand 12:01:56
+2026-10-14 19:02:01.962 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:02:01.962 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:02:01.962 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+27c1aadd80ab494256596eddfe023c7f  tmp/t767/cand/hero-r4/slots.f32
+run cand hero -> tmp/t767/cand/hero-r4 rc=0
+=== round 4 base 12:02:02
+2026-10-14 19:02:08.163 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:02:08.163 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:02:08.163 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+9d1bb8faf67cdbda0cbd52d0f4e9505d  tmp/t767/base/hero-r4/slots.f32
+run base hero -> tmp/t767/base/hero-r4 rc=0
+same9 tmp/t767/base/hero-r4 tmp/t767/cand/hero-r4 slots 4478225 identical
+=== round 5 base 12:02:15
+2026-10-14 19:02:21.166 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:02:21.166 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:02:21.166 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+b2806f1a95504374c93e6daf9abc00fe  tmp/t767/base/hero-r5/slots.f32
+run base hero -> tmp/t767/base/hero-r5 rc=0
+=== round 5 cand 12:02:21
+2026-10-14 19:02:27.366 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 19:02:27.366 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 19:02:27.366 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+2d037f7d66d21b979eca331d2d43ad67  tmp/t767/cand/hero-r5/slots.f32
+run cand hero -> tmp/t767/cand/hero-r5 rc=0
+same9 tmp/t767/base/hero-r5 tmp/t767/cand/hero-r5 slots 4478225 identical
+base c3d4de637d907df353cdc5a0d637b20b  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc0/trisc0.elf
+base 3945992a02263efef122ee2819424186  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc0/trisc0.elf.xip.elf
+base df77874ae308130ac313730a0381f400  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc1/trisc1.elf
+base acd05edefa6be79cbf31689036db0485  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc1/trisc1.elf.xip.elf
+base a6b3b6e2d45b441cc7346f8dd9de8d19  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc2/trisc2.elf
+base 6975d83e517854ab9f5dc0232fc3e5c1  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc2/trisc2.elf.xip.elf
+base f7a837ff3c0edb51c47b9390ed9cba59  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/bwd_reader/6469185264836783164/ncrisc/ncrisc.elf
+base 8723cbc51e76e32c7ae6a1678e60cc58  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/bwd_reader/6469185264836783164/ncrisc/ncrisc.elf.xip.elf
+base 90c14b56d458e95a540e2e40088e59df  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/bwd_writer/4718462697933434136/brisc/brisc.elf
+base a793c81044be561218d47e688cb0f1f0  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/bwd_writer/4718462697933434136/brisc/brisc.elf.xip.elf
+base 823ac875fd6addd8df3eba6382d0c85e  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch/15814219290632870069/brisc/brisc.elf
+base bc2d8719d0fbbc1f4f90cb5e397e0f09  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch/15814219290632870069/brisc/brisc.elf.xip.elf
+base 2ecfe38a6e79c36dc36a643bc8b85020  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate/2724214083921370862/ncrisc/ncrisc.elf
+base a758f69c57fcdc2a2ea598825d4b4a7c  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate/2724214083921370862/ncrisc/ncrisc.elf.xip.elf
+base 5ddb1388c159b4099a054ddb540be978  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc0/trisc0.elf
+base dea98447ca4c556d274fa0947c503c93  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc0/trisc0.elf.xip.elf
+base 43dcf6d663523416de4ed362d867f2d3  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc1/trisc1.elf
+base 22b153182474ed52800111d2cc10fc1c  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc1/trisc1.elf.xip.elf
+base 128542e8efdd7b5fb814bbc1d593df10  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc2/trisc2.elf
+base 4193c1fa914cf7854969a4c95700e0f4  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc2/trisc2.elf.xip.elf
+base 049685c3b7bf770c3edb54b5bb5f0bc5  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_prefetch/8241249358545956802/brisc/brisc.elf
+base 2beb5190274764414f9bde59835a7160  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_prefetch/8241249358545956802/brisc/brisc.elf.xip.elf
+base 56b37cfe4106ae6f3461149fe5c77275  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler/1903584799436068125/brisc/brisc.elf
+base 38fae83d58e6305354cdb36f6e3e9523  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler/1903584799436068125/brisc/brisc.elf.xip.elf
+base e84e2aae5b4abdc99baa524c7c528c49  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler_push/1660497601197208601/ncrisc/ncrisc.elf
+base cfe09e4bac9b45717a7a7f0712cc13db  /localdev/smarton/.cache/ttmc-t767-base/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler_push/1660497601197208601/ncrisc/ncrisc.elf.xip.elf
+cand 395c00aff5fce18b3b501144d5691eb3  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc0/trisc0.elf
+cand 5e0655064adbca96490e3bf9082ef8f6  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc0/trisc0.elf.xip.elf
+cand 6fb897549fb99f33e9e1d74e14b4fea3  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc1/trisc1.elf
+cand 1ca57371995f2d1025b48976a3563f8d  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc1/trisc1.elf.xip.elf
+cand 1d6a66ef1e69451a2b8a661b4521f24c  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc2/trisc2.elf
+cand d1c3bc8801465c118d067a674ca101a9  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/6582188127046739720/trisc2/trisc2.elf.xip.elf
+cand 57b1886ac1bb8f16a91a301e13c4d490  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/bwd_reader/7019041487773361120/ncrisc/ncrisc.elf
+cand f5c035563887c9ba434fa14438de610b  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/bwd_reader/7019041487773361120/ncrisc/ncrisc.elf.xip.elf
+cand be6d85c13b82d6e04dedcc6e5559e4bb  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/bwd_writer/4718462697933434136/brisc/brisc.elf
+cand 86222162fa9a38903d5e7448e27eb329  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/bwd_writer/4718462697933434136/brisc/brisc.elf.xip.elf
+cand 889b14fbf65c074c566167b3e3e95803  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch/15814219290632870069/brisc/brisc.elf
+cand 73e33662672027dafc285426fef11368  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch/15814219290632870069/brisc/brisc.elf.xip.elf
+cand 597227ade23507804bee4d86742d2457  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate/2724214083921370862/ncrisc/ncrisc.elf
+cand 9497d73ed1850fdcf8428fab1c2b4d1c  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate/2724214083921370862/ncrisc/ncrisc.elf.xip.elf
+cand 60fee9ee69275a410b7d315f5635e134  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc0/trisc0.elf
+cand cb3b8e1e53771e6974918885779962db  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc0/trisc0.elf.xip.elf
+cand f8b52e3195bb28633da9474c0bd6abe0  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc1/trisc1.elf
+cand 18d8dfabf94485161cbd15030f18a601  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc1/trisc1.elf.xip.elf
+cand a9177511bbade8df57eb7dbc7d7bbdf9  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc2/trisc2.elf
+cand 3317dcca52281fafaaff935934b62167  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_dispatch_subordinate_compute/1662188317050039273/trisc2/trisc2.elf.xip.elf
+cand 56c95499ca2b4df7e462ed9dbdab48e0  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_prefetch/8241249358545956802/brisc/brisc.elf
+cand 5f0a3b7751f3cc7d33ad33452949cd29  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_prefetch/8241249358545956802/brisc/brisc.elf.xip.elf
+cand b4bda37fade2c91f85360c0da0180ea0  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler/1903584799436068125/brisc/brisc.elf
+cand b39541e47bf439180a8b071bf7d5ca7c  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler/1903584799436068125/brisc/brisc.elf.xip.elf
+cand ceb9d4284ce6f460298a173fa7ee4364  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler_push/1660497601197208601/ncrisc/ncrisc.elf
+cand 1f3d195ceecac17a48bcbb53ce9c05fb  /localdev/smarton/.cache/ttmc-t767-cand/tt-metal-cache12024140084721722581/kernels/cq_realtime_profiler_push/1660497601197208601/ncrisc/ncrisc.elf.xip.elf
+jit+rm rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t767 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t767/docs/t767/out/remote: 109 entries (tar)
+pull rc=0
+rm t767 rc=0
+=== done Wed Oct 14 12:03:19 PDT 2026
