@@ -188,6 +188,53 @@ Note: the hero forward's PSNR against the JPG is 13.1 dB (`hero_meta.json`), far
 trained model's ~25 dB on this view. The camera or colour path of the dump may not match the
 dataset image; the oracle check does not depend on it, but a training step would.
 
+### After the centred-power fix: the last failing slot is a T_min tie (#728, 2026-10-14)
+
+Device run of d951e19c on bh-49 (p150a, board 0): sh0 / sh3 / s1 / s2 pass at 3.7e-5 / 1.0e-4 /
+1.0e-3 / 1.6e-3 (`results/check-*-v2c-p150.json`). The hero went from 49.4 to 0.0278, still over
+the 1e-2 bar (`results/check-hero-v2c-p150.json`).
+
+Float64 reference of the same math on the same fp32 inputs (`hero_f64.py`,
+`results/f64-hero-v2c-p150.json`), max rel err with the floor at 1e-4 of the largest term:
+device vs float64 0.0277, fp32 oracle vs float64 0.0087. Across 35.8M terms the device is over
+1e-2 in exactly one slot: 3654796, Gaussian 1521283 (a needle 335,907 px off the tile, opacity
+1.0) at rank 59 of tile 203. Its dA, dB, dmx, dmy and dopacity are all 0.972x the reference and
+its colour terms 0.998x, so dL/dalpha moved, not one moment.
+
+Cause: at that pair, pixel (11, 27) has T (1 - alpha) only 9.7e-8 (relative) above t_min, under one
+fp32 ulp. The device's fp32 product rounds below t_min and stops the pixel; the references keep it
+live. That is a discontinuity in the forward's own rule, not a kernel bug: replaying tile 203 in
+float64 with only that one stop decision flipped gives dopacity 6.0169e-9 / dr 2.17638e-9 / dA
+-339.43, against the device's 6.0179e-9 / 2.17638e-9 / -339.48 (`tmp/t728/flip.py`, not committed).
+The next-worst device slot is 0.0094 against float64, within the bar.
+
+Oracle change (bd36d918): `ref_slots_fast(..., ties=True)` flags each slot where the pair, or an
+earlier pair at one of its pixels, made a forward decision (alpha >= alpha_min, the alpha_max
+clamp, the T_min stop) within `TIE_RTOL` = 4e-6 (~32 ulp) of its threshold. Such a slot has two
+valid values, so `check --fast` and `hero_ties.py` leave it out of rel_err and report how many
+were skipped plus `rel_err_all`. Unit test `test_fast_ref_flags_threshold_ties`. Nothing is
+approximated: the device output is unchanged.
+
+Timing after the fix (`results/timing-hero-v2c-p150.json`, REPS=8): first 108.40 ms, warm runs
+89.096-89.108 ms, **median of 7 warm 89.10 ms** (was 86.32 ms, +3.2%). Per-stage split
+(`results/stats-hero-v2c-p150.json`, busiest core 107, 41,398 pairs, 492,267 bodies):
+
+| stage | busiest core ms (before fix) | after | mean core ms after |
+|---|---|---|---|
+| total | 86.28 | 89.04 | 53.31 |
+| tile setup | 0.04 | 0.04 | 0.02 |
+| record wait | 0.67 | 0.62 | 0.59 |
+| pair setup | 4.35 | 5.30 | 5.20 |
+| bodies | 77.65 | 79.52 | 44.05 |
+| finish | 3.50 | 3.48 | 3.37 |
+| pack sync | 0.08 | 0.08 | 0.08 |
+
+The bodies grew from 213 to 218 cycles (2 more Dst loads and a subtract for the centred power);
+pair setup grew 0.95 ms (P0, Lx, Ly staged into Dst). JIT check: the before arm's cache
+(#707) was gone from bh-49 by this run, so `opt/ab_jit_check.py` could not be run on both arms;
+the after arm has one blend_bwd_compute hash (`results/jit-hero-v2c-p150.txt`), and the
+kernel source differs between the arms (d951e19c), as do their outputs (hero 49.4 vs 0.028).
+
 ## Footprint (v2, analytic from the code)
 
 L1 per core (CBs): HDR 2x64 B, PLANE 5x4 KB, RAMP 2x4 KB, REC 4x64 B, OUT 2x4 KB, writer

@@ -1,0 +1,4 @@
+2026-10-14 10:53 /localdev/smarton/.cache/ttmc-t693/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc0
+2026-10-14 10:53 /localdev/smarton/.cache/ttmc-t693/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc1
+2026-10-14 10:53 /localdev/smarton/.cache/ttmc-t693/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710/trisc2
+2026-10-14 10:54 /localdev/smarton/.cache/ttmc-t693/tt-metal-cache12024140084721722581/kernels/blend_bwd_compute/11722400452286732710
