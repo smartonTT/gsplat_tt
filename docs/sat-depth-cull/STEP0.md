@@ -2,16 +2,16 @@
 
 Date: 2026-10-13 (PDT). CPU only, no device. Code: `docs/sat-depth-cull/{step0.py,satcull.c,aggregate.py}`.
 
-## Verdict: **@VERDICT@**
+## Verdict: **SHELVE (best net -0.001 ms/view, oracle 0.104; kill line 0.15)**
 
 - Perfect-knowledge bound (oracle: every tile cut exactly at its own saturation depth, no
-  fallback): **@ORACLE_ORBIT@ ms/view** on the 30-view orbit, @ORACLE_TRAIN@ ms/view on the
-  training tour. @ORACLE_LINE@
-- Real predictor (previous view reprojected): best arm nets **@BEST_NET@ ms/view**
-  (@BEST_SET@, @BEST_ARM@). @ARM_LINE@
-- Why it is small: only @TSAT_ORBIT@ of tiles ever reach T < eps on every pixel
-  (@PIXU_ORBIT@ of pixels never do: sky, thin foliage, tile edges against background), and
-  in the tiles that do, few pairs lie past the saturating one (@OSHARE_ORBIT@ of all pairs).
+  fallback): **0.104 ms/view** on the 30-view orbit, 0.102 ms/view on the
+  training tour. Both are below the 0.15 ms/view kill line before any prediction loss.
+- Real predictor (previous view reprojected): best arm nets **-0.001 ms/view**
+  (orbit, m0.0_s1). Orbit arms with negative net (fallback waste exceeds capture): m0.02_s0, m0.02_s1, m0.05_s0, m0.05_s1, m0.0_s0, m0.0_s1.
+- Why it is small: only 14.9% of tiles ever reach T < eps on every pixel
+  (41.4% of pixels never do: sky, thin foliage, tile edges against background), and
+  in the tiles that do, few pairs lie past the saturating one (1.61% of all pairs).
   The blend's per-microblock live mask (blend-waste-t148) already skips most dispatch work for
   those pairs, so the true per-pair saving is below the cost model used here.
 
@@ -37,19 +37,45 @@ Date: 2026-10-13 (PDT). CPU only, no device. Code: `docs/sat-depth-cull/{step0.p
 - Cost per pair (generous upper bound): at best-iter-229 (1-chip b2b 8.063 ms/view) the
   pair-proportional stages are K2/sort 1.33 + mat 1.33 + blend 3.79 = 6.45 ms/view
   (docs/training-view/ANALYSIS.md, ttp/t668-training-view-analysis), divided by the orbit's mean
-  CPU pair count: **@NSPP@ ns/pair**. A culled pair is credited with all three stages.
+  CPU pair count: **2.74 ns/pair**. A culled pair is credited with all three stages.
 - Camera sets: `benchmarks/cameras_v2.json` (30-view orbit, 1024x1024, the headline set; hero
   then orb_00..orb_28, steps ~2 deg after the first 18 deg jump) and
   `benchmarks/cameras_train_nn.json` (ttp/t667-training-bench: the dataset's 169 training views
-  in greedy nearest-neighbour order, 1237x822, dataset intrinsics), first @TRAIN_N@ views.
-  The orbit is the ~2 deg tour; the NN tour's median step is @TRAIN_STEP@ deg.
+  in greedy nearest-neighbour order, 1237x822, dataset intrinsics), first 43 views.
+  The orbit is the ~2 deg tour; the NN tour's median step is 14.5 deg.
 
 ## Results
 
 Raw output of `python3 docs/sat-depth-cull/aggregate.py <out>` (per-view JSON in `evidence/`):
 
 ```
-@AGG@
+cost per pair (upper bound): 6.45 ms / 2,351,151 pairs = 2.743 ns/pair
+
+## orbit: 30 views, mean pairs 2,351,151, median step 3.20 deg
+tiles fully saturated: 14.922%; pixels never below eps: 41.439%
+oracle: pairs behind tile saturation 1.611% = 0.1039 ms/view (of which inside the 512-period live-mask lag 0.542%)
+| margin, slack | tiles cut/view | fallback rate | captured pairs | wasted pairs | net ms/view |
+|---|---|---|---|---|---|
+| m0.02_s0 | 124.7 | 15.3% | 0.563% (of behind 34.9%) | 4.289% | -0.2395 |
+| m0.02_s1 | 33.4 | 0.8% | 0.008% (of behind 0.5%) | 0.032% | -0.0016 |
+| m0.05_s0 | 124.7 | 11.2% | 0.368% (of behind 22.8%) | 2.892% | -0.1622 |
+| m0.05_s1 | 33.4 | 0.8% | 0.006% (of behind 0.4%) | 0.032% | -0.0017 |
+| m0.0_s0 | 124.7 | 51.9% | 0.522% (of behind 32.4%) | 15.166% | -0.9411 |
+| m0.0_s1 | 33.4 | 0.9% | 0.010% (of behind 0.6%) | 0.033% | -0.0015 |
+
+## train: 43 views, mean pairs 1,849,170, median step 14.55 deg
+tiles fully saturated: 13.529%; pixels never below eps: 43.510%
+oracle: pairs behind tile saturation 2.006% = 0.1018 ms/view (of which inside the 512-period live-mask lag 0.445%)
+| margin, slack | tiles cut/view | fallback rate | captured pairs | wasted pairs | net ms/view |
+|---|---|---|---|---|---|
+| m0.02_s0 | 50.2 | 53.8% | 0.070% (of behind 3.4%) | 3.144% | -0.1556 |
+| m0.02_s1 | 14.9 | 36.6% | 0.003% (of behind 0.1%) | 0.753% | -0.0379 |
+| m0.05_s0 | 50.2 | 50.5% | 0.049% (of behind 2.4%) | 2.928% | -0.1457 |
+| m0.05_s1 | 14.9 | 36.6% | 0.002% (of behind 0.1%) | 0.753% | -0.0380 |
+| m0.0_s0 | 50.2 | 66.4% | 0.063% (of behind 3.1%) | 3.758% | -0.1870 |
+| m0.0_s1 | 14.9 | 37.8% | 0.004% (of behind 0.2%) | 0.781% | -0.0394 |
+
+best net -0.0015 ms/view (orbit m0.0_s1); oracle max 0.1039; verdict shelve
 ```
 
 Columns: tiles cut/view = tiles given a predicted cut; fallback rate = share of those whose
