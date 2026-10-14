@@ -20,3 +20,9 @@ add_executable(risc_microbench risc_microbench.cpp)
 target_compile_definitions(risc_microbench PRIVATE
   "MB_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
 gsplat_link_tt_metal(risc_microbench)
+
+# Task #690 (T7): device training loss bench (L1 step; fused D-SSIM to follow).
+add_executable(loss_bench loss_bench.cpp)
+target_compile_definitions(loss_bench PRIVATE
+  "LOSS_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/loss/\"")
+gsplat_link_tt_metal(loss_bench)
