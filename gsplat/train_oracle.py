@@ -170,9 +170,10 @@ def render(params: dict[str, torch.Tensor], cam: Camera, cfg: RenderConfig,
     colors = torch.where(color_lo, torch.zeros_like(raw_rgb),
                          torch.where(color_hi, torch.ones_like(raw_rgb), raw_rgb))
 
-    # Projection visibility for sparse Adam (3-sigma box overlaps the image).
-    rx = 3.0 * torch.sqrt(a.detach().clamp(min=0.0))
-    ry = 3.0 * torch.sqrt(c.detach().clamp(min=0.0))
+    # Projection visibility for sparse Adam: the 3-sigma box overlaps the image
+    # (project_gaussians' valid mask with opacities=None, max_radius=-1).
+    rx = torch.ceil(3.0 * torch.sqrt(a.detach().clamp(min=0.0)))
+    ry = torch.ceil(3.0 * torch.sqrt(c.detach().clamp(min=0.0)))
     m2 = means2d.detach()
     visible = (valid & (m2[:, 0] + rx > 0) & (m2[:, 0] - rx < W)
                & (m2[:, 1] + ry > 0) & (m2[:, 1] - ry < H))
