@@ -1,0 +1,67 @@
+views 30: M mean 1.695 M, bbox P mean 2.694 M, exact P mean 2.467 M (device t595: M 1.675, P 2.614; hero M 1.880 P 2.896)
+1-chip model mean 8.616 ms (measured 8.451); scale 0.981
+LPT 1-chip mat+blend makespan/mean-core: 1.011; max tile / mean core: 0.660
+
+== mat+blend fixed part per tile (halves with the tiles); device time only, no host join/sync
+top/bottom static 16/16, pfwc culls latency  6.111 (max  6.806)  b2b-decoupled  5.432  imbalance 1.168  cut  27.7%
+top/bottom per-view best row (oracle) latency  5.627 (max  6.035)  b2b-decoupled  5.607  imbalance 1.030  cut  33.4% rows 13-21
+top/bottom previous view's best row latency  5.741 (max  6.347)  b2b-decoupled  5.538  imbalance 1.054  cut  32.1%
+left/right static 16/16, pfwc culls latency  5.768 (max  6.124)  b2b-decoupled  5.617  imbalance 1.040  cut  31.8%
+left/right per-view best row (oracle) latency  5.550 (max  6.033)  b2b-decoupled  5.507  imbalance 1.011  cut  34.3% rows 14-18
+left/right previous view's best row latency  5.655 (max  6.105)  b2b-decoupled  5.501  imbalance 1.031  cut  33.1%
+rows1 interleave, pfwc all M       latency  5.921 (max  6.524)  b2b-decoupled  5.697  imbalance 1.053  cut  29.9%
+rows1 interleave, pfwc culls to chip latency  5.741 (max  6.334)  b2b-decoupled  5.516  imbalance 1.055  cut  32.1%
+rows2 interleave, pfwc all M       latency  5.933 (max  6.515)  b2b-decoupled  5.683  imbalance 1.057  cut  29.8%
+rows2 interleave, pfwc culls to chip latency  5.736 (max  6.297)  b2b-decoupled  5.478  imbalance 1.061  cut  32.1%
+rows4 interleave, pfwc all M       latency  5.957 (max  6.601)  b2b-decoupled  5.711  imbalance 1.070  cut  29.5%
+rows4 interleave, pfwc culls to chip latency  5.766 (max  6.409)  b2b-decoupled  5.501  imbalance 1.078  cut  31.8%
+cols1 interleave, pfwc all M       latency  5.909 (max  6.490)  b2b-decoupled  5.831  imbalance 1.021  cut  30.1%
+cols1 interleave, pfwc culls to chip latency  5.739 (max  6.300)  b2b-decoupled  5.660  imbalance 1.022  cut  32.1%
+checker interleave, pfwc all M     latency  5.909 (max  6.486)  b2b-decoupled  5.837  imbalance 1.020  cut  30.1%
+checker interleave, pfwc culls to chip latency  5.768 (max  6.327)  b2b-decoupled  5.696  imbalance 1.021  cut  31.7%
+checker2 interleave, pfwc all M    latency  5.913 (max  6.497)  b2b-decoupled  5.735  imbalance 1.033  cut  30.0%
+checker2 interleave, pfwc culls to chip latency  5.736 (max  6.302)  b2b-decoupled  5.557  imbalance 1.035  cut  32.1%
+
+== mat+blend fixed part 0.3 ms per view, rest per tile; device time only, no host join/sync
+top/bottom static 16/16, pfwc culls latency  6.332 (max  6.955)  b2b-decoupled  5.679  imbalance 1.164  cut  25.1%
+top/bottom per-view best row (oracle) latency  5.865 (max  6.305)  b2b-decoupled  5.859  imbalance 1.029  cut  30.6% rows 13-21
+top/bottom previous view's best row latency  5.968 (max  6.616)  b2b-decoupled  5.790  imbalance 1.049  cut  29.4%
+left/right static 16/16, pfwc culls latency  5.979 (max  6.392)  b2b-decoupled  5.835  imbalance 1.035  cut  29.3%
+left/right per-view best row (oracle) latency  5.801 (max  6.277)  b2b-decoupled  5.774  imbalance 1.010  cut  31.4% rows 13-18
+left/right previous view's best row latency  5.930 (max  6.381)  b2b-decoupled  5.755  imbalance 1.033  cut  29.8%
+rows1 interleave, pfwc all M       latency  6.190 (max  6.793)  b2b-decoupled  5.955  imbalance 1.054  cut  26.8%
+rows1 interleave, pfwc culls to chip latency  6.010 (max  6.603)  b2b-decoupled  5.774  imbalance 1.056  cut  28.9%
+rows2 interleave, pfwc all M       latency  6.202 (max  6.784)  b2b-decoupled  5.934  imbalance 1.057  cut  26.6%
+rows2 interleave, pfwc culls to chip latency  6.005 (max  6.566)  b2b-decoupled  5.729  imbalance 1.061  cut  28.9%
+rows4 interleave, pfwc all M       latency  6.223 (max  6.870)  b2b-decoupled  5.969  imbalance 1.071  cut  26.4%
+rows4 interleave, pfwc culls to chip latency  6.030 (max  6.678)  b2b-decoupled  5.759  imbalance 1.078  cut  28.6%
+cols1 interleave, pfwc all M       latency  6.179 (max  6.759)  b2b-decoupled  6.095  imbalance 1.021  cut  26.9%
+cols1 interleave, pfwc culls to chip latency  6.009 (max  6.569)  b2b-decoupled  5.925  imbalance 1.022  cut  28.9%
+checker interleave, pfwc all M     latency  6.179 (max  6.755)  b2b-decoupled  6.106  imbalance 1.020  cut  26.9%
+checker interleave, pfwc culls to chip latency  6.038 (max  6.596)  b2b-decoupled  5.966  imbalance 1.020  cut  28.6%
+checker2 interleave, pfwc all M    latency  6.182 (max  6.767)  b2b-decoupled  5.999  imbalance 1.033  cut  26.8%
+checker2 interleave, pfwc culls to chip latency  6.005 (max  6.571)  b2b-decoupled  5.821  imbalance 1.035  cut  28.9%
+
+== mat+blend fixed part per view (does not halve); device time only, no host join/sync
+top/bottom static 16/16, pfwc culls latency  7.165 (max  7.845)  b2b-decoupled  6.588  imbalance 1.149  cut  15.2%
+top/bottom per-view best row (oracle) latency  6.733 (max  7.316)  b2b-decoupled  6.725  imbalance 1.026  cut  20.3% rows 13-22
+top/bottom previous view's best row latency  6.895 (max  7.662)  b2b-decoupled  6.613  imbalance 1.050  cut  18.4%
+left/right static 16/16, pfwc culls latency  6.882 (max  7.387)  b2b-decoupled  6.679  imbalance 1.036  cut  18.6%
+left/right per-view best row (oracle) latency  6.683 (max  7.173)  b2b-decoupled  6.669  imbalance 1.009  cut  20.9% rows 11-18
+left/right previous view's best row latency  6.833 (max  7.387)  b2b-decoupled  6.634  imbalance 1.032  cut  19.1%
+rows1 interleave, pfwc all M       latency  7.134 (max  7.805)  b2b-decoupled  6.894  imbalance 1.048  cut  15.6%
+rows1 interleave, pfwc culls to chip latency  6.954 (max  7.615)  b2b-decoupled  6.713  imbalance 1.050  cut  17.7%
+rows2 interleave, pfwc all M       latency  7.146 (max  7.796)  b2b-decoupled  6.865  imbalance 1.051  cut  15.4%
+rows2 interleave, pfwc culls to chip latency  6.949 (max  7.578)  b2b-decoupled  6.660  imbalance 1.053  cut  17.8%
+rows4 interleave, pfwc all M       latency  7.167 (max  7.882)  b2b-decoupled  6.908  imbalance 1.064  cut  15.2%
+rows4 interleave, pfwc culls to chip latency  6.974 (max  7.690)  b2b-decoupled  6.698  imbalance 1.069  cut  17.5%
+cols1 interleave, pfwc all M       latency  7.123 (max  7.771)  b2b-decoupled  7.041  imbalance 1.018  cut  15.7%
+cols1 interleave, pfwc culls to chip latency  6.953 (max  7.581)  b2b-decoupled  6.871  imbalance 1.018  cut  17.7%
+checker interleave, pfwc all M     latency  7.123 (max  7.767)  b2b-decoupled  7.051  imbalance 1.017  cut  15.7%
+checker interleave, pfwc culls to chip latency  6.982 (max  7.608)  b2b-decoupled  6.910  imbalance 1.018  cut  17.4%
+checker2 interleave, pfwc all M    latency  7.126 (max  7.779)  b2b-decoupled  6.941  imbalance 1.030  cut  15.7%
+checker2 interleave, pfwc culls to chip latency  6.949 (max  7.583)  b2b-decoupled  6.763  imbalance 1.031  cut  17.8%
+
+== per-stage, chip max, left/right static 16/16 (fixed per tile), mean over views, x scale
+  pfwc 1.315  k2 0.162  sort 0.987  mb 3.274  gaps 0.029
+  1-chip: pfwc 1.498  k2 0.273  sort 1.443  mb 5.207

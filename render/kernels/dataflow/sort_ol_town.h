@@ -42,7 +42,7 @@ constexpr uint32_t MAGIC = 0x70E7A202u, MAGIC2 = 0x8F185DFDu;
 // writes FIN (= MAGIC) once it is done with the stream, and the mover clears
 // GO, GO2 and FIN at its end only after all three FIN words are set.
 constexpr uint32_t H_GO = 0, H_GO2 = 1, H_NB = 2, H_READY = 3, H_CAP = 4, H_MSK = 5, H_SH = 6, H_RING = 7,
-                   H_CUR = 8;
+                   H_CUR = 8, H_X0 = 9, H_Y0 = 10;  // H_X0/H_Y0: tile window origin (task #623)
 constexpr uint32_t H_FIN = 12;   // + trisc
 constexpr uint32_t H_DONE = 16;  // + 4 * trisc: batches finished
 constexpr uint32_t H_QWP = 32;   // + 4 * trisc: run words pushed

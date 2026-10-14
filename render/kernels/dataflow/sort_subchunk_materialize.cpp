@@ -29,6 +29,7 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
+#include "tile_window.h"
 #if (defined(OL_MAT_SELECT) && OL_MAT_SELECT) || (defined(SORT_ONELAUNCH) && SORT_ONELAUNCH)
 #include "sort_onelaunch_algo.h"
 #endif
@@ -427,7 +428,9 @@ void kernel_main() {
     const uint32_t work_addr      = get_arg_val<uint32_t>(7);
     const uint32_t work_start     = get_arg_val<uint32_t>(8);
     const uint32_t work_count     = get_arg_val<uint32_t>(9);
-    const uint32_t tiles_x        = get_arg_val<uint32_t>(10);
+    // Task #623: arg 10 may carry a tile window (tile_window::pack).
+    const tile_window::Origin win = tile_window::decode(get_arg_val<uint32_t>(10));
+    const uint32_t tiles_x        = win.w;
     const uint32_t bucket_fit     = get_arg_val<uint32_t>(11);
     // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK2,
     // pre-packed by sort_bucket_emit) + per-tile start slot (sentinel 0xFFFFFFFF
@@ -575,8 +578,8 @@ void kernel_main() {
             sc = w1 & 0xFFu;
             part = (w1 >> 8) & 0xFFu;
         }
-        const uint32_t tx = tile_id % tiles_x;
-        const uint32_t ty = tile_id / tiles_x;
+        const uint32_t tx = tile_id % tiles_x + win.x0;
+        const uint32_t ty = tile_id / tiles_x + win.y0;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
 

@@ -51,6 +51,7 @@
 #include "matblend_fuse.h"
 #include "out_ring.h"
 #include "pair_guard.h"
+#include "split_window.h"
 #include "tile_assign.h"
 
 #include <cstdio>
@@ -785,9 +786,12 @@ static double process_frame_mb_devcull_resident(
         ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
         ctx.res_ramp_uploaded = false;
     }
-    const uint32_t pitch = image_pitch_bytes(tiles_x);
+    // Task #623: a split window writes its tiles into the full-size image.
+    const uint32_t pitch = image_pitch_bytes(gsplat_tt::split_window::image_tiles_x(tiles_x));
     const size_t out_bytes =
-        static_cast<size_t>((num_tiles + tiles_x - 1) / tiles_x) * TILE_H * pitch;
+        gsplat_tt::split_window::current().on
+            ? static_cast<size_t>(gsplat_tt::split_window::current().screen_tiles_y) * TILE_H * pitch
+            : static_cast<size_t>((num_tiles + tiles_x - 1) / tiles_x) * TILE_H * pitch;
     if (!ctx.res_out || ctx.res_out_bytes != out_bytes) {
         ctx.res_out = make_dram(out_bytes, pitch);
         ctx.res_out_bytes = out_bytes;
@@ -878,8 +882,8 @@ static double process_frame_mb_devcull_resident(
                     std::vector<uint32_t> reader_args = {
                         a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
                         ids_addr, rng_addr, xramp_addr, yramp_addr,
-                        tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
-                        cull_disabled ? 1u : 0u,
+                        tile_ids_addr, lpt_meta_addr, core_index, gsplat_tt::split_window::origin_arg(tiles_x),
+                        floor_bits, cull_disabled ? 1u : 0u,
                     };
                     {
                         if (sfpu_cull) {
@@ -921,7 +925,7 @@ static double process_frame_mb_devcull_resident(
                         m0.push_back(pend.epoch);
                         m0.resize(mbf::kDmRtaBase, 0u);
                         m0.insert(m0.end(), {out_addr, tile_ids_addr, lpt_meta_addr, core_index,
-                                             tiles_x, pitch});
+                                             gsplat_tt::split_window::origin_arg(tiles_x), pitch});
                         if (out_pinned) {
                             m0.insert(m0.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
                                                  static_cast<uint32_t>(out_pin_addr >> 32)});
@@ -951,7 +955,7 @@ static double process_frame_mb_devcull_resident(
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     std::vector<uint32_t> writer_args = {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
-                        tiles_x, pitch,
+                        gsplat_tt::split_window::origin_arg(tiles_x), pitch,
                     };
                     if (out_pinned) {
                         writer_args.insert(writer_args.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
@@ -1049,7 +1053,7 @@ static double process_frame_mb_devcull_resident(
     // window as (returned ms - d2h). The writer already packed the final u8
     // image (task #61), so when the device row pitch is W*3 the D2H lands
     // straight in image_out and there is no assemble at all.
-    const uint32_t out_pitch = image_pitch_bytes(tiles_x);
+    const uint32_t out_pitch = image_pitch_bytes(gsplat_tt::split_window::image_tiles_x(tiles_x));
     const size_t row_bytes = static_cast<size_t>(image_w) * 3;
     const bool direct = (out_pitch == row_bytes) &&
                         (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);

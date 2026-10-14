@@ -35,6 +35,7 @@
 #include "host_tracy.hpp"
 #include "matblend_fuse.h"
 #include "stage_timers.h"
+#include "split_window.h"
 #include "vis_mode.h"
 
 #include <algorithm>
@@ -940,7 +941,7 @@ static bool launch_subchunk_materialize(
                 static_cast<uint32_t>(ctx->buf_mat_work->address()),
                 idle ? 0u : work.per_core_offset[slot],
                 idle ? 0u : work.per_core_count[slot],
-                tiles_x,
+                gsplat_tt::split_window::origin_arg(tiles_x),
                 bucket_fit,
                 ov_addr,
                 ov_base_addr,
@@ -2516,7 +2517,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     static_cast<uint32_t>(ctx->buf_ol_bases->address()),
                     static_cast<uint32_t>(ctx->buf_ol_totals->address()),
                     mid, hi, P_full, num_tiles, row_pages, c, num_cores, cap,
-                    static_cast<uint32_t>(tiles_x), 1u,
+                    gsplat_tt::split_window::origin_arg(static_cast<uint32_t>(tiles_x)), 1u,
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
                     noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u, 0u, 0u,
@@ -2830,7 +2831,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     args.push_back(l1_recs_addr);
                     args.push_back(l1_base_addr);
                     args.push_back(bucket_fit);  // per-tile bucket slot count (clamp)
-                    args.push_back(static_cast<uint32_t>(tiles_x));  // tile-local mean
+                    args.push_back(gsplat_tt::split_window::origin_arg(static_cast<uint32_t>(tiles_x)));  // tile-local mean
                     args.push_back(l1_ov_addr);       // iter-138: overflow region (0=off)
                     args.push_back(l1_ov_base_addr);  // iter-138: per-(core,tile) ov base
                 }
@@ -3587,7 +3588,7 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
             static_cast<uint32_t>(ctx->buf_ol_bases->address()),
             static_cast<uint32_t>(ctx->buf_ol_totals->address()),
             pairs_P_addr, static_cast<uint32_t>(acc[2u * c + 1u]), 0xFFFFFFFFu,
-            num_tiles, row_pages, c, num_cores, g_ol_tile_cap, tiles_x, 1u,
+            num_tiles, row_pages, c, num_cores, g_ol_tile_cap, gsplat_tt::split_window::origin_arg(tiles_x), 1u,
             ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
             ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
             noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, 1u,

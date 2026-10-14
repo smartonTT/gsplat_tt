@@ -6,6 +6,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "img_pack_u8.h"
+#include "tile_window.h"
 
 // Task #280: shifted ids / compile-time args in the fused mat+blend program.
 #ifndef BLEND_CB_BASE
@@ -65,7 +66,10 @@ void kernel_main() {
     uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
     const uint32_t lpt_meta_addr = get_arg_val<uint32_t>(2);
     const uint32_t core_index    = get_arg_val<uint32_t>(3);
-    const uint32_t tiles_x       = get_arg_val<uint32_t>(4);
+    // Task #623: arg 4 may carry a tile window (tile_window::pack); the image
+    // stays full size (pitch), the window's tiles land at their global origin.
+    const tile_window::Origin win = tile_window::decode(get_arg_val<uint32_t>(4));
+    const uint32_t tiles_x       = win.w;
     const uint32_t pitch         = get_arg_val<uint32_t>(5);
 
     constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
@@ -97,8 +101,9 @@ void kernel_main() {
     // One screen tile: pack the 3 R/G/B tiles compute pushed for it into u8
     // image rows and write them to the image buffer.
     auto write_tile = [&](uint32_t screen_tile) {
-        const uint32_t ty = screen_tile / tiles_x;
-        const uint32_t tx = screen_tile - ty * tiles_x;
+        const uint32_t ty0 = screen_tile / tiles_x;
+        const uint32_t tx = screen_tile - ty0 * tiles_x + win.x0;
+        const uint32_t ty = ty0 + win.y0;
 
         // CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so this
         // 3-tile batch never straddles a CB wrap.
