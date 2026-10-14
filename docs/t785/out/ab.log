@@ -1,0 +1,209 @@
+SSH_PREFLIGHT=ok
+=== t785 d9922e21=d9922e211ce9610f270e9ba0c24b693fba0838fa to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 14:18:03 PDT 2026
+sync rc=0
+[sync_remote] d9922e211ce9610f270e9ba0c24b693fba0838fa from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t785: 1319 files, 65443000 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 15 of 1321 files, 576591 bytes (tar)
+STAMP remote=d9922e211ce9610f270e9ba0c24b693fba0838fa local=d9922e211ce9610f270e9ba0c24b693fba0838fa MATCH
+=== build 14:18:35
+      |                                                                      ~^                    ~~~~~~~~~~~~~~~
+      |                                                                       |                           |
+      |                                                                       unsigned int                long unsigned int
+      |                                                                      %lu
+[2/2] Linking CXX executable blend_bwd_bench
+build rc=0
+=== push inputs 14:18:41
+push hero.npz rc=0
+push s1.npz rc=0
+push s2.npz rc=0
+4cd991367631f0a2b9f45dd15c2e7dcd  hero.npz
+4630304daef1b7a7cb463c35fbea36e5  s1.npz
+d5f5b75c6df6da31ed77ac19c317ca06  s2.npz
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "split_tiles": 0, "partial_slots": 0, "busiest_bodies": 214, "mean_bodies": 6.6, "bodies_busiest_over_mean": 32.649, "busiest_pairs": 21, "busiest_ms": 0.08, "mean_ms": 0.0, "mean_over_busiest": 0.034}
+{"n_tiles": 8, "n_recs": 103, "n_slots": 103, "split_tiles": 4, "partial_slots": 29, "busiest_bodies": 133, "mean_bodies": 6.6, "bodies_busiest_over_mean": 20.291, "busiest_pairs": 18, "busiest_ms": 0.06, "mean_ms": 0.0, "mean_over_busiest": 0.064}
+prep+plan sh0 rc=0
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74, "split_tiles": 0, "partial_slots": 0, "busiest_bodies": 214, "mean_bodies": 6.6, "bodies_busiest_over_mean": 32.649, "busiest_pairs": 21, "busiest_ms": 0.08, "mean_ms": 0.0, "mean_over_busiest": 0.034}
+{"n_tiles": 8, "n_recs": 103, "n_slots": 103, "split_tiles": 4, "partial_slots": 29, "busiest_bodies": 133, "mean_bodies": 6.6, "bodies_busiest_over_mean": 20.291, "busiest_pairs": 18, "busiest_ms": 0.06, "mean_ms": 0.0, "mean_over_busiest": 0.064}
+prep+plan sh3 rc=0
+{"n_tiles": 64, "n_recs": 7975, "n_slots": 7975, "split_tiles": 0, "partial_slots": 0, "busiest_bodies": 1495, "mean_bodies": 697.3, "bodies_busiest_over_mean": 2.144, "busiest_pairs": 154, "busiest_ms": 0.29, "mean_ms": 0.14, "mean_over_busiest": 0.487}
+{"n_tiles": 110, "n_recs": 10343, "n_slots": 10343, "split_tiles": 46, "partial_slots": 2368, "busiest_bodies": 1133, "mean_bodies": 697.3, "bodies_busiest_over_mean": 1.625, "busiest_pairs": 127, "busiest_ms": 0.23, "mean_ms": 0.16, "mean_over_busiest": 0.706}
+prep+plan s1 rc=0
+{"n_tiles": 256, "n_recs": 35052, "n_slots": 35052, "split_tiles": 0, "partial_slots": 0, "busiest_bodies": 3746, "mean_bodies": 2968.2, "bodies_busiest_over_mean": 1.262, "busiest_pairs": 424, "busiest_ms": 0.76, "mean_ms": 0.6, "mean_over_busiest": 0.793}
+{"n_tiles": 330, "n_recs": 39303, "n_slots": 39303, "split_tiles": 74, "partial_slots": 4251, "busiest_bodies": 3092, "mean_bodies": 2968.2, "bodies_busiest_over_mean": 1.042, "busiest_pairs": 390, "busiest_ms": 0.65, "mean_ms": 0.63, "mean_over_busiest": 0.977}
+prep+plan s2 rc=0
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "split_tiles": 0, "partial_slots": 0, "busiest_bodies": 290991, "mean_bodies": 276903.9, "bodies_busiest_over_mean": 1.051, "busiest_pairs": 44263, "busiest_ms": 51.39, "mean_ms": 49.76, "mean_over_busiest": 0.968}
+{"n_tiles": 1095, "n_recs": 4558416, "n_slots": 4558416, "split_tiles": 81, "partial_slots": 80191, "busiest_bodies": 283210, "mean_bodies": 276903.9, "bodies_busiest_over_mean": 1.023, "busiest_pairs": 46640, "busiest_ms": 50.09, "mean_ms": 49.94, "mean_over_busiest": 0.997}
+prep+plan hero rc=0
+2026-10-14 21:21:07.806 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:07.806 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+8e42d89b4c95d657cb83f29a4a844552  tmp/t785/base/sh0/slots.f32
+run base sh0 -> tmp/t785/base/sh0 rc=0
+2026-10-14 21:21:12.407 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:12.407 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+3716785b19c00733378e937c587c426f  tmp/t785/base/sh3/slots.f32
+run base sh3 -> tmp/t785/base/sh3 rc=0
+2026-10-14 21:21:16.908 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:16.908 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+7c7dfc0779fa5e2afed22ad1c3339f29  tmp/t785/base/s1/slots.f32
+run base s1 -> tmp/t785/base/s1 rc=0
+2026-10-14 21:21:21.508 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:21.508 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+49caedbb2f3002000ae6822828fb2efa  tmp/t785/base/s2/slots.f32
+run base s2 -> tmp/t785/base/s2 rc=0
+2026-10-14 21:21:29.910 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:29.910 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+87cffcc795e877951e9c84af84500652  tmp/t785/lpt/sh0/slots.f32
+run lpt sh0 -> tmp/t785/lpt/sh0 rc=0
+2026-10-14 21:21:34.410 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:34.410 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+3e5723b25160d4b62fd76f9c75d824cf  tmp/t785/lpt/sh3/slots.f32
+run lpt sh3 -> tmp/t785/lpt/sh3 rc=0
+2026-10-14 21:21:38.911 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:38.911 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+50a40eb458465beb81c7181d6285c1b8  tmp/t785/lpt/s1/slots.f32
+run lpt s1 -> tmp/t785/lpt/s1 rc=0
+2026-10-14 21:21:43.511 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:43.511 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+d838e85259e63f25d25b4f367e3dff4e  tmp/t785/lpt/s2/slots.f32
+run lpt s2 -> tmp/t785/lpt/s2 rc=0
+2026-10-14 21:21:51.912 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:51.912 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 29}
+3824a8c617d10ecf364c6efa6a2e964e  tmp/t785/split/sh0/slots.f32
+run split sh0 -> tmp/t785/split/sh0 rc=0
+2026-10-14 21:21:56.613 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:21:56.613 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 29}
+94dc00d96bf8e5523f7ddd7bb1186844  tmp/t785/split/sh3/slots.f32
+run split sh3 -> tmp/t785/split/sh3 rc=0
+2026-10-14 21:22:01.214 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:22:01.214 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 2368}
+ebb6ccb37957dc831567b11fa8bbd536  tmp/t785/split/s1/slots.f32
+run split s1 -> tmp/t785/split/s1 rc=0
+2026-10-14 21:22:05.914 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:22:05.914 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 4251}
+a78bd1dd8d908ca6f7081fa706a71208  tmp/t785/split/s2/slots.f32
+run split s2 -> tmp/t785/split/s2 rc=0
+same9 tmp/t785/base/sh0 tmp/t785/lpt/sh0 slots 74 identical
+same9 tmp/t785/base/sh0 tmp/t785/split/sh0 slots 74 DIFFER 58 maxabs 1.12e-08
+check sh0 base rc=0
+05, "per_term": {"dmx": 1.7047779242623994e-05, "dmy": 0.00012742471019980194, "dA": 3.209390820179437e-06, "dB": 1.749279070264653e-05, "dC": 1.874854560914576e-05, "dop": 7.703000501478388e-06, "dr": 3.793160071960973e-05, "dg": 1.4896332981168743e-05, "db": 1.4411581671088403e-05}, "pass": true}
+check sh0 lpt rc=0
+05, "per_term": {"dmx": 1.7047779242623994e-05, "dmy": 0.00012742471019980194, "dA": 3.209390820179437e-06, "dB": 1.749279070264653e-05, "dC": 1.874854560914576e-05, "dop": 7.703000501478388e-06, "dr": 3.793160071960973e-05, "dg": 1.4896332981168743e-05, "db": 1.4411581671088403e-05}, "pass": true}
+check sh0 split rc=0
+-05, "per_term": {"dmx": 1.5893502523071327e-05, "dmy": 0.00013106541620551057, "dA": 3.209390820179437e-06, "dB": 2.048904682281696e-05, "dC": 1.874854560914576e-05, "dop": 8.094678493078985e-06, "dr": 3.793160071960973e-05, "dg": 4.583487071128844e-06, "db": 1.4411581671088403e-05}, "pass": true}
+same9 tmp/t785/base/sh3 tmp/t785/lpt/sh3 slots 74 identical
+same9 tmp/t785/base/sh3 tmp/t785/split/sh3 slots 74 DIFFER 58 maxabs 3.73e-09
+check sh3 base rc=0
+6, "per_term": {"dmx": 1.0462707423174665e-05, "dmy": 1.2137195388906083e-05, "dA": 1.2924113681197851e-05, "dB": 4.792300854698595e-06, "dC": 5.612381597049546e-06, "dop": 0.00012752916746640766, "dr": 3.260414788452915e-05, "dg": 1.6596885433433856e-05, "db": 2.378394851441097e-06}, "pass": true}
+check sh3 lpt rc=0
+6, "per_term": {"dmx": 1.0462707423174665e-05, "dmy": 1.2137195388906083e-05, "dA": 1.2924113681197851e-05, "dB": 4.792300854698595e-06, "dC": 5.612381597049546e-06, "dop": 0.00012752916746640766, "dr": 3.260414788452915e-05, "dg": 1.6596885433433856e-05, "db": 2.378394851441097e-06}, "pass": true}
+check sh3 split rc=0
+2, "per_term": {"dmx": 1.627984638503924e-05, "dmy": 1.2137195388906083e-05, "dA": 1.1189333321305523e-05, "dB": 4.9575526083088915e-06, "dC": 5.368365005873479e-06, "dop": 0.00011722378019639492, "dr": 3.260414788452915e-05, "dg": 1.6596885433433856e-05, "db": 2.378394851441097e-06}, "pass": true}
+same9 tmp/t785/base/s1 tmp/t785/lpt/s1 slots 7975 identical
+same9 tmp/t785/base/s1 tmp/t785/split/s1 slots 7975 DIFFER 3755 maxabs 4.47e-08
+check s1 base rc=0
+894398, "per_term": {"dmx": 0.003786171360188257, "dmy": 0.0026810441341111307, "dA": 0.00046791183204193383, "dB": 0.0010361191361894398, "dC": 0.0011927506856107644, "dop": 0.0024725797379565907, "dr": 0.0011984385636142252, "dg": 0.0007976429367216794, "db": 0.0008562342466498631}, "pass": true}
+check s1 lpt rc=0
+894398, "per_term": {"dmx": 0.003786171360188257, "dmy": 0.0026810441341111307, "dA": 0.00046791183204193383, "dB": 0.0010361191361894398, "dC": 0.0011927506856107644, "dop": 0.0024725797379565907, "dr": 0.0011984385636142252, "dg": 0.0007976429367216794, "db": 0.0008562342466498631}, "pass": true}
+check s1 split rc=0
+867524, "per_term": {"dmx": 0.0037001220110930693, "dmy": 0.0026810441341111307, "dA": 0.00046791183204193383, "dB": 0.0010372742299867524, "dC": 0.0011911578027507072, "dop": 0.0024725797379565907, "dr": 0.001209962011341285, "dg": 0.0007976429367216794, "db": 0.0008561532941825615}, "pass": true}
+same9 tmp/t785/base/s2 tmp/t785/lpt/s2 slots 35052 identical
+same9 tmp/t785/base/s2 tmp/t785/split/s2 slots 35052 DIFFER 7022 maxabs 5.96e-08
+check s2 base rc=0
+98406727, "per_term": {"dmx": 0.0032790830254711568, "dmy": 0.0035544982196558063, "dA": 0.0018641591645978802, "dB": 0.0013447992336137276, "dC": 0.0014098447444440608, "dop": 0.004071561496474461, "dr": 0.0019994201853623873, "dg": 0.003695954812457392, "db": 0.0037909257523040508}, "pass": true}
+check s2 lpt rc=0
+98406727, "per_term": {"dmx": 0.0032790830254711568, "dmy": 0.0035544982196558063, "dA": 0.0018641591645978802, "dB": 0.0013447992336137276, "dC": 0.0014098447444440608, "dop": 0.004071561496474461, "dr": 0.0019994201853623873, "dg": 0.003695954812457392, "db": 0.0037909257523040508}, "pass": true}
+check s2 split rc=0
+98406727, "per_term": {"dmx": 0.0032790830254711568, "dmy": 0.0035544982196558063, "dA": 0.0018641591645978802, "dB": 0.0013447992336137276, "dC": 0.0014098447444440608, "dop": 0.004071561496474461, "dr": 0.0019994201853623873, "dg": 0.003695954812457392, "db": 0.0037909257523040508}, "pass": true}
+=== round 1 base 14:23:10
+2026-10-14 21:23:16.124 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:23:16.124 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+1c51ba21c835f52e6722f55d189e962e  tmp/t785/base/hero-r1/slots.f32
+run base hero -> tmp/t785/base/hero-r1 rc=0
+=== round 1 lpt 14:23:16
+2026-10-14 21:23:21.924 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:23:21.924 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+2196936f3e7de1da4392f59934877c41  tmp/t785/lpt/hero-r1/slots.f32
+run lpt hero -> tmp/t785/lpt/hero-r1 rc=0
+=== round 1 split 14:23:22
+2026-10-14 21:23:27.825 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:23:27.825 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 80191}
+b1bfb53f84e6240d2952fd574b948355  tmp/t785/split/hero-r1/slots.f32
+run split hero -> tmp/t785/split/hero-r1 rc=0
+same9 tmp/t785/base/hero-r1 tmp/t785/lpt/hero-r1 slots 4478225 identical
+same9 tmp/t785/base/hero-r1 tmp/t785/split/hero-r1 slots 4478225 DIFFER 2848 maxabs 0.0625
+=== round 2 lpt 14:23:43
+2026-10-14 21:23:49.028 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:23:49.028 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+f90a355247d0865d386ed3893f3c339b  tmp/t785/lpt/hero-r2/slots.f32
+run lpt hero -> tmp/t785/lpt/hero-r2 rc=0
+=== round 2 base 14:23:49
+2026-10-14 21:23:55.529 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:23:55.529 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+4d313d085d82064554644bc89ef580c9  tmp/t785/base/hero-r2/slots.f32
+run base hero -> tmp/t785/base/hero-r2 rc=0
+=== round 2 split 14:23:55
+2026-10-14 21:24:01.730 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:24:01.730 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 80191}
+3379619c60515d40f384943b2d16b7e8  tmp/t785/split/hero-r2/slots.f32
+run split hero -> tmp/t785/split/hero-r2 rc=0
+same9 tmp/t785/base/hero-r2 tmp/t785/lpt/hero-r2 slots 4478225 identical
+same9 tmp/t785/base/hero-r2 tmp/t785/split/hero-r2 slots 4478225 DIFFER 2848 maxabs 0.0625
+=== round 3 lpt 14:24:33
+2026-10-14 21:24:42.735 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:24:42.735 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+c35e07356155a1e3601faec1b11817e1  tmp/t785/lpt/hero-r3/slots.f32
+run lpt hero -> tmp/t785/lpt/hero-r3 rc=0
+=== round 3 split 14:24:44
+2026-10-14 21:24:52.037 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:24:52.037 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 80191}
+6a3a3dfa83d3d9e13df4b5a274c86d57  tmp/t785/split/hero-r3/slots.f32
+run split hero -> tmp/t785/split/hero-r3 rc=0
+=== round 3 base 14:24:55
+2026-10-14 21:25:04.039 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:25:04.039 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+f27871613d439a9d1b95f8bf5ee03ac9  tmp/t785/base/hero-r3/slots.f32
+run base hero -> tmp/t785/base/hero-r3 rc=0
+same9 tmp/t785/base/hero-r3 tmp/t785/lpt/hero-r3 slots 4478225 identical
+same9 tmp/t785/base/hero-r3 tmp/t785/split/hero-r3 slots 4478225 DIFFER 2848 maxabs 0.0625
+=== round 4 split 14:25:30
+2026-10-14 21:25:36.843 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:25:36.843 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"partials_merged": 80191}
+84ba7206084b317b75a2b7e611d3f748  tmp/t785/split/hero-r4/slots.f32
+run split hero -> tmp/t785/split/hero-r4 rc=0
+=== round 4 lpt 14:25:37
+2026-10-14 21:25:43.945 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:25:43.945 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+1dabb1523b5e1d045042e54a730d2b92  tmp/t785/lpt/hero-r4/slots.f32
+run lpt hero -> tmp/t785/lpt/hero-r4 rc=0
+=== round 4 base 14:25:44
+2026-10-14 21:25:51.346 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 21:25:51.346 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+526ff7e2fd758c04a653a5d8a56f4997  tmp/t785/base/hero-r4/slots.f32
+run base hero -> tmp/t785/base/hero-r4 rc=0
+same9 tmp/t785/base/hero-r4 tmp/t785/lpt/hero-r4 slots 4478225 identical
+same9 tmp/t785/base/hero-r4 tmp/t785/split/hero-r4 slots 4478225 DIFFER 2848 maxabs 0.0625
+78 /localdev/smarton/gstt2-sync/tmp/t785/jit-elf-md5.txt
+7106fe71ce92d6165094caac604482a9  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-hero/cores.u32
+65b1492cc54af632d79d01617d42c592  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-s1/cores.u32
+32613ddf0cb9637fb58a5c3c4548707f  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-s2/cores.u32
+6e62eb4df53d8ee9fa8f7c46894462e5  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-sh0/cores.u32
+6e62eb4df53d8ee9fa8f7c46894462e5  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-sh3/cores.u32
+3adb82bed741e8d78a5f61883e7a787e  /localdev/smarton/gstt2-sync/tmp/t785in/split-hero/cores.u32
+005c58db76f1d8f64f61e4e83c30452a  /localdev/smarton/gstt2-sync/tmp/t785in/split-s1/cores.u32
+d931322096485e82af12f08c9f413af9  /localdev/smarton/gstt2-sync/tmp/t785in/split-s2/cores.u32
+adb4899d1111df25b65f4ae08aee3bff  /localdev/smarton/gstt2-sync/tmp/t785in/split-sh0/cores.u32
+adb4899d1111df25b65f4ae08aee3bff  /localdev/smarton/gstt2-sync/tmp/t785in/split-sh3/cores.u32
+jit+rm rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t785 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t785/docs/t785/out/remote: 161 entries (tar)
+pull rc=0
+rm t785 rc=0
+=== done Wed Oct 14 14:26:53 PDT 2026
