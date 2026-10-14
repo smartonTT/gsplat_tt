@@ -12,7 +12,7 @@
 [ttw 2026-10-14T08:40:21-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #126 sha=b3e8f99a bin=441da92eca4df12b t731 b3e8f99a profiler zones (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t731-prof  timeout=560s  worry=600s  ts=2026-10-14T08:40:21-0700
 cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=480 bash /localdev/smarton/gstt2-sync/tmp/t731-remote.sh prof
