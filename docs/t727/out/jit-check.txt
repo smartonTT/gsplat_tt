@@ -1,0 +1,9 @@
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] sdb=['7341047734140140230']
+JIT-HASH OK
+rc=0
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] sd=['13938720532765730199']
+JIT-HASH OK
+rc=0
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] b2k=['3995261079649868300']
+JIT-HASH OK
+rc=0

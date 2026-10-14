@@ -1,0 +1,39 @@
+[ttw 2026-10-14T03:41:05-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T03:41:05-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-14T03:41:05-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T03:41:05-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T03:41:05-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T03:41:05-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T03:41:05-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T03:41:05-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T03:41:05-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T03:41:05-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T03:41:05-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T03:41:05-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=5df7e221 bin=c9932cf0f5e462f5 t727 5df7e221 train opc gather profile + A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t727-w0  timeout=500s  worry=600s  ts=2026-10-14T03:41:07-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t727-remote.sh 0 on d1 d2
+-----------------------------------------
+=== r0-on 5df7e221 GSPLAT_TT_BLEND_TRAIN=1 --back-to-back 10:41:11 load=1.12
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t727-on
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.684 fps=68.10 ms_frame_median=14.685 pass_ms_frame=14.685,14.687,14.669,14.679,14.680,14.674,14.683,14.675,14.693,14.687,14.701,14.683,14.679,14.690,14.690,14.685,14.700,14.703,14.689,14.649 check_pass_ms_frame=14.750 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.684 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.684
+TTW_TIMING b2b_ms_frame_median=14.685
+=== r0-d1 5df7e221 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_T727_DIAG=1 --back-to-back 10:41:34 load=1.23
+run rc=5
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t727-d1
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.622 fps=73.41 ms_frame_median=13.624 pass_ms_frame=13.610,13.624,13.619,13.637,13.631,13.638,13.635,13.623,13.633,13.627,13.616,13.619,13.611,13.603,13.630,13.623,13.625,13.629,13.623,13.579 check_pass_ms_frame=13.658 raw_md5=8e84723c gap_ms=0.00 render_ms_frame=13.622 xview_hits=659 xview_misses=0 identical_across_passes=NO out=/
+TTW_TIMING b2b_ms_frame=13.622
+TTW_TIMING b2b_ms_frame_median=13.624
+=== r0-d2 5df7e221 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_T727_DIAG=2 --back-to-back 10:41:57 load=1.73
+run rc=5
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t727-d2
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.262 fps=75.41 ms_frame_median=13.264 pass_ms_frame=13.266,13.253,13.272,13.276,13.272,13.265,13.251,13.269,13.272,13.264,13.264,13.275,13.245,13.264,13.253,13.266,13.264,13.264,13.254,13.226 check_pass_ms_frame=13.306 raw_md5=9d1c9c26 gap_ms=0.00 render_ms_frame=13.262 xview_hits=659 xview_misses=0 identical_across_passes=NO out=/
+TTW_TIMING b2b_ms_frame=13.262
+TTW_TIMING b2b_ms_frame_median=13.264
+=== done 0 10:42:19
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t727/tmp/ttw-state/logs/t727-w0-20261014-034105.log

@@ -1,0 +1,3 @@
+2.3G	/localdev/smarton/gstt2-sync
+356M	/localdev/smarton/.cache
+/dev/mapper/ubuntu--vg-ubuntu--lv  913G  512G  355G  60% /localdev/smarton
