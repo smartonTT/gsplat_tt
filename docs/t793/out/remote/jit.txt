@@ -1,0 +1,6 @@
+OK t2g_reader: same hashes ['11764250209759479447', '12209847043831273822'] (runtime-arg-only)
+OK t2g_compute: same hashes ['2560876098778140448', '6610215706525512914'] (runtime-arg-only)
+OK t2h_writer: same hashes ['6096485016913297380'] (runtime-arg-only)
+OK marker base: '[SPLIT] kcap 16' found
+OK marker cand: '[PERVIEW] plan_stable 1' found
+JIT-HASH OK (runtime-arg-only)

@@ -1,0 +1,139 @@
+ttp lock: waiting for p100 (held by task #792 (run 2235) since 15:31 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #792 (run 2235) since 15:31 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #792 (run 2235) since 15:31 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #792 (run 2235) since 15:31 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 1 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #788 (run 2239) since 15:41 PDT; 2 ahead in queue)
+ttp lock: got p100 after 23.9 min
+SSH_PREFLIGHT=ok
+=== card / disk
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+/dev/mapper/ubuntu--vg-ubuntu--lv  913G  517G  351G  60% /localdev
+=== base 9a30c819=9a30c819f0b2462f8106f5971286b5b3e2b7be79 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 15:57:29 PDT 2026
+sync rc=0
+[sync_remote] 9a30c819f0b2462f8106f5971286b5b3e2b7be79 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t793: 1423 files, 65905760 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 19 of 1425 files, 828247 bytes (tar)
+STAMP remote=9a30c819f0b2462f8106f5971286b5b3e2b7be79 local=9a30c819f0b2462f8106f5971286b5b3e2b7be79 MATCH
+=== build base 15:57:56
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/train_step.dir/train_step.cpp.o
+[2/2] Linking CXX executable train_step
+build base rc=0
+=== cand fcb0174a5c0ff87bbbde6c677a9979fe44076981=fcb0174a5c0ff87bbbde6c677a9979fe44076981 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 15:58:04 PDT 2026
+sync rc=0
+[sync_remote] fcb0174a5c0ff87bbbde6c677a9979fe44076981 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t793: 1424 files, 65921498 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 5 of 1426 files, 47410 bytes (tar)
+STAMP remote=fcb0174a5c0ff87bbbde6c677a9979fe44076981 local=fcb0174a5c0ff87bbbde6c677a9979fe44076981 MATCH
+=== build cand 15:58:33
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/train_step.dir/train_step.cpp.o
+[2/2] Linking CXX executable train_step
+build cand rc=0
+push hero rc=0 255s
+=== hero base0 (T2_SPLIT=1) 16:02:57
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 6.556 upload_ms 1.079
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 3, "grads_out": true, "t1_ms_first": 104.6436, "t1_ms_min": 81.3323, "t1_ms_med": 81.3340, "t2_ms_first": 16.8672, "t2_ms_min": 9.1748, "t2_ms_med": 9.1780, "chain_ms_min": 90.4828, "chain_ms_med": 90.4914, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 6.556, "split_upload_ms": 1.079, "ta_ms_min": 2.0312, "ta_ms_med": 2.0330, "tb_ms_min": 7.1627, "tb_ms_med": 7.1668}
+
+hero base0 rc=0
+=== hero cand0 (T2_SPLIT=1 T2_PERVIEW=1) 16:03:03
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 1.026 upload_ms 1.100
+[PERVIEW] plan_stable 1
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 3, "grads_out": true, "t1_ms_first": 2276.6267, "t1_ms_min": 81.3375, "t1_ms_med": 81.3410, "t2_ms_first": 2045.8429, "t2_ms_min": 9.1753, "t2_ms_med": 9.1761, "chain_ms_min": 90.4878, "chain_ms_med": 90.4950, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 1.026, "split_upload_ms": 1.100, "ta_ms_min": 2.0332, "ta_ms_med": 2.0397, "tb_ms_min": 7.1607, "tb_ms_med": 7.1660, "perview": true, "plan_stable": true, "view_plan_ms_min": 0.8903, "view_plan_ms_med": 0.9007, "view_serial_ms_min": 92.8179, "view_serial_ms_med": 92.8236, "view_overlap_ms_min": 91.5261, "view_overlap_ms_med": 91.5403}
+
+hero cand0 rc=0
+{"params_out.f32": "bit-equal", "m_out.u16": "bit-equal", "v_out.u16": "bit-equal", "pfwc.f32": "bit-equal", "grads.f32": "bit-equal", "pass": true}
+SAME rc=0
+=== hero ab1-base (T2_SPLIT=1) 16:03:28
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 6.572 upload_ms 1.091
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 104.1297, "t1_ms_min": 81.3347, "t1_ms_med": 81.3620, "t2_ms_first": 16.7364, "t2_ms_min": 9.1763, "t2_ms_med": 9.2105, "chain_ms_min": 90.4845, "chain_ms_med": 90.4880, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 6.572, "split_upload_ms": 1.091, "ta_ms_min": 2.0287, "ta_ms_med": 2.0506, "tb_ms_min": 7.1622, "tb_ms_med": 7.1821}
+
+hero ab1-base rc=0
+=== hero ab1-cand (T2_SPLIT=1 T2_PERVIEW=1) 16:03:45
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 1.022 upload_ms 1.098
+[PERVIEW] plan_stable 1
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 105.2251, "t1_ms_min": 81.3557, "t1_ms_med": 81.3659, "t2_ms_first": 16.9434, "t2_ms_min": 9.2004, "t2_ms_med": 9.2072, "chain_ms_min": 90.4790, "chain_ms_med": 90.4869, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 1.022, "split_upload_ms": 1.098, "ta_ms_min": 2.0283, "ta_ms_med": 2.0316, "tb_ms_min": 7.1576, "tb_ms_med": 7.1609, "perview": true, "plan_stable": true, "view_plan_ms_min": 1.1612, "view_plan_ms_med": 1.2821, "view_serial_ms_min": 93.0731, "view_serial_ms_med": 93.2557, "view_overlap_ms_min": 91.5365, "view_overlap_ms_med": 91.5539}
+
+hero ab1-cand rc=0
+=== hero ab2-cand (T2_SPLIT=1 T2_PERVIEW=1) 16:04:00
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 1.024 upload_ms 1.100
+[PERVIEW] plan_stable 1
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 105.1813, "t1_ms_min": 81.3574, "t1_ms_med": 81.3664, "t2_ms_first": 16.7912, "t2_ms_min": 9.2017, "t2_ms_med": 9.2102, "chain_ms_min": 90.4809, "chain_ms_med": 90.4857, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 1.024, "split_upload_ms": 1.100, "ta_ms_min": 2.0303, "ta_ms_med": 2.0336, "tb_ms_min": 7.1600, "tb_ms_med": 7.1606, "perview": true, "plan_stable": true, "view_plan_ms_min": 1.1072, "view_plan_ms_med": 1.1752, "view_serial_ms_min": 93.0810, "view_serial_ms_med": 93.1961, "view_overlap_ms_min": 91.5324, "view_overlap_ms_med": 91.5488}
+
+hero ab2-cand rc=0
+=== hero ab2-base (T2_SPLIT=1) 16:04:18
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 6.604 upload_ms 1.080
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 105.1167, "t1_ms_min": 81.3251, "t1_ms_med": 81.3351, "t2_ms_first": 16.6336, "t2_ms_min": 9.1727, "t2_ms_med": 9.1766, "chain_ms_min": 90.4785, "chain_ms_med": 90.4828, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 6.604, "split_upload_ms": 1.080, "ta_ms_min": 2.0271, "ta_ms_med": 2.0316, "tb_ms_min": 7.1589, "tb_ms_med": 7.1612}
+
+hero ab2-base rc=0
+=== hero ab3-base (T2_SPLIT=1) 16:04:35
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 6.585 upload_ms 1.089
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 104.3250, "t1_ms_min": 81.3512, "t1_ms_med": 81.3658, "t2_ms_first": 16.4806, "t2_ms_min": 9.2039, "t2_ms_med": 9.2135, "chain_ms_min": 90.5145, "chain_ms_med": 90.5182, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 6.585, "split_upload_ms": 1.089, "ta_ms_min": 2.0543, "ta_ms_med": 2.0624, "tb_ms_min": 7.1880, "tb_ms_med": 7.1916}
+
+hero ab3-base rc=0
+=== hero ab3-cand (T2_SPLIT=1 T2_PERVIEW=1) 16:04:50
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 1.021 upload_ms 1.102
+[PERVIEW] plan_stable 1
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 105.0952, "t1_ms_min": 81.3594, "t1_ms_med": 81.3670, "t2_ms_first": 16.6341, "t2_ms_min": 9.2041, "t2_ms_med": 9.2112, "chain_ms_min": 90.5114, "chain_ms_med": 90.5152, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 1.021, "split_upload_ms": 1.102, "ta_ms_min": 2.0557, "ta_ms_med": 2.0621, "tb_ms_min": 7.1874, "tb_ms_med": 7.1945, "perview": true, "plan_stable": true, "view_plan_ms_min": 1.1622, "view_plan_ms_med": 1.3319, "view_serial_ms_min": 93.1175, "view_serial_ms_med": 93.3007, "view_overlap_ms_min": 91.5540, "view_overlap_ms_med": 91.5567}
+
+hero ab3-cand rc=0
+=== hero ab4-cand (T2_SPLIT=1 T2_PERVIEW=1) 16:05:07
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 1.031 upload_ms 1.085
+[PERVIEW] plan_stable 1
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 107.0254, "t1_ms_min": 81.3315, "t1_ms_med": 81.3658, "t2_ms_first": 16.7350, "t2_ms_min": 9.1769, "t2_ms_med": 9.2060, "chain_ms_min": 90.5092, "chain_ms_med": 90.5167, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 1.031, "split_upload_ms": 1.085, "ta_ms_min": 2.0562, "ta_ms_med": 2.0656, "tb_ms_min": 7.1840, "tb_ms_med": 7.1917, "perview": true, "plan_stable": true, "view_plan_ms_min": 1.1213, "view_plan_ms_med": 1.3122, "view_serial_ms_min": 93.0123, "view_serial_ms_med": 93.2185, "view_overlap_ms_min": 91.5253, "view_overlap_ms_med": 91.5484}
+
+hero ab4-cand rc=0
+=== hero ab4-base (T2_SPLIT=1) 16:05:25
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 2975 heavy_groups 186 heavy_planes 77616 light_planes 181694 a_max_planes 1014 b_max_weight 2171 plan_ms 6.597 upload_ms 1.092
+{"n_tiles": 1014, "n_recs": 4478225, "n_slots": 4478225, "n_groups": 28288, "groups_processed": 28278, "cores": 110, "t1_cores": 110, "reps": 10, "grads_out": true, "t1_ms_first": 106.1898, "t1_ms_min": 81.3606, "t1_ms_med": 81.3672, "t2_ms_first": 17.0797, "t2_ms_min": 9.2027, "t2_ms_med": 9.2113, "chain_ms_min": 90.5047, "chain_ms_med": 90.5161, "host_repack_ms": 0, "split": true, "g2d_only": false, "kcap": 16, "hl": 16, "ovh": 2, "heavy_rows": 2975, "heavy_planes": 77616, "light_planes": 181694, "a_max_planes": 1014, "b_max_weight": 2171, "plan_ms": 6.597, "split_upload_ms": 1.092, "ta_ms_min": 2.0545, "ta_ms_med": 2.0623, "tb_ms_min": 7.1842, "tb_ms_med": 7.1900}
+
+hero ab4-base rc=0
+hero dir removed rc=0
+=== t0 sh0 kcap 1 16:05:46
+{"dump": "benchmarks/train_oracle/t0_sh0_64x64_n50.npz", "n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "n": 50, "tie_slots": 0}
+[SPLIT] kcap 1 hl 16 ovh 2 heavy_rows 22 heavy_groups 2 heavy_planes 6 light_planes 1 a_max_planes 4 b_max_weight 3 plan_ms 0.002 upload_ms 0.024
+[PERVIEW] plan_stable 1
+CHECK sh0 k1 rc=0
+{'t1': True, 't2': True, 't0': True, 'pass': True}
+=== t0 sh0 kcap 16 16:05:54
+{"dump": "benchmarks/train_oracle/t0_sh0_64x64_n50.npz", "n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "n": 50, "tie_slots": 0}
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 0 heavy_groups 0 heavy_planes 0 light_planes 4 a_max_planes 0 b_max_weight 6 plan_ms 0.001 upload_ms 0.021
+[PERVIEW] plan_stable 1
+CHECK sh0 k16 rc=0
+{'t1': True, 't2': True, 't0': True, 'pass': True}
+=== t0 sh3 kcap 1 16:06:00
+{"dump": "benchmarks/train_oracle/t0_sh3_64x64_n50.npz", "n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "n": 50, "tie_slots": 0}
+[SPLIT] kcap 1 hl 16 ovh 2 heavy_rows 22 heavy_groups 2 heavy_planes 6 light_planes 1 a_max_planes 4 b_max_weight 3 plan_ms 0.002 upload_ms 0.021
+[PERVIEW] plan_stable 1
+CHECK sh3 k1 rc=0
+{'t1': True, 't2': True, 't0': False, 'pass': True}
+=== t0 sh3 kcap 16 16:06:06
+{"dump": "benchmarks/train_oracle/t0_sh3_64x64_n50.npz", "n_tiles": 4, "n_recs": 74, "n_slots": 74, "n_groups": 16, "n": 50, "tie_slots": 0}
+[SPLIT] kcap 16 hl 16 ovh 2 heavy_rows 0 heavy_groups 0 heavy_planes 0 light_planes 4 a_max_planes 0 b_max_weight 6 plan_ms 0.001 upload_ms 0.021
+[PERVIEW] plan_stable 1
+CHECK sh3 k16 rc=0
+{'t1': True, 't2': True, 't0': False, 'pass': True}
+=== jit
+OK t2g_reader: same hashes ['11764250209759479447', '12209847043831273822'] (runtime-arg-only)
+OK t2g_compute: same hashes ['2560876098778140448', '6610215706525512914'] (runtime-arg-only)
+OK t2h_writer: same hashes ['6096485016913297380'] (runtime-arg-only)
+OK marker base: '[SPLIT] kcap 16' found
+OK marker cand: '[PERVIEW] plan_stable 1' found
+JIT-HASH OK (runtime-arg-only)
+JIT rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t793/res -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t793/docs/t793/out/remote: 33 entries (tar)
+pull rc=0
+=== done Wed Oct 14 16:06:31 PDT 2026

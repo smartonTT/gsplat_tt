@@ -1,0 +1,1 @@
+{"params_out.f32": "bit-equal", "m_out.u16": "bit-equal", "v_out.u16": "bit-equal", "pfwc.f32": "bit-equal", "grads.f32": "bit-equal", "pass": true}
