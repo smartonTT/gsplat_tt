@@ -125,6 +125,34 @@ cross-chunk state handed to the first (front-most) 1024-pair chunk when a tile s
 chunks (the back-to-front transmittance / colour suffix carried between chunks), not the per-pair
 body math.
 
+### Root cause of the hero FAIL (#728, 2026-10-14)
+
+Not a cross-chunk carry: the kernel keeps T and BH in Dst for a tile's whole pair list, with
+no 1024-pair chunks (the "rank < 1024" edge in the breakdown above is `hero_err.py`'s bucket
+edge; every bad slot actually has rank < 256). The cause is fp32 catastrophic cancellation in
+the power polynomial A' u^2 + B' u v + C' v^2 for needle Gaussians whose mean lies 1e4-2e5 px
+off the tile (conic entries 1e-7-1e-10, opacity ~0.99), which sit at the front of tiles. The
+three terms are each up to ~1e4 and cancel to a power near -1, so fp32 rounding of u^2 etc.
+moves alpha by O(1). Both the device and the fp32 oracle (`ref_slots_fast`) were wrong against
+a float64 evaluation of the same fp32 inputs; on the worst tiles the device was even closer
+(rel err vs float64, device / old fp32 oracle: tile 229 7.02 / 13.9, 283 2.03 / 3.54,
+692 0.66 / 0.23, 817 1.40 / 0.57). They disagreed with each other because the SFPU's fused
+multiply-adds round differently from numpy.
+
+Fix (commit d951e19c): the tile-centred form, the same in the kernel, prep, the emulator and
+both references (`blend_backward_ref.centred_power_coeffs` / `centred_power`):
+
+    power = P0 + du (Lx + A' du + B' dv) + dv (Ly + C' dv),   du = X - 16, dv = Y - 16 (exact)
+    U0 = 16 - mx, V0 = 16 - my, P0 = power(U0, V0), Lx = 2 A' U0 + B' V0, Ly = B' U0 + 2 C' V0
+
+P0, Lx, Ly are formed in float64 on the host and stored in record words 9-11 (A, B, C there
+were unused by the kernels; the emulator now derives A = -2 A', B = -B', C = -2 C' exactly).
+In fp32 this cuts the error against float64 on the worst tiles to 0.0375 / 0.0092 / 0.0039 /
+0.0073. The per-pixel part only adds small terms. Kernel cost: per body, 2 more Dst loads
+(Lx, Ly; P0 replaces 1 - alpha in ACC vector 22, which is now recomputed) and one more
+subtract; u and v are still formed for the moments. Unit test: `test_centred_power_far_mean`
+(plain fp32 off by > 1e-2, centred within 1e-5 of float64).
+
 Timing (`results/timing-hero-v2-p150.json`, `runs-hero-v2-p150.json`): 6 runs, first 109.0 ms,
 warm runs 86.33 / 86.67 / 86.32 / 86.32 / 86.32 ms, **median of 5 warm 86.32 ms**. Host reduce 0.
 
@@ -159,6 +187,53 @@ x10 diff: no tile seams or blocky artifacts, the diff is thin edges (spokes, lea
 Note: the hero forward's PSNR against the JPG is 13.1 dB (`hero_meta.json`), far below a
 trained model's ~25 dB on this view. The camera or colour path of the dump may not match the
 dataset image; the oracle check does not depend on it, but a training step would.
+
+### After the centred-power fix: the last failing slot is a T_min tie (#728, 2026-10-14)
+
+Device run of d951e19c on bh-49 (p150a, board 0): sh0 / sh3 / s1 / s2 pass at 3.7e-5 / 1.0e-4 /
+1.0e-3 / 1.6e-3 (`results/check-*-v2c-p150.json`). The hero went from 49.4 to 0.0278, still over
+the 1e-2 bar (`results/check-hero-v2c-p150.json`).
+
+Float64 reference of the same math on the same fp32 inputs (`hero_f64.py`,
+`results/f64-hero-v2c-p150.json`), max rel err with the floor at 1e-4 of the largest term:
+device vs float64 0.0277, fp32 oracle vs float64 0.0087. Across 35.8M terms the device is over
+1e-2 in exactly one slot: 3654796, Gaussian 1521283 (a needle 335,907 px off the tile, opacity
+1.0) at rank 59 of tile 203. Its dA, dB, dmx, dmy and dopacity are all 0.972x the reference and
+its colour terms 0.998x, so dL/dalpha moved, not one moment.
+
+Cause: at that pair, pixel (11, 27) has T (1 - alpha) only 9.7e-8 (relative) above t_min, under one
+fp32 ulp. The device's fp32 product rounds below t_min and stops the pixel; the references keep it
+live. That is a discontinuity in the forward's own rule, not a kernel bug: replaying tile 203 in
+float64 with only that one stop decision flipped gives dopacity 6.0169e-9 / dr 2.17638e-9 / dA
+-339.43, against the device's 6.0179e-9 / 2.17638e-9 / -339.48 (`tmp/t728/flip.py`, not committed).
+The next-worst device slot is 0.0094 against float64, within the bar.
+
+Oracle change (bd36d918): `ref_slots_fast(..., ties=True)` flags each slot where the pair, or an
+earlier pair at one of its pixels, made a forward decision (alpha >= alpha_min, the alpha_max
+clamp, the T_min stop) within `TIE_RTOL` = 4e-6 (~32 ulp) of its threshold. Such a slot has two
+valid values, so `check --fast` and `hero_ties.py` leave it out of rel_err and report how many
+were skipped plus `rel_err_all`. Unit test `test_fast_ref_flags_threshold_ties`. Nothing is
+approximated: the device output is unchanged.
+
+Timing after the fix (`results/timing-hero-v2c-p150.json`, REPS=8): first 108.40 ms, warm runs
+89.096-89.108 ms, **median of 7 warm 89.10 ms** (was 86.32 ms, +3.2%). Per-stage split
+(`results/stats-hero-v2c-p150.json`, busiest core 107, 41,398 pairs, 492,267 bodies):
+
+| stage | busiest core ms (before fix) | after | mean core ms after |
+|---|---|---|---|
+| total | 86.28 | 89.04 | 53.31 |
+| tile setup | 0.04 | 0.04 | 0.02 |
+| record wait | 0.67 | 0.62 | 0.59 |
+| pair setup | 4.35 | 5.30 | 5.20 |
+| bodies | 77.65 | 79.52 | 44.05 |
+| finish | 3.50 | 3.48 | 3.37 |
+| pack sync | 0.08 | 0.08 | 0.08 |
+
+The bodies grew from 213 to 218 cycles (2 more Dst loads and a subtract for the centred power);
+pair setup grew 0.95 ms (P0, Lx, Ly staged into Dst). JIT check: the before arm's cache
+(#707) was gone from bh-49 by this run, so `opt/ab_jit_check.py` could not be run on both arms;
+the after arm has one blend_bwd_compute hash (`results/jit-hero-v2c-p150.txt`), and the
+kernel source differs between the arms (d951e19c), as do their outputs (hero 49.4 vs 0.028).
 
 ## Footprint (v2, analytic from the code)
 
@@ -210,9 +285,7 @@ The training quality bar is published 3DGS/gsplat or LiteGS bicycle test PSNR/SS
 
 ## Not done (moved to the follow-up)
 
-- Hero oracle failure (#707): all bad slots sit in the first 1024-pair chunk of tiles spanning
-  several chunks; fix the cross-chunk carry, check on a synthetic dump with one >1024-pair tile,
-  then re-time the hero (see the hero section).
+- Hero oracle failure (#707): fixed in #728 (tile-centred power, see the hero section).
 - Forward training flag (fp32 image, accurate exp, slab kept alive), with the flag-off b2b
   raw_md5 1d372b94 check and the on/off A/B (opt/ab_jit_check.py on both arms, plus a device
   hero.png, a diff and PSNR against benchmarks/reference_v2/hero.png).

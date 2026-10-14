@@ -92,3 +92,26 @@ def test_bf16_final_image_fails_gate():
     d = dict(np.load(DUMPS[0]))
     d["image"] = b.bf16_round(np.asarray(d["image"], np.float32)).astype(np.float64)
     assert b.compare(d, frozen=True)["worst_rel_err"] > BAR
+
+
+@pytest.mark.parametrize("l2", [1e-4, 1e-3])
+def test_centred_power_far_mean(l2):
+    """#728: a needle Gaussian whose mean is 1.3e5 px off the tile (hero view, _DSC8679).
+    The plain fp32 polynomial cancels catastrophically; the tile-centred form stays at fp32
+    rounding of the float64 power from the same fp32 inputs."""
+    f32 = np.float32
+    d = np.array([1.2e5, -4.0e4])
+    e1 = d / np.linalg.norm(d)
+    e2 = np.array([-e1[1], e1[0]])
+    Q = 2.0 / (d @ d) * np.outer(e1, e1) + l2 * np.outer(e2, e2)
+    A, B, C = f32(Q[0, 0]), f32(Q[0, 1]), f32(Q[1, 1])
+    mx, my = f32(16 - d[0]), f32(16 - d[1])
+    yy, xx = np.meshgrid(np.arange(32, dtype=f32) + f32(0.5), np.arange(32, dtype=f32) + f32(0.5),
+                         indexing="ij")
+    u64, v64 = xx - np.float64(mx), yy - np.float64(my)
+    truth = -0.5 * (np.float64(A) * u64 * u64 + 2.0 * np.float64(B) * u64 * v64 + np.float64(C) * v64 * v64)
+    u, v = xx - mx, yy - my
+    plain = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + C * v * v)
+    centred = b.centred_power(*b.centred_power_coeffs(A, B, C, mx, my), xx - f32(16), yy - f32(16))
+    assert np.abs(plain - truth).max() > 1e-2
+    assert np.abs(centred - truth).max() < 1e-5

@@ -86,6 +86,8 @@ for n in ${NPZS:-sh0 sh3}; do
   case "$n" in *=*) n=${n%%=*}; src=$O/remote/$n.npz ;; hero) src=tmp/t707/hero.npz; fast=--fast ;;
     *) src=benchmarks/train_oracle/t0_${n}_64x64_n50.npz ;; esac
   f=$O/remote/$n/slots.f32
+  # HERO_CHECK=0: skip the ~25 min hero check here (it holds the lock); run it after the lock.
+  if [ "$n" = hero ] && [ "${HERO_CHECK:-1}" = 0 ]; then echo "CHECK hero: deferred"; continue; fi
   if [ -s "$f" ]; then python3 -m gsplat.blend_backward_dev check "$src" "$f" --bar 1e-2 $fast | tee "$O/check-$n.json"
   else echo "CHECK $n: no slots.f32"; fi
 done

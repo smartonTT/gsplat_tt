@@ -16,7 +16,8 @@ Device decomposition (docs/training-plan/T1-blend-backward.md section 4):
 File layout (little endian):
   tiles.u32  16 words per tile with pairs: tile_id, rec_start, rec_count, n_batches
   recs.u32   16 words per pair: A', B', C' (A' = -A/2, B' = -B, C' = -C/2), mx, my
-             (tile-local), opacity, r, g, b, A, B, C, vector mask, slot, 0, 0
+             (tile-local), opacity, r, g, b, P0, Lx, Ly (tile-centred power, #728:
+             blend_backward_ref.centred_power_coeffs), vector mask, slot, 0, 0
   planes.f32 5 tilized fp32 tiles per listed tile: T0, BH0, g0, g1, g2
   ramps.f32  2 tilized fp32 tiles: x = c + 0.5, y = r + 0.5
   meta.json  counts and the blend cfg bits
@@ -30,8 +31,9 @@ import sys
 
 import numpy as np
 
-from gsplat.blend_backward_ref import (BlendCfg, blend_backward, cov_diag_from_conic,
-                                       rel_error, tile_rects)
+from gsplat.blend_backward_ref import (BlendCfg, blend_backward, centred_power,
+                                       centred_power_coeffs, cov_diag_from_conic, rel_error,
+                                       tile_rects)
 
 TILE = 32
 BATCH = 16         # pairs per ACC pack (v2: 3 result vectors per 8 pairs, vectors 24..29)
@@ -166,7 +168,7 @@ def prep(means2d, conic, opacity, colors, order, valid, image, dL_dimage, cfg: B
     recs[:, 0], recs[:, 1], recs[:, 2] = vb(f32(-0.5) * con[g, 0]), vb(-con[g, 1]), vb(f32(-0.5) * con[g, 2])
     recs[:, 3], recs[:, 4], recs[:, 5] = vb(mx), vb(my), vb(op[g])
     recs[:, 6:9] = vb(col[g])
-    recs[:, 9:12] = vb(con[g])
+    recs[:, 9:12] = vb(np.stack(centred_power_coeffs(con[g, 0], con[g, 1], con[g, 2], mx, my)[3:], 1))
     recs[:, 12] = masks
     recs[:, 13] = (pl["P"][g] + pl["j"]).astype(np.uint32)
     tiles = np.stack([utid, start, cnt, -(-cnt // BATCH)], 1).astype(np.uint32)
@@ -226,10 +228,10 @@ def prep_loop(means2d, conic, opacity, colors, order, valid, image, dL_dimage, c
                 mask = int(sum(1 << V for V in np.nonzero(hit)[0]))
                 rx0, rx1, ry0, ry1 = rects[g]
                 j = (ty - ry0) * (rx1 - rx0 + 1) + (tx - rx0)
-                cA, cB, cC = con[g]
-                rec = [fbits(f32(-0.5) * cA), fbits(-cB), fbits(f32(-0.5) * cC), fbits(mx), fbits(my),
+                Af, Bf, Cf, P0, Lx, Ly = centred_power_coeffs(*con[g], mx, my)
+                rec = [fbits(Af), fbits(Bf), fbits(Cf), fbits(mx), fbits(my),
                        fbits(op[g]), fbits(col[g, 0]), fbits(col[g, 1]), fbits(col[g, 2]),
-                       fbits(cA), fbits(cB), fbits(cC), mask, int(P[g] + j), 0, 0]
+                       fbits(P0), fbits(Lx), fbits(Ly), mask, int(P[g] + j), 0, 0]
                 recs.append(rec)
     return {"tiles": np.asarray(tiles, np.uint32).reshape(-1, 4),
             "recs": np.asarray(recs, np.uint32).reshape(-1, REC_WORDS),
@@ -267,13 +269,14 @@ def emulate(p: dict, exp=np.exp) -> np.ndarray:
         T, BH, g0, g1, g2 = (pl[k][lanes].copy() for k in range(N_PLANES))
         for rec in p["recs"][start:start + cnt]:
             fr = rec[:12].view(f32)
-            Af, Bf, Cf, mx, my, op, cr, cgc, cb, A, B, C = fr
+            Af, Bf, Cf, mx, my, op, cr, cgc, cb, P0, Lx, Ly = fr
+            A, B, C = f32(-2) * Af, -Bf, f32(-2) * Cf
             acc = np.zeros((9, 32, 32), f32)
             for V in range(32):
                 if not (int(rec[12]) >> V) & 1:
                     continue
                 u, v = xr[V] - mx, yr[V] - my
-                pw = Af * (u * u) + Bf * (u * v) + Cf * (v * v)
+                pw = centred_power(Af, Bf, Cf, P0, Lx, Ly, xr[V] - f32(16), yr[V] - f32(16))
                 w = exp(np.minimum(pw, f32(0))).astype(f32)
                 al = op * w
                 ga = np.where(pw > 0, f32(0), al)
@@ -390,10 +393,9 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
     for k in range(int(cnt.max()) if nt else 0):
         n = int(np.searchsorted(-cnt, -k, side="left"))   # tiles with cnt > k
         g = pl["g"][start[:n] + k]
-        A, B, Cc = (con[g, i][:, None, None] for i in range(3))
-        u = xx - (m2[g, 0][:, None, None] - ox[:n])
-        v = yy - (m2[g, 1][:, None, None] - oy[:n])
-        pw = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + Cc * v * v)
+        cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)),
+                                  m2[g, 0][:, None, None] - ox[:n], m2[g, 1][:, None, None] - oy[:n])
+        pw = centred_power(*cf, xx - f32(16), yy - f32(16))
         al = np.minimum(op[g][:, None, None] * np.exp(np.minimum(pw, f32(0))), amax).astype(f32)
         Tn = T[:n] * (one - al)
         act = (al >= amin) & ~done[:n]
@@ -412,66 +414,94 @@ def forward_fast(means2d, conic, opacity, colors, order, valid, H, W, cfg: Blend
                          "n_live_px": n_live}
 
 
-def ref_slots_fast(d, cfg) -> np.ndarray:
+TIE_RTOL = 4e-6   # ~32 fp32 ulp: a forward decision this close to its threshold may go either way
+
+
+def ref_slots_fast(d, cfg, dt=f32, ties=False):
     """blend_backward_ref.blend_backward's slots (same fp32 expressions, microblock and
-    lane sum orders), vectorised across tiles for hero-size dumps (tested against it)."""
-    img, gimg = np.asarray(d["image"], f32), np.asarray(d["dL_dimage"], f32)
+    lane sum orders), vectorised across tiles for hero-size dumps (tested against it).
+    dt=np.float64 (#728): the same math in float64 on the fp32 inputs (plain power polynomial
+    in absolute pixel coordinates), the exact gradient the fp32 forms approximate.
+    ties=True (#728) also returns a per-slot bool: the pair, or an earlier pair at one of its
+    pixels, made a forward decision (alpha >= alpha_min, clamp at alpha_max, T (1 - alpha) <
+    t_min) within TIE_RTOL of its threshold. Those decisions are discontinuities of the forward:
+    any fp32 evaluation order may take the other side (the hero's one failing slot is a T_min
+    stop 9.7e-8 above t_min), so the slot has two valid values and the check skips it."""
+    img, gimg = np.asarray(d["image"], dt), np.asarray(d["dL_dimage"], dt)
     H, W = img.shape[:2]
-    m2, con, op, col = (np.asarray(d[k], f32) for k in ("means2d", "conic", "opacity", "colors"))
+    m2, con, op, col = (np.asarray(d[k], dt) for k in ("means2d", "conic", "opacity", "colors"))
     rects = tile_rects_vec(d["means2d"], d["valid"], d["conic"], H, W, TILE)
     pl, utid, start, cnt, ox, oy, xx, yy, tiles_x, tiles_y = _sweep_tiles(m2, con, rects, d["order"], H, W)
     nt = utid.size
-    slots = np.zeros((int(pl["counts"].sum()), 9), f32)
+    slots = np.zeros((int(pl["counts"].sum()), 9), dt)
     alive = tile_planes(np.ones((H, W), bool), H, W, tiles_x, tiles_y)[utid]
     Gp = tile_planes(gimg, H, W, tiles_x, tiles_y)[utid]
-    Ig = (tile_planes(img, H, W, tiles_x, tiles_y)[utid] * Gp).sum(-1, dtype=f32)
-    T = np.ones((nt, TILE, TILE), f32)
-    s_acc = np.zeros((nt, TILE, TILE), f32)
-    amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1)
+    Ig = (tile_planes(img, H, W, tiles_x, tiles_y)[utid] * Gp).sum(-1, dtype=dt)
+    T = np.ones((nt, TILE, TILE), dt)
+    s_acc = np.zeros((nt, TILE, TILE), dt)
+    amax, amin, tmin, one = dt(cfg.alpha_max), dt(cfg.alpha_min), dt(cfg.t_min), dt(1)
+    taint = np.zeros((nt, TILE, TILE), bool)
+    tie = np.zeros(slots.shape[0], bool)
+    near = lambda q, th: np.abs(q / th - one) < TIE_RTOL  # noqa: E731
     for k in range(int(cnt.max()) if nt else 0):
         n = int(np.searchsorted(-cnt, -k, side="left"))
         idx = start[:n] + k
         g = pl["g"][idx]
-        A, B, C = (con[g, i][:, None, None] for i in range(3))
-        u = xx - (m2[g, 0][:, None, None] - ox[:n])
-        v = yy - (m2[g, 1][:, None, None] - oy[:n])
-        power = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + C * v * v)
-        wgt = np.exp(np.minimum(power, f32(0.0))).astype(f32)
+        mxl, myl = m2[g, 0][:, None, None] - ox[:n], m2[g, 1][:, None, None] - oy[:n]
+        u, v = xx - mxl, yy - myl
+        if dt is f32:
+            cf = centred_power_coeffs(*(con[g, i][:, None, None] for i in range(3)), mxl, myl)
+            power = centred_power(*cf, xx - dt(16), yy - dt(16))
+        else:
+            A_, B_, C_ = (con[g, i][:, None, None] for i in range(3))
+            power = -0.5 * A_ * u * u - B_ * u * v - 0.5 * C_ * v * v
+        wgt = np.exp(np.minimum(power, dt(0.0))).astype(dt)
         raw = op[g][:, None, None] * wgt
         clamp = raw > amax
-        alpha = np.where(clamp, amax, raw).astype(f32)
+        alpha = np.where(clamp, amax, raw).astype(dt)
         Tk = T[:n]
         live = alive[:n] & (alpha >= amin)
+        if ties:
+            taint[:n] |= alive[:n] & (near(alpha, amin) | near(raw, amax)
+                                      | (live & near(Tk * (one - alpha), tmin)))
+            tie[pl["P"][g] + pl["j"][idx]] = (taint[:n] & (alpha >= amin * (one - TIE_RTOL))).any((1, 2))
         stop = live & (Tk * (one - alpha) < tmin)
         live &= ~stop
         alive[:n] &= ~stop
-        at = np.where(live, alpha * Tk, f32(0.0)).astype(f32)
+        at = np.where(live, alpha * Tk, dt(0.0)).astype(dt)
         Gk = Gp[:n]
-        cg = (col[g][:, None, None, :] * Gk).sum(-1, dtype=f32)
+        cg = (col[g][:, None, None, :] * Gk).sum(-1, dtype=dt)
         s_acc[:n] = s_acc[:n] + at * cg
         behind = Ig[:n] - s_acc[:n]
         dalpha = Tk * cg - behind / (one - alpha)
-        T[:n] = np.where(live, Tk * (one - alpha), Tk).astype(f32)
-        act = live & ~clamp & (power <= f32(0.0))
-        G = np.where(act, dalpha * alpha, f32(0.0)).astype(f32)
-        terms = np.stack([np.where(live & ~clamp, dalpha * wgt, f32(0.0)),
+        T[:n] = np.where(live, Tk * (one - alpha), Tk).astype(dt)
+        act = live & ~clamp & (power <= dt(0.0))
+        G = np.where(act, dalpha * alpha, dt(0.0)).astype(dt)
+        terms = np.stack([np.where(live & ~clamp, dalpha * wgt, dt(0.0)),
                           at * Gk[..., 0], at * Gk[..., 1], at * Gk[..., 2],
-                          G * u * u, G * u * v, G * v * v, G * u, G * v], axis=-1).astype(f32)
+                          G * u * u, G * u * v, G * v * v, G * u, G * v], axis=-1).astype(dt)
         mb = terms.reshape(n, 8, 4, 4, 8, 9).transpose(0, 1, 3, 2, 4, 5).reshape(n, 32, 32, 9)
-        mb = mb.sum(2, dtype=f32)
-        s = np.zeros((n, 9), f32)
+        mb = mb.sum(2, dtype=dt)
+        s = np.zeros((n, 9), dt)
         for q in range(32):
             s += mb[:, q]
         Ac, Bc, Cc = con[g, 0], con[g, 1], con[g, 2]
         Suu, Suv, Svv, Su, Sv = s[:, 4], s[:, 5], s[:, 6], s[:, 7], s[:, 8]
         slots[pl["P"][g] + pl["j"][idx]] = np.stack(
-            [Ac * Su + Bc * Sv, Bc * Su + Cc * Sv, f32(-0.5) * Suu, -Suv, f32(-0.5) * Svv,
+            [Ac * Su + Bc * Sv, Bc * Su + Cc * Sv, dt(-0.5) * Suu, -Suv, dt(-0.5) * Svv,
              s[:, 0], s[:, 1], s[:, 2], s[:, 3]], 1)
-    return slots
+    return (slots, tie) if ties else slots
 
 
-def compare_slots(dev: np.ndarray, ref: np.ndarray) -> dict:
-    rep = {"rel_err": rel_error(dev.astype(np.float64), ref.astype(np.float64))}
+def compare_slots(dev: np.ndarray, ref: np.ndarray, skip=None) -> dict:
+    """skip: bool per slot (ref_slots_fast ties), left out of rel_err and per_term; the
+    error over all slots is still reported as rel_err_all."""
+    rep = {}
+    if skip is not None and skip.any():
+        rep["rel_err_all"] = rel_error(dev.astype(np.float64), ref.astype(np.float64))
+        rep["tie_slots"] = int(skip.sum())
+        dev, ref = dev[~skip], ref[~skip]
+    rep["rel_err"] = rel_error(dev.astype(np.float64), ref.astype(np.float64))
     names = ["dmx", "dmy", "dA", "dB", "dC", "dop", "dr", "dg", "db"]
     rep["per_term"] = {n: rel_error(dev[:, k].astype(np.float64), ref[:, k].astype(np.float64))
                        for k, n in enumerate(names)}
@@ -506,7 +536,7 @@ def main(argv=None) -> int:
             print(json.dumps({"emulate_vs_ref": compare_slots(emulate(p), ref_slots(d, cfg))}))
         return 0
     dev = np.fromfile(args.slots, f32).reshape(-1, 16)[:, :9]
-    rep = compare_slots(dev, (ref_slots_fast if args.fast else ref_slots)(d, cfg))
+    rep = compare_slots(dev, *ref_slots_fast(d, cfg, ties=True)) if args.fast else compare_slots(dev, ref_slots(d, cfg))
     rep["pass"] = bool(rep["rel_err"] <= args.bar)
     print(json.dumps({"npz": os.path.basename(args.npz), **rep}))
     return 0 if rep["pass"] else 1

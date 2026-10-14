@@ -7,9 +7,11 @@
 // + add tree + row rotate-add) and each pair's 9 floats land in column q of 3 out vectors;
 // the ACC tile is packed once per NB pairs and the writer scatters 9 floats per pair.
 // Dst (fp32, full sync, 8 tiles, dst_reg index = tile * 32 + vector):
-//   0 T, 1 BH, 2-4 g, 5 x ramp, 6 y ramp,
-//   7 ACC: 0-8 term sums, 9-17 pair scalars, 18-23 scratch (u, v, w, ga, 1 - alpha, alpha),
-//          24-29 out: pair i of a pack -> column i % 8 of vectors 24 + 3 (i / 8) + {0, 1, 2}
+//   0 T, 1 BH, 2-4 g, 5 x ramp, 6 y ramp (#747: x of vector V equals x of V & 9 and y of V equals
+//     y of V & ~9 (vector_lanes), so the bodies read only those; x ramp vectors 16-31 hold the
+//     body's fp32 constants, DR_K, rewritten per tile after the ramp copy),
+//   7 ACC: 0-8 term sums, 9-17 pair scalars, 18-21 scratch (u, v, w, ga), 22 P0, 23 alpha,
+//          30 Lx, 31 Ly (#728 tile-centred power, see bwd_body), 24-29 out: pair i of a pack -> column i % 8 of vectors 24 + 3 (i / 8) + {0, 1, 2}
 //          (group 0 rows: dop dr dg db; group 1: dA dB dC dmx; group 2 row 0: dmy).
 // Compile defines: BWD_AMAX_BITS, BWD_AMIN_BITS, BWD_TMIN_BITS (fp32 bits of the blend cfg).
 // BWD_STATS (#707): MATH-thread wall-clock counters per stage (tile setup, record wait, pair
@@ -35,8 +37,12 @@ constexpr uint32_t ACC_TILE = 7, DR_ACC = 224;
 constexpr uint32_t DR_S = DR_ACC + 9;  // Af Bf Cf mx my op cr cg cb
 constexpr uint32_t S_AF = 0, S_BF = 1, S_CF = 2, S_MX = 3, S_MY = 4, S_OP = 5, S_CR = 6, S_CG = 7, S_CB = 8;
 constexpr uint32_t DR_U = DR_ACC + 18, DR_V = DR_ACC + 19, DR_W = DR_ACC + 20, DR_GA = DR_ACC + 21,
-                   DR_OM = DR_ACC + 22, DR_AL = DR_ACC + 23;
+                   DR_P0 = DR_ACC + 22, DR_AL = DR_ACC + 23, DR_LX = DR_ACC + 30, DR_LY = DR_ACC + 31;
 constexpr uint32_t DR_O = DR_ACC + 24, NB = 16;  // out vectors, pairs per ACC pack
+// #747: body constants staged in Dst (one SFPLOAD instead of two SFPLOADI) and three in the
+// programmable constant registers (no load at all); same values, so bit-identical results.
+constexpr uint32_t DR_K = DR_X + 16;
+constexpr uint32_t K_LN2H = 0, K_LN2L = 1, K_C3 = 2, K_C2 = 3, K_C1 = 4, K_AMAX = 5, K_AMIN = 6, K_TMIN = 7;
 constexpr float kAmax = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_AMAX_BITS));
 constexpr float kAmin = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_AMIN_BITS));
 constexpr float kTmin = __builtin_bit_cast(float, static_cast<uint32_t>(BWD_TMIN_BITS));
@@ -57,16 +63,15 @@ inline void non_zeroing_pack_release() {
 // first device run failed the T0 oracle on small slots with it (max abs err 5e-4 of scale).
 sfpi_inline sfpi::vFloat bwd_exp(sfpi::vFloat a) {
     using namespace sfpi;
-    vFloat j = 1.442695f * a;
+    vFloat j = a * vConstFloatPrgm0;  // 1.442695f (bwd_consts_init)
     vInt i = float_to_int16(j, RoundMode::NearestEven);
     j = int32_to_float(i, RoundMode::NearestEven);
-    vFloat f = j * -6.93145752e-1f + a;
-    f = j * -1.42860677e-6f + f;
-    vFloat r = 1.37805939e-3f;
-    r = r * f + 8.37312452e-3f;
-    r = r * f + 4.16695364e-2f;
-    r = r * f + 1.66664720e-1f;
-    r = r * f + 4.99999851e-1f;
+    vFloat f = j * dst_reg[DR_K + K_LN2H] + a;
+    f = j * dst_reg[DR_K + K_LN2L] + f;
+    vFloat r = f * vConstFloatPrgm2 + vConstFloatPrgm1;  // 1.37805939e-3 f + 8.37312452e-3
+    r = r * f + dst_reg[DR_K + K_C3];
+    r = r * f + dst_reg[DR_K + K_C2];
+    r = r * f + dst_reg[DR_K + K_C1];
     i = abs(i);
     vFloat y = r * f + 1.0f;
     i = reinterpret<vInt>(copysgn(reinterpret<vFloat>(i), j));
@@ -82,14 +87,19 @@ template <uint32_t V>
 __attribute__((noinline)) void bwd_body() {
     using namespace sfpi;
     {
-        vFloat u = dst_reg[DR_X + V];
-        u = u - dst_reg[DR_S + S_MX];
-        vFloat v = dst_reg[DR_Y + V];
-        v = v - dst_reg[DR_S + S_MY];
-        dst_reg[DR_U] = u;
-        dst_reg[DR_V] = v;
-        vFloat pw = dst_reg[DR_S + S_AF] * (u * u) + dst_reg[DR_S + S_BF] * (u * v);
-        pw = pw + dst_reg[DR_S + S_CF] * (v * v);
+        // Tile-centred power (#728): A' u^2 + B' u v + C' v^2 cancels catastrophically in fp32
+        // when the mean is 1e4+ px off the tile. With du = X - 16, dv = Y - 16 (exact) and P0,
+        // Lx, Ly formed in float64 on the host (blend_backward_ref.centred_power_coeffs):
+        // power = P0 + du (Lx + A' du + B' dv) + dv (Ly + C' dv).
+        vFloat x = dst_reg[DR_X + (V & 9u)];
+        vFloat y = dst_reg[DR_Y + (V & ~9u)];
+        dst_reg[DR_U] = x - dst_reg[DR_S + S_MX];
+        dst_reg[DR_V] = y - dst_reg[DR_S + S_MY];
+        vFloat du = x - 16.0f;
+        vFloat dv = y - 16.0f;
+        vFloat pw = dst_reg[DR_LX] + dst_reg[DR_S + S_AF] * du + dst_reg[DR_S + S_BF] * dv;
+        vFloat q = dst_reg[DR_LY] + dst_reg[DR_S + S_CF] * dv;
+        pw = dst_reg[DR_P0] + du * pw + dv * q;
         vFloat ex = pw;
         v_if (pw > 0.0f) { ex = 0.0f; }
         v_endif;
@@ -100,8 +110,9 @@ __attribute__((noinline)) void bwd_body() {
         vFloat ga = al;
         v_if (pw > 0.0f) { ga = 0.0f; }
         v_endif;
-        v_if (al > kAmax) {
-            al = kAmax;
+        vFloat amax = dst_reg[DR_K + K_AMAX];
+        v_if (al > amax) {
+            al = amax;
             w = 0.0f;
             ga = 0.0f;
         }
@@ -109,14 +120,15 @@ __attribute__((noinline)) void bwd_body() {
         dst_reg[DR_W] = w;
         dst_reg[DR_GA] = ga;
         dst_reg[DR_AL] = al;
-        dst_reg[DR_OM] = vConst1 - al;
     }
     vFloat al = dst_reg[DR_AL];
     vFloat T = dst_reg[DR_T + V];
-    v_if (al >= kAmin) {
-        vFloat om = dst_reg[DR_OM];
+    vFloat amin = dst_reg[DR_K + K_AMIN];
+    v_if (al >= amin) {
+        vFloat om = vConst1 - al;
         vFloat Tn = T * om;
-        v_if (Tn >= kTmin) {
+        vFloat tmin = dst_reg[DR_K + K_TMIN];
+        v_if (Tn >= tmin) {
             dst_reg[DR_T + V] = Tn;
             vFloat at = al * T;
             vFloat g = dst_reg[DR_G0 + V];
@@ -239,7 +251,7 @@ inline void bwd_bodies_init() {
 inline uint32_t bwd_read_record(uint32_t ra, uint32_t* s) {
     asm volatile("fence" ::: "memory");
     const volatile uint32_t* rec = reinterpret_cast<const volatile uint32_t*>(ra);
-    for (uint32_t k = 0; k < 9; k++) s[k] = rec[k];
+    for (uint32_t k = 0; k < 12; k++) s[k] = rec[k];
     const uint32_t mask = rec[12];
     ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, 1u);
     return mask;
@@ -257,6 +269,9 @@ inline void bwd_pair_setup(const uint32_t* s) {
     dst_reg[DR_S + 6] = Converter::as_float(s[6]);
     dst_reg[DR_S + 7] = Converter::as_float(s[7]);
     dst_reg[DR_S + 8] = Converter::as_float(s[8]);
+    dst_reg[DR_P0] = Converter::as_float(s[9]);
+    dst_reg[DR_LX] = Converter::as_float(s[10]);
+    dst_reg[DR_LY] = Converter::as_float(s[11]);
     dst_reg[DR_ACC + 0] = vConst0;
     dst_reg[DR_ACC + 1] = vConst0;
     dst_reg[DR_ACC + 2] = vConst0;
@@ -266,6 +281,22 @@ inline void bwd_pair_setup(const uint32_t* s) {
     dst_reg[DR_ACC + 6] = vConst0;
     dst_reg[DR_ACC + 7] = vConst0;
     dst_reg[DR_ACC + 8] = vConst0;
+}
+
+// Per tile, after the ramp copy (it overwrites DR_K): the body constants (see DR_K).
+inline void bwd_consts_init() {
+    using namespace sfpi;
+    vConstFloatPrgm0 = 1.442695f;
+    vConstFloatPrgm1 = 8.37312452e-3f;
+    vConstFloatPrgm2 = 1.37805939e-3f;
+    dst_reg[DR_K + K_LN2H] = -6.93145752e-1f;
+    dst_reg[DR_K + K_LN2L] = -1.42860677e-6f;
+    dst_reg[DR_K + K_C3] = 4.16695364e-2f;
+    dst_reg[DR_K + K_C2] = 1.66664720e-1f;
+    dst_reg[DR_K + K_C1] = 4.99999851e-1f;
+    dst_reg[DR_K + K_AMAX] = kAmax;
+    dst_reg[DR_K + K_AMIN] = kAmin;
+    dst_reg[DR_K + K_TMIN] = kTmin;
 }
 
 inline void bwd_bodies(uint32_t mask) {
@@ -328,6 +359,7 @@ void kernel_main() {
         copy_tile(CB_RAMP, 0, 5);
         copy_tile(CB_RAMP, 1, 6);
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((bwd_consts_init()));
         ST_LAP(ST_TILE, st_c);
         ST_CNT(ST_NT, 1);
 
@@ -336,7 +368,7 @@ void kernel_main() {
             const uint32_t ra = get_tile_address(CB_REC, 0);  // all threads (mailbox sync)
 #ifdef TRISC_MATH
             ST_LAP(ST_REC, st_c);
-            uint32_t s[9];
+            uint32_t s[12];
             const uint32_t mask = bwd_read_record(ra, s);
             bwd_pair_setup(s);
             ST_LAP(ST_SETUP, st_c);

@@ -13,8 +13,8 @@ Decomposition (PLAN.md §3 steps 1-4):
 2. Per 32x32 tile, on the core that blended it, pairs run front to back in the tile's
    sorted list. Per pixel the backward carries T and the colour accumulated so far
    (as C_acc . g). It recomputes the forward's alpha and live decision with the forward's own
-   math (fp32 power polynomial in tile-local coordinates, alpha clamp 0.99, skip below
-   1/255, stop when T * (1 - alpha) < t_min), so no live mask is stored. The colour
+   math (fp32 power polynomial in tile-local coordinates, tile-centred as centred_power
+   (#728), alpha clamp 0.99, skip below 1/255, stop when T * (1 - alpha) < t_min), so no live mask is stored. The colour
    behind pair i is image - C_acc(<= i), so
        dL/dalpha_i = T_i (c_i . g) - (image . g - C_acc . g) / (1 - alpha_i)
    needs one reciprocal of (1 - alpha_i) per live pixel. Only the dot products are
@@ -53,6 +53,7 @@ import numpy as np
 
 TILE = 32
 MB_H, MB_W = 4, 8          # one SFPU vector: 4 rows x 8 columns
+f32 = np.float32
 N_TERMS = 9                # dmx dmy dA dB dC dopacity dr dg db (after the pair epilogue)
 
 
@@ -62,6 +63,33 @@ class BlendCfg:
     alpha_min: float = 1.0 / 255.0
     t_min: float = 1e-4
     background: tuple = (0.0, 0.0, 0.0)
+
+
+def centred_power_coeffs(A, B, C, mx, my):
+    """Per-pair coefficients of the tile-centred power polynomial (#728).
+
+    power(u, v) = A' u^2 + B' u v + C' v^2 with A' = -A/2, B' = -B, C' = -C/2 (fp32, as the
+    pair record) and u, v the pixel centre minus the tile-local mean. Evaluated as is in fp32
+    it cancels catastrophically for Gaussians whose mean lies 1e4+ px off the tile (tiny conic,
+    huge u, v: the hero view has them at the front of tiles, #707). Instead, with du = X - 16,
+    dv = Y - 16 (exact in fp32) and U0 = 16 - mx, V0 = 16 - my:
+        power = P0 + du (Lx + A' du + B' dv) + dv (Ly + C' dv)
+    P0 = power(U0, V0), Lx = 2 A' U0 + B' V0, Ly = B' U0 + 2 C' V0 are formed in float64 here
+    (host side) and rounded to fp32 once; the per-pixel part only adds small terms.
+    Returns fp32 (Af, Bf, Cf, P0, Lx, Ly); inputs are fp32 arrays or scalars."""
+    Af, Bf, Cf = f32(-0.5) * f32(A), -f32(B), f32(-0.5) * f32(C)
+    a, b, c = (np.asarray(x, np.float64) for x in (Af, Bf, Cf))
+    U0 = 16.0 - np.asarray(mx, np.float64)
+    V0 = 16.0 - np.asarray(my, np.float64)
+    P0 = a * U0 * U0 + b * U0 * V0 + c * V0 * V0
+    Lx = 2.0 * a * U0 + b * V0
+    Ly = b * U0 + 2.0 * c * V0
+    return Af, Bf, Cf, f32(P0), f32(Lx), f32(Ly)
+
+
+def centred_power(Af, Bf, Cf, P0, Lx, Ly, du, dv):
+    """fp32 power in the device kernel's order (blend_bwd_compute.cpp bwd_body)."""
+    return (P0 + du * (Lx + Af * du + Bf * dv) + dv * (Ly + Cf * dv)).astype(f32)
 
 
 def bf16_round(x: np.ndarray) -> np.ndarray:
@@ -142,6 +170,7 @@ def blend_backward(means2d, conic, opacity, colors, order, valid, image, dL_dima
     tiles_x, tiles_y = (W + tile - 1) // tile, (H + tile - 1) // tile
     yy, xx = np.meshgrid(np.arange(tile, dtype=f32) + f32(0.5),
                          np.arange(tile, dtype=f32) + f32(0.5), indexing="ij")
+    du, dv = xx - f32(16.0), yy - f32(16.0)
     one = f32(1.0)
     n_pairs = 0
     n_live_px = 0
@@ -169,7 +198,7 @@ def blend_backward(means2d, conic, opacity, colors, order, valid, image, dL_dima
                 mx, my = m2[g, 0] - f32(ox), m2[g, 1] - f32(oy)   # tile-local mean
                 u = xx - mx
                 v = yy - my
-                power = f32(-0.5) * (A * u * u + f32(2.0) * B * u * v + C * v * v)
+                power = centred_power(*centred_power_coeffs(A, B, C, mx, my), du, dv)
                 wgt = np.exp(np.minimum(power, f32(0.0))).astype(f32)
                 raw = op[g] * wgt
                 clamp = raw > f32(cfg.alpha_max)

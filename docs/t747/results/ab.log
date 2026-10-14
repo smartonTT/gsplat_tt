@@ -1,0 +1,153 @@
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #750 (run 2108) since 09:49 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #756 (run 2123) since 10:16 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #755 (run 2121) since 10:18 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #755 (run 2121) since 10:18 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #755 (run 2121) since 10:18 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #755 (run 2121) since 10:18 PDT; 5 ahead in queue)
+ttp lock: waiting for p100 (held by task #753 (run 2125) since 10:26 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #753 (run 2125) since 10:26 PDT; 4 ahead in queue)
+ttp lock: waiting for p100 (held by task #753 (run 2125) since 10:26 PDT; 4 ahead in queue)
+ttp lock: got p100 after 33.6 min
+SSH_PREFLIGHT=ok
+=== t747 HEAD=c84e9e0379a86d77dad2e2b593dfb9003dcabdc4 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 10:32:23 PDT 2026
+sync rc=0
+[sync_remote] c84e9e0379a86d77dad2e2b593dfb9003dcabdc4 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t747: 1152 files, 64988597 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 12 of 1154 files, 106917 bytes (tar)
+STAMP remote=c84e9e0379a86d77dad2e2b593dfb9003dcabdc4 local=c84e9e0379a86d77dad2e2b593dfb9003dcabdc4 MATCH
+=== build 10:32:53
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:88:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+   88 |     want = std::max<uint32_t>(1, std::min<uint32_t>({want, grid.x * grid.y, std::max<uint32_t>(n_tiles, 1)}));
+      |                                                            ~~~~~~~^~~~~~~~
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:88:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+[2/2] Linking CXX executable blend_bwd_bench
+build rc=0
+=== push inputs 10:33:01
+push hero.npz rc=0
+push s1.npz rc=0
+push s2.npz rc=0
+push blend_bwd_compute.base.cpp rc=0
+4cd991367631f0a2b9f45dd15c2e7dcd  hero.npz
+4630304daef1b7a7cb463c35fbea36e5  s1.npz
+d5f5b75c6df6da31ed77ac19c317ca06  s2.npz
+bb21df9cd483338316b6ea4e281061df  blend_bwd_compute.base.cpp
+b9e970d02a0e53b6c19c3fb60742a6af  cand.cpp
+prep sh0 rc=0
+prep sh3 rc=0
+prep s1 rc=0
+prep s2 rc=0
+prep hero rc=0
+2026-10-14 17:35:30.823 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:35:30.823 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:35:30.823 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+c0ad8844e5d16b9756bb98d74b6f2f97  tmp/t747/base/sh0/slots.f32
+run base sh0 -> tmp/t747/base/sh0 rc=0
+2026-10-14 17:35:36.024 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:35:36.024 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:35:36.024 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+75fdb8477031c08c74e09fa9bb8e51bd  tmp/t747/base/sh3/slots.f32
+run base sh3 -> tmp/t747/base/sh3 rc=0
+2026-10-14 17:35:41.225 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:35:41.225 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:35:41.225 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+a711a426458aa15572707ec61be71841  tmp/t747/base/s1/slots.f32
+run base s1 -> tmp/t747/base/s1 rc=0
+2026-10-14 17:35:46.026 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:35:46.026 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:35:46.026 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+9da24fa01a2d81efbe108bb8912489d9  tmp/t747/base/s2/slots.f32
+run base s2 -> tmp/t747/base/s2 rc=0
+2026-10-14 17:35:54.927 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:35:54.927 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:35:54.927 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+9f431f77dc7f8ef5d3ad43671e238efa  tmp/t747/cand/sh0/slots.f32
+run cand sh0 -> tmp/t747/cand/sh0 rc=0
+2026-10-14 17:36:00.128 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:00.128 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:00.128 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+4cb19a1eea7d4749808136aedf0bd056  tmp/t747/cand/sh3/slots.f32
+run cand sh3 -> tmp/t747/cand/sh3 rc=0
+2026-10-14 17:36:05.228 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:05.228 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:05.228 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+fa451e7ac8384c762ba002e770d6f57a  tmp/t747/cand/s1/slots.f32
+run cand s1 -> tmp/t747/cand/s1 rc=0
+2026-10-14 17:36:10.329 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:10.329 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:10.329 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+42fd4cd30a5a06a21a5cf3642d8124d2  tmp/t747/cand/s2/slots.f32
+run cand s2 -> tmp/t747/cand/s2 rc=0
+=== round 1 base 10:36:10
+2026-10-14 17:36:16.830 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:16.830 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:16.830 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+9fbeed13d98df7672ba25f2d9ba6c775  tmp/t747/base/hero-r1/slots.f32
+run base hero -> tmp/t747/base/hero-r1 rc=0
+=== round 1 cand 10:36:20
+2026-10-14 17:36:26.931 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:26.931 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:26.931 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+5edc0d5dbb628dc596425b404d72c0ab  tmp/t747/cand/hero-r1/slots.f32
+run cand hero -> tmp/t747/cand/hero-r1 rc=0
+=== round 2 cand 10:36:30
+2026-10-14 17:36:36.532 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:36.532 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:36.532 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+33e5ff4b229ac6188a54a66e62a0eda5  tmp/t747/cand/hero-r2/slots.f32
+run cand hero -> tmp/t747/cand/hero-r2 rc=0
+=== round 2 base 10:36:39
+2026-10-14 17:36:46.134 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:46.134 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:46.134 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+b394c26bc637c968efd36305fad67966  tmp/t747/base/hero-r2/slots.f32
+run base hero -> tmp/t747/base/hero-r2 rc=0
+=== round 3 base 10:36:49
+2026-10-14 17:36:55.735 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:36:55.735 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:36:55.735 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+a1410cae8428a5818a4e156385de07ce  tmp/t747/base/hero-r3/slots.f32
+run base hero -> tmp/t747/base/hero-r3 rc=0
+=== round 3 cand 10:36:58
+2026-10-14 17:37:04.837 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:37:04.837 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:37:04.837 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+dd25122558d3832b857092d1a5f03eab  tmp/t747/cand/hero-r3/slots.f32
+run cand hero -> tmp/t747/cand/hero-r3 rc=0
+=== round 4 cand 10:37:07
+2026-10-14 17:37:14.038 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:37:14.038 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:37:14.038 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+f56430da302c9b23b89bd2a6f00b5dca  tmp/t747/cand/hero-r4/slots.f32
+run cand hero -> tmp/t747/cand/hero-r4 rc=0
+=== round 4 base 10:38:34
+2026-10-14 17:38:41.050 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:38:41.050 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:38:41.050 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+aefe94889d9239295a527d31a1dbc2c4  tmp/t747/base/hero-r4/slots.f32
+run base hero -> tmp/t747/base/hero-r4 rc=0
+=== round 5 base 10:38:44
+2026-10-14 17:38:50.752 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:38:50.752 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:38:50.752 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+b2a8d6aa95c0b2b10fb42f4be429d981  tmp/t747/base/hero-r5/slots.f32
+run base hero -> tmp/t747/base/hero-r5 rc=0
+=== round 5 cand 10:38:54
+2026-10-14 17:39:00.453 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 17:39:00.453 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 17:39:00.453 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+873c33ec07586359b619a65c893c1d02  tmp/t747/cand/hero-r5/slots.f32
+run cand hero -> tmp/t747/cand/hero-r5 rc=0
+restore+jit+rm rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t747 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t747/docs/t747/out/remote: 102 entries (tar)
+pull rc=0
+rm t747 rc=0
+=== done Wed Oct 14 10:39:56 PDT 2026
