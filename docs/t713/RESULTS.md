@@ -17,3 +17,25 @@ Dst accumulation across the 12 matmuls/windows (fp32_dest_acc_en / HiFi4 really 
 the pack format of the matmul output CB, or SrcB fidelity. Speed: 2.2x at K=8, 1.17x at K=1.
 
 Raw: run3-bf16x3/, run2-tf32pair/. Log: tt-project/state/runs/2022/t713e.log.
+
+## t726: root cause of the ~2^-10 loss, and the fix (cbb60f4a)
+
+Root cause: the 32-bit Dst transpose (`transpose_wh_dest<true>`) moves the low 16 bits of each
+value through SrcB. SrcB was still configured for the bf16 matmul operands, so those bits were
+reformatted on the way and g2d came back with mantissa bits 9-14 flipped (~2^-10 relative). Found
+offline from the run-3 dumps: the back-solved device g2d differs from the exact g2d only in those
+bits; the matmul body, Dst accumulation and the Float32 pack are exact. Fix: set fp32 Src formats
+(`reconfig_data_format(CB_K, CB_P, CB_A, CB_P)`) before the transpose. Source regression test in
+tests/unit/test_t2_segmm.py fails without it.
+
+Run 4 (fix cbb60f4a vs t697 gather 311181db), bh-49 p150a, 110 cores, 10 reps, one `ttp lock`,
+separate JIT caches (ttmc-t726-fix / ttmc-t726-gather): `ab_jit_check --kernel t2_compute` JIT-HASH OK.
+
+| arm | syn K=8 ms (med / min) | syn K=1 ms (med / min) |
+|---|---|---|
+| t697 RISC gather (311181db) | 13.85 / 13.85 | 3.19 / 3.18 |
+| FPU segment matmul + fp32 Src transpose (cbb60f4a) | 6.15 / 6.13 | 2.76 / 2.70 |
+
+Speedup 2.25x at K=8, 1.16x at K=1; the fix costs nothing measurable (run 3: 6.21 / 2.71).
+The gate's oracle outputs were deleted on the box by a drive.sh quoting bug (fixed in 3371c380),
+so sh0/sh3 were rerun separately (below). Raw: run4-fp32src/.
