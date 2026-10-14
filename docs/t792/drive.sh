@@ -35,6 +35,9 @@ SSH=(ssh "${SO[@]}" "$H")
 sha=$(git rev-parse "$rev^{commit}")
 echo "=== t792 $rev=$sha iter $N to $H:$T $(TZ=America/Los_Angeles date)"
 opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1; rc=$?
+# rc 3 = the stale-build heuristic: render/train sources changed, render_clean .so did not (it does
+# not build render/train). .host_src.md5 is updated by then, so one resync settles it (as docs/t720).
+if [ $rc = 3 ]; then echo "sync rc=3 (stale-build heuristic), resync"; opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1; rc=$?; fi
 echo "sync rc=$rc"; grep '^\[sync_remote\]' "$O/sync.log" | tail -4
 [ $rc = 0 ] || { tail -30 "$O/sync.log"; exit 3; }
 rsha=$(timeout 60 "${SSH[@]}" "sed -n 's/^sha=//p' $T/SYNC_STAMP")
