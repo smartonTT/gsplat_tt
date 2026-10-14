@@ -1,0 +1,1 @@
+{"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1751.1040, "device_ms_min": 13.8452, "device_ms_med": 13.8534, "reps": 10, "grads_out": false}

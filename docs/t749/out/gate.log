@@ -1,0 +1,736 @@
+ttp lock: waiting for p100 (held by task #745 (run 2113) since 09:19 PDT)
+ttp lock: waiting for p100 (held by task #745 (run 2113) since 09:19 PDT)
+ttp lock: got p100 after 3.1 min
+SSH_PREFLIGHT=ok
+SSH_PREFLIGHT=ok
+=== t713 4634e976=4634e976fbf3922cd61b7ff240ffb76b092e2250 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:24:22 PDT 2026
+sync rc=0
+[sync_remote] 4634e976fbf3922cd61b7ff240ffb76b092e2250 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1137 files, 64954549 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 27 of 1139 files, 3381057 bytes (tar)
+STAMP remote=4634e976fbf3922cd61b7ff240ffb76b092e2250 local=4634e976fbf3922cd61b7ff240ffb76b092e2250 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:24:56
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench
+build rc=0
+=== run sh0 09:25:05
+{"consts": [0.9987502694129944, 0.0, -0.04997916892170906, -0.0049895914271473885, 0.9950041770935059, -0.09970865398645401, 0.04972948133945465, 0.0998334139585495, 0.9937606453895569, 0.10000000149011612, -0.05000000074505806, 0.30000001192092896, 70.4000015258789, 70.4000015258789, 32.0, 32.0, 64.0, 64.0, 0.20000000298023224, 0.30000001192092896, 0.00039071086212061346, 0.012209714390337467, 0.002441942924633622, 0.12209714204072952, 0.006104857195168734, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 14.156285285949707, 1.0000000036274937e-15], "source": "benchmarks/train_oracle/t0_sh0_64x64_n50.npz", "n": 50, "n_groups": 16, "n_slot_pages": 2, "n_slots": 72, "max_count": 4}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:25:09.107 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:25:09.107 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:25:09.107 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:25:09.107 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:25:09.107 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:25:09.107 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:25:09.111 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:25:11.485 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349983 GHz, device_time_at_sync=6110771492652 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16, "groups_processed": 1, "cores": 110, "max_core_groups": 1, "slot_pages": 2, "device_ms_first": 1923.8941, "device_ms_min": 0.0444, "device_ms_med": 0.0464, "reps": 3, "grads_out": true}
+2026-10-14 16:25:13.541 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:25:13.541 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:25:13.541 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=7381.057ms, min=224.999ms, max=1907.700ms, mean=567.774ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:13.541 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3788.893ms, min=225.000ms, max=1328.301ms, mean=541.270ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:13.542 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:25:13.542 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:25:13.637 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:25:13.637 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:25:13.637 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run sh0 rc=0
+=== run sh3 09:25:13
+{"consts": [0.9987502694129944, 0.0, -0.04997916892170906, -0.0049895914271473885, 0.9950041770935059, -0.09970865398645401, 0.04972948133945465, 0.0998334139585495, 0.9937606453895569, 0.10000000149011612, -0.05000000074505806, 0.30000001192092896, 70.4000015258789, 70.4000015258789, 32.0, 32.0, 64.0, 64.0, 0.20000000298023224, 0.30000001192092896, 0.00039071086212061346, 0.012209714390337467, 0.002441942924633622, 0.12209714204072952, 0.006104857195168734, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 14.156285285949707, 1.0000000036274937e-15], "source": "benchmarks/train_oracle/t0_sh3_64x64_n50.npz", "n": 50, "n_groups": 16, "n_slot_pages": 2, "n_slots": 72, "max_count": 4}
+ (topology_solver.tpp:94)
+2026-10-14 16:25:17.401 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:25:17.401 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:25:17.401 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:25:17.401 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:25:17.401 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:25:17.401 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:25:17.463 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:25:18.104 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349985 GHz, device_time_at_sync=6116117682750 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16, "groups_processed": 1, "cores": 110, "max_core_groups": 1, "slot_pages": 2, "device_ms_first": 14.7894, "device_ms_min": 0.0466, "device_ms_med": 0.0477, "reps": 3, "grads_out": true}
+2026-10-14 16:25:18.251 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:25:18.251 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:25:18.251 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=14.186ms, min=0.015ms, max=2.607ms, mean=0.546ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:18.251 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=14.692ms, min=0.410ms, max=2.738ms, mean=1.130ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:18.251 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=6.670ms, min=0.410ms, max=1.667ms, mean=0.953ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:18.252 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:25:18.252 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:25:18.337 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:25:18.337 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:25:18.337 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run sh3 rc=0
+=== run syn8 09:25:18
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+ (topology_solver.tpp:94)
+2026-10-14 16:25:23.994 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:25:23.994 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:25:23.994 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:25:23.994 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:25:23.994 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:25:23.994 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:25:23.998 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:25:24.625 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349979 GHz, device_time_at_sync=6118691480863 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1894.3326, "device_ms_min": 6.4578, "device_ms_med": 6.5113, "reps": 10, "grads_out": false}
+2026-10-14 16:25:26.942 | info     |    BuildKernels | JIT cache stats: 9/13 hits (69.2%) [9 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:25:26.942 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:25:26.942 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=18, total=10.379ms, min=0.014ms, max=2.010ms, mean=0.577ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:26.942 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=2922.751ms, min=0.374ms, max=1875.170ms, mean=224.827ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:26.942 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=265.172ms, min=0.374ms, max=258.971ms, mean=37.882ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:26.944 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:25:26.944 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:25:27.038 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:25:27.038 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:25:27.038 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:25:27
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:25:31.798 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:25:31.798 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:25:31.798 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:25:31.798 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:25:31.798 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:25:31.798 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:25:31.802 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:25:32.435 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=6124207348371 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.0647, "device_ms_min": 3.5397, "device_ms_med": 3.6218, "reps": 10, "grads_out": false}
+2026-10-14 16:25:32.813 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:25:32.813 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:25:32.813 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=15.056ms, min=0.014ms, max=2.332ms, mean=0.579ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:32.813 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=15.542ms, min=0.488ms, max=2.442ms, mean=1.196ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:32.813 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=7.738ms, min=0.488ms, max=2.071ms, mean=1.105ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:25:32.815 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:25:32.815 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:25:32.939 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:25:32.939 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:25:32.939 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r1/fix/remote: 38 entries (tar)
+pull rc=0
+{
+ "n": 50,
+ "n_slots": 72,
+ "max_count": 4,
+ "grads": {
+  "means": 5.3324280723047204e-05,
+  "log_scales": 3.191153484439262e-05,
+  "quats": 0.00010526050782009612,
+  "opacity_logits": 3.7425464404415777e-05,
+  "sh": 0.0001336132796795206
+ },
+ "adam": {
+  "params_means": 0.0,
+  "params_log_scales": 0.0,
+  "params_quats": 6.921290804123871e-08,
+  "params_opacity_logits": 6.733319799360536e-07,
+  "params_sh": 9.182361235009221e-08,
+  "m_means": 0.0,
+  "m_log_scales": 0.0,
+  "m_quats": 0.0,
+  "m_opacity_logits": 0.0,
+  "m_sh": 0.0,
+  "v_means": 0.0,
+  "v_log_scales": 0.0,
+  "v_quats": 0.0,
+  "v_opacity_logits": 0.0,
+  "v_sh": 0.0,
+  "delta_means": 0.0,
+  "delta_log_scales": 0.0,
+  "delta_quats": 2.2289089490694304e-05,
+  "delta_opacity_logits": 1.7041853001577308e-07,
+  "delta_sh": 7.733772611617674e-06
+ },
+ "pfwc": {
+  "mx": 0.0,
+  "my": 0.0,
+  "mz": 0.0,
+  "c00": 1.0256127117174458e-06,
+  "c01": 5.8717715618359715e-06,
+  "c02": 3.7034714232575845e-05,
+  "c11": 8.369405470912968e-07,
+  "c12": 1.5553253418029056e-05,
+  "c22": 7.665270346419848e-07,
+  "opacity": 1.8708930389869788e-07,
+  "col_r": 0.0,
+  "col_g": 0.0,
+  "col_b": 0.0
+ },
+ "m_bits_equal": true,
+ "worst_grad": 0.0001336132796795206,
+ "worst_adam": 2.2289089490694304e-05,
+ "worst_pfwc": 3.7034714232575845e-05,
+ "pass": true
+}
+{
+ "n": 50,
+ "n_slots": 72,
+ "max_count": 4,
+ "grads": {
+  "means": 1.0581745226788142e-05,
+  "log_scales": 2.9425959581867823e-05,
+  "quats": 0.00037965571889422145,
+  "opacity_logits": 6.667272928000781e-06,
+  "sh": 3.568261255151547e-05
+ },
+ "adam": {
+  "params_means": 0.0,
+  "params_log_scales": 0.0,
+  "params_quats": 1.180700691548202e-07,
+  "params_opacity_logits": 1.496847212100684e-06,
+  "params_sh": 0.0,
+  "m_means": 0.0,
+  "m_log_scales": 0.0,
+  "m_quats": 0.0,
+  "m_opacity_logits": 0.0,
+  "m_sh": 0.0,
+  "v_means": 0.0,
+  "v_log_scales": 0.0,
+  "v_quats": 0.0,
+  "v_opacity_logits": 0.0,
+  "v_sh": 0.0,
+  "delta_means": 0.0,
+  "delta_log_scales": 0.0,
+  "delta_quats": 8.84024788055057e-06,
+  "delta_opacity_logits": 9.524734783759947e-07,
+  "delta_sh": 0.0
+ },
+ "pfwc": {
+  "mx": 0.0,
+  "my": 0.0,
+  "mz": 0.0,
+  "c00": 1.05456012890943e-06,
+  "c01": 1.0460759329647547e-05,
+  "c02": 8.038137209930422e-06,
+  "c11": 1.0783399990920378e-06,
+  "c12": 6.8323270644075505e-06,
+  "c22": 8.684665442804313e-07,
+  "opacity": 1.626910134852954e-07,
+  "col_r": 0.0,
+  "col_g": 0.0,
+  "col_b": 0.0
+ },
+ "m_bits_equal": true,
+ "worst_grad": 0.00037965571889422145,
+ "worst_adam": 8.84024788055057e-06,
+ "worst_pfwc": 1.0460759329647547e-05,
+ "pass": true
+}
+=== done Wed Oct 14 09:25:42 PDT 2026
+r1 fix arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 311181db=311181db9577713581922b90d120489b4ecba135 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:25:46 PDT 2026
+sync rc=0
+[sync_remote] 311181db9577713581922b90d120489b4ecba135 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1099 files, 64836045 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 5 of 1101 files, 37107 bytes (tar)
+STAMP remote=311181db9577713581922b90d120489b4ecba135 local=311181db9577713581922b90d120489b4ecba135 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:26:13
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench
+build rc=0
+=== run syn8 09:26:20
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:26:26.210 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:26:26.210 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:26:26.210 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:26:26.210 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:26:26.210 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:26:26.210 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:26:26.214 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:26:28.575 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349952 GHz, device_time_at_sync=6129435472513 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1747.1939, "device_ms_min": 13.8275, "device_ms_med": 13.8494, "reps": 10, "grads_out": false}
+2026-10-14 16:26:30.829 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:26:30.829 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:26:30.829 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=6948.330ms, min=220.800ms, max=1714.178ms, mean=534.487ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:26:30.829 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3715.319ms, min=220.801ms, max=1317.769ms, mean=530.760ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:26:30.831 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:26:30.831 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:26:30.947 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:26:30.947 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:26:30.947 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:26:31
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:26:36.306 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:26:36.306 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:26:36.306 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:26:36.306 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:26:36.306 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:26:36.306 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:26:36.310 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:26:36.939 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349990 GHz, device_time_at_sync=6134908672888 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.9516, "device_ms_min": 3.1693, "device_ms_med": 3.1867, "reps": 10, "grads_out": false}
+2026-10-14 16:26:37.317 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:26:37.317 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:26:37.317 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=14.720ms, min=0.018ms, max=2.399ms, mean=0.566ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:26:37.317 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=15.291ms, min=0.488ms, max=2.515ms, mean=1.176ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:26:37.317 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=7.082ms, min=0.488ms, max=1.767ms, mean=1.012ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:26:37.319 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:26:37.319 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:26:37.448 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:26:37.448 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:26:37.448 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r1/gather/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:26:47 PDT 2026
+r1 gather arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 311181db=311181db9577713581922b90d120489b4ecba135 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:26:50 PDT 2026
+sync rc=0
+[sync_remote] 311181db9577713581922b90d120489b4ecba135 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1099 files, 64836045 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 1 of 1101 files, 165 bytes (tar)
+STAMP remote=311181db9577713581922b90d120489b4ecba135 local=311181db9577713581922b90d120489b4ecba135 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:27:08
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+ninja: no work to do.
+build rc=0
+=== run syn8 09:27:10
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:27:16.519 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:27:16.519 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:27:16.519 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:27:16.519 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:27:16.519 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:27:16.519 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:27:16.522 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:27:18.926 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349974 GHz, device_time_at_sync=6140217791309 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1751.1040, "device_ms_min": 13.8452, "device_ms_med": 13.8534, "reps": 10, "grads_out": false}
+2026-10-14 16:27:21.185 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:27:21.185 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:27:21.185 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=7050.816ms, min=224.399ms, max=1724.755ms, mean=542.370ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:27:21.185 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3784.224ms, min=224.400ms, max=1361.240ms, mean=540.603ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:27:21.186 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:27:21.186 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:27:21.255 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:27:21.255 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:27:21.255 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:27:21
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:27:26.318 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:27:26.318 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:27:26.318 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:27:26.318 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:27:26.318 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:27:26.318 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:27:26.322 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:27:26.955 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=6145614470933 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.8341, "device_ms_min": 3.1815, "device_ms_med": 3.2514, "reps": 10, "grads_out": false}
+2026-10-14 16:27:27.334 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:27:27.334 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:27:27.334 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=13.938ms, min=0.015ms, max=1.919ms, mean=0.536ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:27:27.334 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=14.510ms, min=0.379ms, max=2.015ms, mean=1.116ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:27:27.334 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=7.515ms, min=0.379ms, max=1.857ms, mean=1.074ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:27:27.336 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:27:27.336 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:27:27.455 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:27:27.455 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:27:27.455 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r2/gather/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:27:35 PDT 2026
+r2 gather arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 4634e976=4634e976fbf3922cd61b7ff240ffb76b092e2250 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:27:38 PDT 2026
+sync rc=0
+[sync_remote] 4634e976fbf3922cd61b7ff240ffb76b092e2250 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1137 files, 64954549 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 5 of 1139 files, 45390 bytes (tar)
+STAMP remote=4634e976fbf3922cd61b7ff240ffb76b092e2250 local=4634e976fbf3922cd61b7ff240ffb76b092e2250 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:28:04
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench
+build rc=0
+=== run syn8 09:28:15
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:28:21.430 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:28:21.430 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:28:21.430 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:28:21.430 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:28:21.430 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:28:21.430 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:28:21.434 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:28:23.790 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349964 GHz, device_time_at_sync=6150923294440 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1907.4171, "device_ms_min": 6.4672, "device_ms_med": 6.5234, "reps": 10, "grads_out": false}
+2026-10-14 16:28:26.122 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:28:26.122 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:28:26.122 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=7215.838ms, min=223.166ms, max=1880.950ms, mean=555.064ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:28:26.122 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3712.675ms, min=223.167ms, max=1319.018ms, mean=530.382ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:28:26.123 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:28:26.123 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:28:26.264 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:28:26.264 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:28:26.264 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:28:26
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:28:32.622 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:28:32.622 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:28:32.622 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:28:32.622 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:28:32.622 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:28:32.622 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:28:32.626 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:28:33.252 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349993 GHz, device_time_at_sync=6156482565883 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.1911, "device_ms_min": 3.4944, "device_ms_med": 3.5725, "reps": 10, "grads_out": false}
+2026-10-14 16:28:33.631 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:28:33.631 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:28:33.631 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=13.676ms, min=0.015ms, max=2.186ms, mean=0.526ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:28:33.631 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=14.206ms, min=0.394ms, max=2.291ms, mean=1.093ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:28:33.631 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=6.587ms, min=0.394ms, max=1.577ms, mean=0.941ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:28:33.633 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:28:33.633 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:28:33.765 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:28:33.765 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:28:33.765 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r2/fix/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:28:40 PDT 2026
+r2 fix arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 4634e976=4634e976fbf3922cd61b7ff240ffb76b092e2250 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:28:43 PDT 2026
+sync rc=0
+[sync_remote] 4634e976fbf3922cd61b7ff240ffb76b092e2250 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1137 files, 64954549 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 1 of 1139 files, 165 bytes (tar)
+STAMP remote=4634e976fbf3922cd61b7ff240ffb76b092e2250 local=4634e976fbf3922cd61b7ff240ffb76b092e2250 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:29:00
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+ninja: no work to do.
+build rc=0
+=== run syn8 09:29:02
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:29:08.027 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:29:08.027 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:29:08.027 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:29:08.027 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:29:08.027 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:29:08.027 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:29:08.030 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:29:10.406 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349987 GHz, device_time_at_sync=6161846223603 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1902.0899, "device_ms_min": 6.4342, "device_ms_med": 6.4830, "reps": 10, "grads_out": false}
+2026-10-14 16:29:12.740 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:29:12.740 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:29:12.740 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=7255.045ms, min=222.169ms, max=1879.282ms, mean=558.080ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:29:12.740 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3724.863ms, min=222.170ms, max=1329.800ms, mean=532.123ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:29:12.741 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:29:12.741 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:29:12.870 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:29:12.870 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:29:12.870 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:29:13
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:29:17.648 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:29:17.648 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:29:17.648 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:29:17.648 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:29:17.648 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:29:17.648 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:29:17.652 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:29:18.285 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349986 GHz, device_time_at_sync=6167500894447 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.3379, "device_ms_min": 3.5148, "device_ms_med": 3.6037, "reps": 10, "grads_out": false}
+2026-10-14 16:29:18.664 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:29:18.664 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:29:18.664 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=12.932ms, min=0.015ms, max=2.001ms, mean=0.497ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:29:18.664 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=13.446ms, min=0.379ms, max=2.109ms, mean=1.034ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:29:18.664 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=6.426ms, min=0.379ms, max=1.647ms, mean=0.918ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:29:18.666 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:29:18.666 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:29:18.771 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:29:18.771 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:29:18.771 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r3/fix/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:29:26 PDT 2026
+r3 fix arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 311181db=311181db9577713581922b90d120489b4ecba135 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:29:28 PDT 2026
+sync rc=0
+[sync_remote] 311181db9577713581922b90d120489b4ecba135 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1099 files, 64836045 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 5 of 1101 files, 37107 bytes (tar)
+STAMP remote=311181db9577713581922b90d120489b4ecba135 local=311181db9577713581922b90d120489b4ecba135 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:29:55
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench
+build rc=0
+=== run syn8 09:30:02
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:30:07.742 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:30:07.742 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:30:07.742 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:30:07.742 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:30:07.742 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:30:07.742 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:30:07.746 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:30:10.100 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349959 GHz, device_time_at_sync=6172816449604 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1750.6216, "device_ms_min": 13.8463, "device_ms_med": 13.9126, "reps": 10, "grads_out": false}
+2026-10-14 16:30:12.357 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:30:12.357 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:30:12.357 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=6951.499ms, min=222.166ms, max=1716.819ms, mean=534.731ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:30:12.357 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3718.184ms, min=222.166ms, max=1317.029ms, mean=531.169ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:30:12.359 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:30:12.359 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:30:12.479 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:30:12.479 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:30:12.479 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:30:12
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:30:17.339 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:30:17.339 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:30:17.339 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:30:17.339 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:30:17.339 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:30:17.339 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:30:17.399 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:30:18.035 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349985 GHz, device_time_at_sync=6178375009707 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.0763, "device_ms_min": 3.1785, "device_ms_med": 3.1889, "reps": 10, "grads_out": false}
+2026-10-14 16:30:18.414 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:30:18.414 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:30:18.414 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=14.648ms, min=0.018ms, max=2.009ms, mean=0.563ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:30:18.414 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=15.177ms, min=0.496ms, max=2.109ms, mean=1.167ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:30:18.414 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=7.528ms, min=0.496ms, max=1.875ms, mean=1.075ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:30:18.415 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:30:18.415 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:30:18.480 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:30:18.480 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:30:18.480 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r3/gather/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:30:25 PDT 2026
+r3 gather arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 311181db=311181db9577713581922b90d120489b4ecba135 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:30:28 PDT 2026
+sync rc=0
+[sync_remote] 311181db9577713581922b90d120489b4ecba135 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1099 files, 64836045 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 1 of 1101 files, 165 bytes (tar)
+STAMP remote=311181db9577713581922b90d120489b4ecba135 local=311181db9577713581922b90d120489b4ecba135 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:30:46
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+ninja: no work to do.
+build rc=0
+=== run syn8 09:30:49
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:30:56.342 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:30:56.342 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:30:56.342 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:30:56.342 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:30:56.342 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:30:56.342 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:30:56.346 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:30:58.703 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349984 GHz, device_time_at_sync=6183669098034 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1736.4331, "device_ms_min": 13.8464, "device_ms_med": 13.8542, "reps": 10, "grads_out": false}
+2026-10-14 16:31:00.946 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:31:00.946 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:31:00.946 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=6947.058ms, min=221.205ms, max=1710.222ms, mean=534.389ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:31:00.946 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3711.737ms, min=221.205ms, max=1318.530ms, mean=530.248ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:31:00.947 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:31:00.947 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:31:01.086 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:31:01.086 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:31:01.086 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:31:01
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:31:05.846 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:31:05.846 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:31:05.846 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:31:05.846 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:31:05.846 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:31:05.846 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:31:05.850 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:31:06.475 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349984 GHz, device_time_at_sync=6189142430220 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.0658, "device_ms_min": 3.1526, "device_ms_med": 3.1597, "reps": 10, "grads_out": false}
+2026-10-14 16:31:06.854 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:31:06.854 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:31:06.854 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=14.149ms, min=0.016ms, max=2.162ms, mean=0.544ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:31:06.854 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=14.681ms, min=0.417ms, max=2.261ms, mean=1.129ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:31:06.854 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=7.490ms, min=0.417ms, max=1.880ms, mean=1.070ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:31:06.856 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:31:06.856 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:31:06.987 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:31:06.987 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:31:06.987 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r4/gather/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:31:16 PDT 2026
+r4 gather arm rc=0
+SSH_PREFLIGHT=ok
+=== t713 4634e976=4634e976fbf3922cd61b7ff240ffb76b092e2250 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 09:31:20 PDT 2026
+sync rc=0
+[sync_remote] 4634e976fbf3922cd61b7ff240ffb76b092e2250 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749: 1137 files, 64954549 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 5 of 1139 files, 45390 bytes (tar)
+STAMP remote=4634e976fbf3922cd61b7ff240ffb76b092e2250 local=4634e976fbf3922cd61b7ff240ffb76b092e2250 MATCH
+=== card
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 09:31:44
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench
+build rc=0
+=== run syn8 09:31:50
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=8.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 131086, "n_slots": 8389494, "max_count": 27}
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-14 16:31:58.654 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:31:58.654 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:31:58.654 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:31:58.654 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:31:58.654 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:31:58.655 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:31:58.658 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:32:01.013 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349986 GHz, device_time_at_sync=6194386558829 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1893.7623, "device_ms_min": 6.4556, "device_ms_med": 6.4808, "reps": 10, "grads_out": false}
+2026-10-14 16:32:03.332 | info     |    BuildKernels | JIT cache stats: 0/13 hits (0.0%) [0 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:32:03.332 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:32:03.332 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=7205.141ms, min=220.774ms, max=1876.284ms, mean=554.242ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:32:03.332 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=3715.199ms, min=220.774ms, max=1317.716ms, mean=530.743ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:32:03.333 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:32:03.333 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:32:03.494 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:32:03.494 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:32:03.494 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn8 rc=0
+=== run syn1 09:32:03
+{"consts": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1100.0, 1100.0, 618.5, 411.0, 1237.0, 822.0, 0.20000000298023224, 0.30000001192092896, 0.000233171769650653, 0.007286617998033762, 0.0014573235530406237, 0.07286617904901505, 0.003643308999016881, 0.8999999761581421, 0.10000002384185791, 0.9990000128746033, 0.0009999871253967285, 9.558480262756348, 1.0000000036274937e-15], "source": "synth N=1048576 mean_count=1.0", "visible_frac": 0.7297801971435547, "n": 1048576, "n_groups": 16384, "n_slot_pages": 16393, "n_slots": 1049149, "max_count": 9}
+ (topology_solver.tpp:94)
+2026-10-14 16:32:08.758 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-14 16:32:08.758 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-14 16:32:08.758 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-14 16:32:08.758 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-14 16:32:08.758 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-14 16:32:08.758 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-14 16:32:08.762 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/12024140084721722581/ (build_env_manager.cpp:257)
+2026-10-14 16:32:09.400 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349986 GHz, device_time_at_sync=6199963167518 cycles (realtime_profiler_manager.cpp:1075)
+[T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.5745, "device_ms_min": 3.3568, "device_ms_med": 3.5995, "reps": 10, "grads_out": false}
+2026-10-14 16:32:09.778 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-14 16:32:09.778 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-14 16:32:09.778 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=26, total=13.302ms, min=0.015ms, max=1.859ms, mean=0.512ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:32:09.778 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=13, total=13.801ms, min=0.394ms, max=1.966ms, mean=1.062ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:32:09.778 | info     |    BuildKernels | JIT telemetry [jit_build]: count=7, total=6.895ms, min=0.394ms, max=1.759ms, mean=0.985ms (build_cache_telemetry.cpp:238)
+2026-10-14 16:32:09.779 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 16:32:09.779 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 16:32:09.895 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 16:32:09.895 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 16:32:09.895 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run syn1 rc=0
+jit list rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t713 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t749/docs/t749/out/r4/fix/remote: 8 entries (tar)
+pull rc=0
+=== done Wed Oct 14 09:32:18 PDT 2026
+r4 fix arm rc=0
+OK t2_compute: gather=['6830563607915648082'] fix=['15908094789292826535', '6077061965465178886']
+JIT-HASH OK
+r1 jit check rc=0
+OK t2_compute: gather=['6830563607915648082'] fix=['6077061965465178886']
+JIT-HASH OK
+r2 jit check rc=0
+OK t2_compute: gather=['6830563607915648082'] fix=['6077061965465178886']
+JIT-HASH OK
+r3 jit check rc=0
+OK t2_compute: gather=['6830563607915648082'] fix=['6077061965465178886']
+JIT-HASH OK
+r4 jit check rc=0
+fix syn8 r1: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1894.3326, "device_ms_min": 6.4578, "device_ms_med": 6.5113, "reps": 10, "grads_out": false}
+fix syn8 r2: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1907.4171, "device_ms_min": 6.4672, "device_ms_med": 6.5234, "reps": 10, "grads_out": false}
+fix syn8 r3: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1902.0899, "device_ms_min": 6.4342, "device_ms_med": 6.4830, "reps": 10, "grads_out": false}
+fix syn8 r4: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1893.7623, "device_ms_min": 6.4556, "device_ms_med": 6.4808, "reps": 10, "grads_out": false}
+fix syn1 r1: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.0647, "device_ms_min": 3.5397, "device_ms_med": 3.6218, "reps": 10, "grads_out": false}
+fix syn1 r2: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.1911, "device_ms_min": 3.4944, "device_ms_med": 3.5725, "reps": 10, "grads_out": false}
+fix syn1 r3: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.3379, "device_ms_min": 3.5148, "device_ms_med": 3.6037, "reps": 10, "grads_out": false}
+fix syn1 r4: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.5745, "device_ms_min": 3.3568, "device_ms_med": 3.5995, "reps": 10, "grads_out": false}
+gather syn8 r1: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1747.1939, "device_ms_min": 13.8275, "device_ms_med": 13.8494, "reps": 10, "grads_out": false}
+gather syn8 r2: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1751.1040, "device_ms_min": 13.8452, "device_ms_med": 13.8534, "reps": 10, "grads_out": false}
+gather syn8 r3: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1750.6216, "device_ms_min": 13.8463, "device_ms_med": 13.9126, "reps": 10, "grads_out": false}
+gather syn8 r4: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 131086, "device_ms_first": 1736.4331, "device_ms_min": 13.8464, "device_ms_med": 13.8542, "reps": 10, "grads_out": false}
+gather syn1 r1: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.9516, "device_ms_min": 3.1693, "device_ms_med": 3.1867, "reps": 10, "grads_out": false}
+gather syn1 r2: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.8341, "device_ms_min": 3.1815, "device_ms_med": 3.2514, "reps": 10, "grads_out": false}
+gather syn1 r3: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 23.0763, "device_ms_min": 3.1785, "device_ms_med": 3.1889, "reps": 10, "grads_out": false}
+gather syn1 r4: [T2] {"n_groups": 16384, "groups_processed": 16384, "cores": 110, "max_core_groups": 160, "slot_pages": 16393, "device_ms_first": 24.0658, "device_ms_min": 3.1526, "device_ms_med": 3.1597, "reps": 10, "grads_out": false}
+=== done Wed Oct 14 09:32:19 PDT 2026
