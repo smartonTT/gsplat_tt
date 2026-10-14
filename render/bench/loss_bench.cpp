@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -261,6 +262,103 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
     return 0;
 }
 
+// LOSS_MODE=sfilt (task #720): the same 11-tap Gaussian on the SFPU in fp32 FMAs
+// (sfilt_compute.cpp), on P arbitrary padded planes: <in>/planes.txt ("P Hp Wp") and
+// <in>/planes.f32 (P, Hp, Wp) float32, written by opt/t720/sfilt_check.py. Writes
+// <out>/planes_out.f32 (same shape) unless LOSS_NOOUT=1, and <out>/sf_taps.txt (fp32 taps).
+int run_sfilt(distributed::MeshDevice* dev, const std::string& in, const std::string& out, int iters) {
+    uint32_t P = 0, Hp = 0, Wp = 0;
+    {
+        std::ifstream f(in + "/planes.txt");
+        if (!(f >> P >> Hp >> Wp) || Hp % TS || Wp % TS) {
+            std::fprintf(stderr, "[LOSS] ERROR bad %s/planes.txt\n", in.c_str());
+            return 2;
+        }
+    }
+    const uint32_t nh = Hp / TS, nw = Wp / TS, NT = P * nh * nw, S = P * nw;
+    const auto pl = read_f32(in + "/planes.f32", size_t(P) * Hp * Wp);
+    std::vector<float> x(size_t(NT) * TS * TS);
+    for (uint32_t p = 0; p < P; p++)
+        for (uint32_t r = 0; r < Hp; r++)
+            for (uint32_t c = 0; c < Wp; c++)
+                x[((size_t(p) * nh + r / TS) * nw + c / TS) * TS * TS + tidx(r % TS, c % TS)] =
+                    pl[(size_t(p) * Hp + r) * Wp + c];
+    auto& cq = dev->mesh_command_queue();
+    const CoreCoord grid = dev->compute_with_storage_grid_size();
+    const uint32_t ncores = grid.x * grid.y;
+    auto bx = make_dram(dev, uint64_t(NT) * TILE_BYTES), bo = make_dram(dev, uint64_t(NT) * TILE_BYTES);
+    distributed::EnqueueWriteMeshBuffer(cq, bx, x, true);
+    Program prog = CreateProgram();
+    const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
+    add_cb(prog, cores, 0, 6);  // X (u2d)
+    for (uint32_t q = 0; q < 3; q++) add_cb(prog, cores, 6 + q, 1);  // H-pass slot q (u2d)
+    add_cb(prog, cores, 16, 2);  // out
+    std::vector<uint32_t> ct_r, ct_w;
+    TensorAccessorArgs::create_dram_interleaved().append_to(ct_r);
+    TensorAccessorArgs::create_dram_interleaved().append_to(ct_r);
+    TensorAccessorArgs::create_dram_interleaved().append_to(ct_w);
+    const std::string kd = LOSS_KERNEL_DIR;
+    auto kr = CreateKernel(prog, kd + "reader_filt.cpp", cores,
+                           DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
+                                              .noc = NOC::RISCV_1_default, .compile_args = ct_r});
+    auto kw = CreateKernel(prog, kd + "writer_filt.cpp", cores,
+                           DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                                              .noc = NOC::RISCV_0_default, .compile_args = ct_w});
+    std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+    for (uint32_t cb : {0u, 6u, 7u, 8u}) u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+    // fp32 taps g0 (offset 5) .. g5 (centre), as hex-float literals (exact).
+    double g[11], sum = 0.0;
+    for (int i = 0; i < 11; i++) sum += g[i] = std::exp(-double((i - 5) * (i - 5)) / (2.0 * 1.5 * 1.5));
+    std::map<std::string, std::string> defs;
+    std::ofstream tf(out + "/sf_taps.txt");
+    tf.precision(17);
+    for (int i = 0; i < 6; i++) {
+        const float v = float(g[i] / sum);
+        char b[48];
+        std::snprintf(b, sizeof b, "%af", double(v));
+        defs["SF_G" + std::to_string(i)] = b;
+        tf << double(v) << "\n";
+    }
+    auto kc = CreateKernel(prog, kd + "sfilt_compute.cpp", cores,
+                           ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
+                                         .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
+                                         .math_approx_mode = false, .defines = defs});
+    for (uint32_t cy = 0, k = 0; cy < grid.y; cy++)
+        for (uint32_t cx = 0; cx < grid.x; cx++, k++) {
+            const uint32_t t0 = uint32_t(uint64_t(NT) * k / ncores), t1 = uint32_t(uint64_t(NT) * (k + 1) / ncores);
+            const CoreCoord c{cx, cy};
+            SetRuntimeArgs(prog, kr, c, {uint32_t(bx->address()), 0u, t0, t1, nh, nw});
+            SetRuntimeArgs(prog, kw, c, {uint32_t(bo->address()), t0, t1, nh, nw});
+            SetRuntimeArgs(prog, kc, c, {t0, t1, nh});
+        }
+    distributed::MeshWorkload wl;
+    wl.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(prog));
+    std::fprintf(stderr, "[LOSS] stage=sfilt_program planes=%u strips=%u cores=%u\n", P, S, ncores);
+    distributed::EnqueueMeshWorkload(cq, wl, false);
+    distributed::Finish(cq);
+    std::fprintf(stderr, "[LOSS] stage=launch1_done\n");
+    const char* no = std::getenv("LOSS_NOOUT");
+    if (!(no && no[0] == '1')) {
+        std::vector<float> o;
+        distributed::EnqueueReadMeshBuffer(cq, o, bo, true);
+        std::vector<float> oh(size_t(P) * Hp * Wp);
+        for (uint32_t p = 0; p < P; p++)
+            for (uint32_t r = 0; r < Hp; r++)
+                for (uint32_t c = 0; c < Wp; c++)
+                    oh[(size_t(p) * Hp + r) * Wp + c] =
+                        o[((size_t(p) * nh + r / TS) * nw + c / TS) * TS * TS + tidx(r % TS, c % TS)];
+        std::ofstream f(out + "/planes_out.f32", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(oh.data()), oh.size() * 4);
+    }
+    std::vector<double> ms;
+    const double b2b = time_b2b(cq, wl, iters, ms);
+    std::printf("[LOSS] mode=sfilt P=%u Hp=%u Wp=%u tiles=%u strips=%u cores=%u b2b_ms=%.4f launch_ms_med=%.4f "
+                "launch_ms_min=%.4f iters=%d\n",
+                P, Hp, Wp, NT, S, ncores, b2b, ms.empty() ? 0.0 : ms[ms.size() / 2], ms.empty() ? 0.0 : ms[0],
+                iters);
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -270,6 +368,12 @@ int main(int argc, char** argv) {
     }
     const std::string in = argv[1], out = argv[2];
     const int iters = argc > 3 ? std::atoi(argv[3]) : 20;
+    if (const char* m = std::getenv("LOSS_MODE"); m && std::string(m) == "sfilt") {
+        auto dev = distributed::MeshDevice::create_unit_mesh(0);
+        const int rc = run_sfilt(dev.get(), in, out, iters);
+        dev->close();
+        return rc;
+    }
     LossLayout L{};
     {
         std::ifstream f(in + "/hw.txt");

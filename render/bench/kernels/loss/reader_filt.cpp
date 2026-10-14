@@ -2,7 +2,7 @@
 // each strip segment of output tiles [t0, t1) (t = strip * nh + row; strip s: channel s / nw,
 // tile column s % nw) the tiles X[ch, I, J-1..J+1] (zero tiles off the plane) of the rows
 // I = r0-1 .. r1 that exist (the compute kernel zero-fills the others).
-// Runtime args: x_addr, r_addr, t0, t1, nh, nw.
+// Runtime args: x_addr, r_addr (0: none), t0, t1, nh, nw. Any number of planes (ch = s / nw).
 #include <cstdint>
 #include "api/dataflow/dataflow_api.h"
 
@@ -21,10 +21,12 @@ void kernel_main() {
     const auto acc_x = TensorAccessor(ax, x_addr, tb);
     const auto acc_r = TensorAccessor(ar, r_addr, tb);
 
-    cb_reserve_back(CB_R, 12);
-    for (uint32_t t = 0; t < 12; t++) noc_async_read_tile(t, acc_r, get_write_ptr(CB_R) + t * tb);
-    noc_async_read_barrier();
-    cb_push_back(CB_R, 12);
+    if (r_addr) {  // 0: no band constants (sfilt_compute.cpp, #720)
+        cb_reserve_back(CB_R, 12);
+        for (uint32_t t = 0; t < 12; t++) noc_async_read_tile(t, acc_r, get_write_ptr(CB_R) + t * tb);
+        noc_async_read_barrier();
+        cb_push_back(CB_R, 12);
+    }
 
     for (uint32_t t = t0; t < t1;) {
         const uint32_t s = t / nh, r0 = t % nh, r1 = (t1 - t < nh - r0) ? r0 + (t1 - t) : nh;
