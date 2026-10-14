@@ -7,6 +7,8 @@
 // #707: reps default 6 (first = JIT/warm-up; device_ms_med is the median of the rest).
 // BWD_STATS=1 (default; 0 = off) builds the kernels with in-kernel stage counters and writes
 // stats.json (per core: MATH wall-clock cycles per stage and counts, see blend_bwd_compute.cpp).
+// BWD_STATS=2 (#772): diagnostic, the MATH thread also waits for the Tensix to go idle at the end of
+// every pair stage and setup sub-step, so each counter holds that stage's execution, not only its issue.
 // BWD_PRESTAGE=2 (default), 1 or 0 (#747 staging) (#767): the reader turns each record's 12 floats
 // into their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp; 2 also loads all
 // words before the first instruction-buffer store. On bh-49 vs 0: 1 is slower (setup 172.9 -> 198.2
@@ -94,7 +96,8 @@ int main(int argc, char** argv) {
     const std::string odir = argc > 4 ? argv[4] : dir;
     const char* st_env = std::getenv("BWD_STATS");
     const bool stats = !(st_env && std::string(st_env) == "0");
-    constexpr uint32_t ST_PAGE = 128, ST_N = 11;
+    const int stats_mode = !stats ? 0 : st_env && std::string(st_env) == "2" ? 2 : 1;
+    constexpr uint32_t ST_PAGE = 128, ST_N = 16;
     const char* ps_env = std::getenv("BWD_PRESTAGE");
     const int prestage = ps_env ? std::atoi(ps_env) : 2;
 
@@ -157,7 +160,7 @@ int main(int argc, char** argv) {
         {"BWD_AMIN_BITS", std::to_string(meta_int(js, "alpha_min_bits")) + "u"},
         {"BWD_TMIN_BITS", std::to_string(meta_int(js, "t_min_bits")) + "u"},
     };
-    if (stats) cdef["BWD_STATS"] = "1";
+    if (stats) cdef["BWD_STATS"] = std::to_string(stats_mode);
     if (prestage) cdef["BWD_PRESTAGE"] = std::to_string(prestage);
     auto kc = CreateKernel(prog, kd + "blend_bwd_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
@@ -227,7 +230,8 @@ int main(int argc, char** argv) {
         distributed::EnqueueReadMeshBuffer(*cq, sw, b_stats, true);
         std::ofstream f(odir + "/stats.json");
         f << "{\"cols\": [\"core\", \"tot\", \"tile\", \"rec\", \"setup\", \"body\", \"fin\", \"pack\", \"nt\", \"np\", "
-             "\"nv\", \"mark\"], \"cores\": [";
+             "\"nv\", \"mark\", \"s_load\", \"s_stage9\", \"s_stage3\", \"s_mbox\", \"s_zero\"], \"stats_mode\": "
+          << stats_mode << ", \"cores\": [";
         bool first = true;
         for (uint32_t c = 0; c < want; c++) {
             if (t_beg[c + 1] == t_beg[c]) continue;

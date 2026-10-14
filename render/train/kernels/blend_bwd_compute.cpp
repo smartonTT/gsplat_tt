@@ -59,6 +59,46 @@ inline void non_zeroing_pack_release() {
 }
 #endif
 
+#if defined(BWD_STATS) && defined(TRISC_MATH)
+// #772: pair setup sub-steps (BWD_PRESTAGE): L1 word loads, 9 pair scalars, P0 Lx Ly, mailbox, zeroing.
+enum : uint32_t { ST_TOT, ST_TILE, ST_REC, ST_SETUP, ST_BODY, ST_FIN, ST_PACK, ST_NT, ST_NP, ST_NV, ST_MARK,
+                  ST_S_LD, ST_S_9, ST_S_3, ST_S_MB, ST_S_Z, ST_N };
+static_assert(2 * ST_N <= 32, "two ACC vectors per counter (bwd_writer.cpp ST_WORDS)");
+uint32_t g_st[ST_N], g_st_sub;
+inline uint32_t st_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+#define ST_T0(v) uint32_t v = st_now()
+#define ST_LAP(i, v) do { const uint32_t n_ = st_now(); g_st[i] += n_ - (v); (v) = n_; } while (0)
+#define ST_CNT(i, n) g_st[i] += (n)
+// BWD_STATS=2 (#772, diagnostic): wait for the Tensix to go idle before each stage's lap, so a
+// counter holds the stage's execution, not only its instruction issue (stages no longer overlap).
+#if BWD_STATS == 2
+#define ST_SYNC() ckernel::tensix_sync()
+#else
+#define ST_SYNC()
+#endif
+#define ST_SUB0(v) g_st_sub = (v)
+#define ST_SUB(i) do { ST_SYNC(); ST_LAP(i, g_st_sub); } while (0)
+inline uint32_t bwd_popcount(uint32_t m) {
+    uint32_t n = 0;
+    for (; m != 0u; m &= m - 1u) n++;
+    return n;
+}
+inline void bwd_emit_stats() {
+    g_st[ST_MARK] = 707u;
+    for (uint32_t k = 0; k < ST_N; k++) {
+        sfpi::dst_reg[DR_ACC + 2 * k] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] & 0xFFFFu));
+        sfpi::dst_reg[DR_ACC + 2 * k + 1] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] >> 16));
+    }
+}
+#else
+#define ST_T0(v)
+#define ST_LAP(i, v)
+#define ST_CNT(i, n)
+#define ST_SYNC()
+#define ST_SUB0(v)
+#define ST_SUB(i)
+#endif
+
 #ifdef TRISC_MATH
 // fp32-accurate exp for x in [-80, 0] (Juffa / tt-metal _sfpu_exp_fp32_accurate_<true>, inlined
 // here so the kernel does not depend on which ckernel_sfpu_exp.h the include path finds).
@@ -287,6 +327,7 @@ inline uint32_t bwd_stage_record(uint32_t ra) {
     uint32_t a[REC_MASK_W + 1];
 #pragma GCC unroll 25
     for (uint32_t k = 0; k <= REC_MASK_W; k++) a[k] = vw[k];
+    ST_SUB(ST_S_LD);
 #else
     // Plain loads: the compiler may issue them ahead of the instruction-buffer stores.
     const uint32_t* a = reinterpret_cast<const uint32_t*>(ra);
@@ -300,12 +341,15 @@ inline uint32_t bwd_stage_record(uint32_t ra) {
     BWD_STAGE(6, DR_S + 6);
     BWD_STAGE(7, DR_S + 7);
     BWD_STAGE(8, DR_S + 8);
+    ST_SUB(ST_S_9);
     BWD_STAGE(9, DR_P0);
     BWD_STAGE(10, DR_LX);
     BWD_STAGE(11, DR_LY);
+    ST_SUB(ST_S_3);
     const uint32_t mask = a[REC_MASK_W];
     asm volatile("" ::: "memory");  // every page read before the page goes back to UNPACK
     ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, 1u);
+    ST_SUB(ST_S_MB);
     using namespace sfpi;
     dst_reg[DR_ACC + 0] = vConst0;
     dst_reg[DR_ACC + 1] = vConst0;
@@ -316,6 +360,7 @@ inline uint32_t bwd_stage_record(uint32_t ra) {
     dst_reg[DR_ACC + 6] = vConst0;
     dst_reg[DR_ACC + 7] = vConst0;
     dst_reg[DR_ACC + 8] = vConst0;
+    ST_SUB(ST_S_Z);
     return mask;
 }
 #undef BWD_STAGE
@@ -371,31 +416,6 @@ inline void bwd_bodies(uint32_t mask) {
 }
 #endif
 
-#if defined(BWD_STATS) && defined(TRISC_MATH)
-enum : uint32_t { ST_TOT, ST_TILE, ST_REC, ST_SETUP, ST_BODY, ST_FIN, ST_PACK, ST_NT, ST_NP, ST_NV, ST_MARK, ST_N };
-uint32_t g_st[ST_N];
-inline uint32_t st_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
-#define ST_T0(v) uint32_t v = st_now()
-#define ST_LAP(i, v) do { const uint32_t n_ = st_now(); g_st[i] += n_ - (v); (v) = n_; } while (0)
-#define ST_CNT(i, n) g_st[i] += (n)
-inline uint32_t bwd_popcount(uint32_t m) {
-    uint32_t n = 0;
-    for (; m != 0u; m &= m - 1u) n++;
-    return n;
-}
-inline void bwd_emit_stats() {
-    g_st[ST_MARK] = 707u;
-    for (uint32_t k = 0; k < ST_N; k++) {
-        sfpi::dst_reg[DR_ACC + 2 * k] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] & 0xFFFFu));
-        sfpi::dst_reg[DR_ACC + 2 * k + 1] = ckernel::sfpu::Converter::as_float(0x4B000000u | (g_st[k] >> 16));
-    }
-}
-#else
-#define ST_T0(v)
-#define ST_LAP(i, v)
-#define ST_CNT(i, n)
-#endif
-
 void kernel_main() {
     const uint32_t n_tiles = get_arg_val<uint32_t>(0);
     init_sfpu(CB_PLANE, CB_OUT);
@@ -424,6 +444,7 @@ void kernel_main() {
         copy_tile(CB_RAMP, 1, 6);
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
         MATH((bwd_consts_init()));
+        ST_SYNC();
         ST_LAP(ST_TILE, st_c);
         ST_CNT(ST_NT, 1);
 
@@ -432,6 +453,7 @@ void kernel_main() {
             const uint32_t ra = get_tile_address(CB_REC, 0);  // all threads (mailbox sync)
 #ifdef TRISC_MATH
             ST_LAP(ST_REC, st_c);
+            ST_SUB0(st_c);
 #ifdef BWD_PRESTAGE
             const uint32_t mask = bwd_stage_record(ra);
 #else
@@ -443,6 +465,7 @@ void kernel_main() {
             ST_CNT(ST_NP, 1);
             ST_CNT(ST_NV, bwd_popcount(mask));
             bwd_bodies(mask);
+            ST_SYNC();
             ST_LAP(ST_BODY, st_c);
             sfpi::dst_reg[DR_U] = ckernel::sfpu::Converter::as_float(kColX[p & 7u]);
             if ((p & 8u) == 0u) {
@@ -450,6 +473,7 @@ void kernel_main() {
             } else {
                 bwd_finish<1>();
             }
+            ST_SYNC();
             ST_LAP(ST_FIN, st_c);
 #else
             (void)ra;

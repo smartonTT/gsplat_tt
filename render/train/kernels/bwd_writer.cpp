@@ -15,7 +15,7 @@ namespace {
 constexpr uint32_t CB_OUT = 16, CB_WS = 17, SMALL = 64, NB = 16, REC_WORDS = 16;
 // Packed-tile element of SFPU vector V, row j, column k (blend_backward_dev.vector_lanes).
 constexpr uint32_t lane(uint32_t V, uint32_t j, uint32_t k) { return 64 * (V >> 1) + 16 * j + 2 * k + (V & 1); }
-constexpr uint32_t ST_PAGE = 128, ST_WORDS = 22;
+constexpr uint32_t ST_PAGE = 128, ST_WORDS = 32;
 }  // namespace
 
 void kernel_main() {

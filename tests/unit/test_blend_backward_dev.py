@@ -154,3 +154,16 @@ def test_prestage_page_loads_the_record_bits():
         t = (src / f).read_text()
         assert f"K_LOAD_LO = {dev.SFPLOADI_LO:#010x}u" in t and f"K_LOAD_HI = {dev.SFPLOADI_HI:#010x}u" in t, f
     assert "REC_MASK_W = 24" in (src / "blend_bwd_compute.cpp").read_text()
+
+
+def test_stats_counters_agree():
+    """#772: compute counters (enum), writer words and bench ST_N / stats.json columns agree."""
+    src = pathlib.Path(__file__).resolve().parents[2] / "render" / "train"
+    comp = (src / "kernels" / "blend_bwd_compute.cpp").read_text()
+    enum = comp.split("enum : uint32_t { ST_TOT", 1)[1].split("ST_N };", 1)[0]
+    n = enum.count(",")  # names before ST_N, each followed by a comma
+    bench = (src / "blend_bwd_bench.cpp").read_text()
+    assert f"ST_PAGE = 128, ST_N = {n};" in bench
+    assert f"ST_WORDS = {2 * n};" in (src / "kernels" / "bwd_writer.cpp").read_text()
+    cols = bench.split('f << "{\\"cols\\": [', 1)[1].split("]", 1)[0]
+    assert cols.count('\\"') // 2 == n + 1  # core + counters
