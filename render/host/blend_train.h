@@ -15,6 +15,7 @@
 // final T. GSPLAT_TT_BLEND_TRAIN_DUMP=<path> also reads it back after each
 // forward and writes it to <path> (raw pages, no header).
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 
@@ -31,6 +32,18 @@ inline bool enabled() {
 inline const char* dump_path() {
     const char* e = std::getenv("GSPLAT_TT_BLEND_TRAIN_DUMP");
     return (e != nullptr && e[0] != '\0') ? e : nullptr;
+}
+
+// Task #788: GSPLAT_TT_BLEND_TRAIN_HASH=1 reads the train buffer back after each
+// forward and prints "TRAIN_HASH fwd=<n> fnv=<FNV-1a 64>" (A/B bit identity).
+inline bool hash_on() {
+    const char* e = std::getenv("GSPLAT_TT_BLEND_TRAIN_HASH");
+    return e != nullptr && e[0] == '1';
+}
+inline uint64_t fnv1a64(const uint8_t* p, std::size_t n) {
+    uint64_t h = 1469598103934665603ull;
+    for (std::size_t i = 0; i < n; ++i) h = (h ^ p[i]) * 1099511628211ull;
+    return h;
 }
 
 constexpr uint32_t kCb = 17;                          // CB_TRAIN_OUT (fp32, 4 tiles)
@@ -100,6 +113,19 @@ inline bool opc_ring3() {
     return enabled() && on && !opc_on_writer() && !opc_side();
 }
 constexpr uint32_t kOpcStageCb = 15;
+
+// Task #788: GSPLAT_TT_TRAIN_FUSE=1 keeps the fused mat+blend program
+// (matblend_fuse.h) in train mode. The blend reader's opc args then move to
+// kOpcReaderArgFused (28/29 are the fused ready flags) and the fused BRISC gets
+// the writer's train args 9/10. Not with the writer gather.
+inline bool train_fuse() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_TRAIN_FUSE");
+        return e != nullptr && e[0] == '1';
+    }();
+    return enabled() && on && !opc_on_writer();
+}
+constexpr uint32_t kOpcReaderArgFused = 30u;
 
 // Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
 // DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask

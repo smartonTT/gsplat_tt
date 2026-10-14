@@ -242,8 +242,15 @@ inline void blend_stage_hoist() {
 // so later gaussians (T' < 0 < 1e-4) never touch it. |T| is gsplat's final T.
 // The host forces BLEND_SCHED 0 (the raw-TTI bodies inline exp_21f) and
 // BLEND_T_PERIOD 0 (the 1/256 early-out is lossy against the 1e-4 rule).
+// Task #788 (host env GSPLAT_TT_TRAIN_T_PERIOD): the T early-out with eps = the
+// smallest normal float instead. A microblock then goes dead only once every
+// pixel has stopped (T < 0; a live T is >= 1e-4), and later records leave such
+// a pixel unchanged, so skipping them is bit-identical.
 #ifndef BLEND_TRAIN
 #define BLEND_TRAIN 0
+#endif
+#ifndef BLEND_TRAIN_MINMAX
+#define BLEND_TRAIN_MINMAX 0  // task #788 (host env GSPLAT_TT_TRAIN_MINMAX)
 #endif
 #if BLEND_TRAIN
 #if BLEND_FPU_QF_ABL
@@ -281,6 +288,17 @@ inline void blend_train_gaussian_math(
     vFloat power = BLEND_COEF(S_A, a_bits) * (dx * dx);
     power = power + BLEND_COEF(S_B, b_bits) * (dx * dy);
     power = power + BLEND_COEF(S_C, c_bits) * (dy * dy);
+#if BLEND_TRAIN_MINMAX
+    // Task #788: the same clamps as one SFPSWAP each (finite inputs: same bits;
+    // a -0 power gives exp 1 either way).
+    vFloat zero = 0.0f;
+    vec_min_max(power, zero);                                      // power = min(power, 0)
+    vFloat lo = -80.0f;
+    vec_min_max(lo, power);                                        // power = max(power, -80)
+    vFloat alpha = BLEND_COEF(S_OP, op_bits) * blend_train_exp(power);
+    vFloat k99 = 0.99f;
+    vec_min_max(alpha, k99);                                       // alpha = min(alpha, 0.99)
+#else
     v_if(power > 0.0f) { power = 0.0f; }
     v_endif;
     v_if(power < -80.0f) { power = -80.0f; }
@@ -288,6 +306,7 @@ inline void blend_train_gaussian_math(
     vFloat alpha = BLEND_COEF(S_OP, op_bits) * blend_train_exp(power);
     v_if(alpha > 0.99f) { alpha = 0.99f; }                        // 0x3F7D70A4
     v_endif;
+#endif
     v_if(alpha >= 0.003921569f) {                                  // 1/255, 0x3B808081
         vFloat t = dst_reg[DR_T + IX];
         vFloat tn = t * (vFloat(1.0f) - alpha);
@@ -2022,7 +2041,8 @@ void kernel_main() {
     DeviceZoneScopedN("tile_blend_sfpu");
     // Runtime-arg 0: saturation epsilon bits (viewer slider). 0 => keep the
     // compile-time default (kBlendTEps) so non-forwarding callers are unchanged.
-    {
+    // Task #788: train mode keeps the compile-time eps (the exact stop test below).
+    if (!BLEND_TRAIN) {
         const uint32_t eps_bits = get_arg_val<uint32_t>(0);
         if (eps_bits != 0u) {
             __builtin_memcpy(&g_blend_t_eps, &eps_bits, 4);
