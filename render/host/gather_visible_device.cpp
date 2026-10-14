@@ -20,6 +20,7 @@
 #include "stage_timers.h"
 #include "pfwc.h"
 #include "tile_assign.h"
+#include "scene_version.h"
 #include "vis_mode.h"
 #include "../kernels/dataflow/sort_bin_fp32.h"
 
@@ -219,9 +220,9 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_pub23;
     bool pub_ok = false;
     std::size_t scene_cached_bytes = 0;
-    const float* uploaded_colors_ptr = nullptr;
-    const float* uploaded_opacities_ptr = nullptr;
-    std::size_t uploaded_N = 0;
+    // Keyed by pointer, N and scene version (#671).
+    scene_version::UploadKey uploaded_colors;
+    scene_version::UploadKey uploaded_opacities;
 
     // M-compact resident outputs (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -467,8 +468,8 @@ static void ensure_scene_uploaded(
         ctx->buf_cb = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
         ctx->buf_op = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
         ctx->scene_cached_bytes = soa_bytes;
-        ctx->uploaded_colors_ptr = nullptr;
-        ctx->uploaded_opacities_ptr = nullptr;
+        ctx->uploaded_colors.invalidate();
+        ctx->uploaded_opacities.invalidate();
         device_state::register_buffer("scene_col_r", ctx->buf_cr);
         device_state::register_buffer("scene_col_g", ctx->buf_cg);
         device_state::register_buffer("scene_col_b", ctx->buf_cb);
@@ -480,14 +481,14 @@ static void ensure_scene_uploaded(
     if (want_pub && !ctx->buf_pub01) {
         ctx->buf_pub01 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
         ctx->buf_pub23 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
-        ctx->uploaded_colors_ptr = nullptr;  // fill them below
+        ctx->uploaded_colors.invalidate();  // fill them below
         ctx->pub_ok = false;
         device_state::register_buffer("scene_puboc01", nullptr);
         device_state::register_buffer("scene_puboc23", nullptr);
     }
-    const bool hit = (ctx->uploaded_colors_ptr == colors) &&
-                     (ctx->uploaded_opacities_ptr == opacities) &&
-                     (ctx->uploaded_N == N);
+    const uint64_t sv = scene_version::current();
+    const bool hit = ctx->uploaded_colors.hit(colors, N, sv) &&
+                     ctx->uploaded_opacities.hit(opacities, N, sv);
     if (cache_hit) *cache_hit = hit;
     if (hit) return;
 
@@ -549,9 +550,8 @@ static void ensure_scene_uploaded(
     distributed::Finish(*ctx->cq);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (upload_ms) *upload_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    ctx->uploaded_colors_ptr = colors;
-    ctx->uploaded_opacities_ptr = opacities;
-    ctx->uploaded_N = N;
+    ctx->uploaded_colors.record(colors, N, sv);
+    ctx->uploaded_opacities.record(opacities, N, sv);
 }
 
 // Allocate/grow + (re)register the M-compact output buffers to hold cap_elems.

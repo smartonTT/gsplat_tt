@@ -189,6 +189,19 @@ class CleanBackend(CpuCppBackend):
             self._pruned = (src_arrs, arrs)
         return self._pruned[1]
 
+    def bump_scene_version(self):
+        """Task #671: call after updating the scene tensors in place (training).
+
+        Every scene cache here and in render_clean is keyed by pointer and
+        shape, which an in-place update keeps; drop the host ones and bump
+        render_clean's scene version so the next render re-uploads."""
+        self._gauss_np_cache_key = None
+        self._gauss_np_cache = None
+        self._cov3d_cache_key = None
+        self._cov3d_cache_buf = None
+        self._pruned = None
+        return int(self._clean.bump_scene_version())
+
     def close(self):
         if hasattr(self._clean, "device_shutdown"):
             try:

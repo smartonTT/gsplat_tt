@@ -16,13 +16,15 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 
 namespace gsplat_tt::xview {
 
 // Every run_project input the pfwc enqueue depends on. The env modes
 // (SFPU_VIS / PFWC_FUSE / PRECULL / VIS_EDGE_TAU) are process constants and
-// the scene uploads are cached by pointer and N, as in pfwc_tt itself.
+// the scene uploads are cached by pointer, N and scene version, as in pfwc_tt
+// itself (#671, scene_version.h): a bump between prefetch and consume misses.
 struct Key {
     const float* means = nullptr;
     const float* cov3d = nullptr;
@@ -38,12 +40,14 @@ struct Key {
     int tile_size = 0;
     float mb_contrib_floor = 0.0f;
     bool cull_disabled = false;
+    uint64_t scene_version = 0;
 };
 
 inline Key make_key(const float* means, const float* cov3d, const float* extrinsics,
                     const float* intrinsics, const float* colors, const float* opacities,
                     float min_opacity, std::size_t n, int image_height, int image_width,
-                    int max_radius, int tile_size, float mb_contrib_floor, bool cull_disabled) {
+                    int max_radius, int tile_size, float mb_contrib_floor, bool cull_disabled,
+                    uint64_t scene_version) {
     Key k;
     k.means = means;
     k.cov3d = cov3d;
@@ -59,6 +63,7 @@ inline Key make_key(const float* means, const float* cov3d, const float* extrins
     k.tile_size = tile_size;
     k.mb_contrib_floor = mb_contrib_floor;
     k.cull_disabled = cull_disabled;
+    k.scene_version = scene_version;
     return k;
 }
 
@@ -72,7 +77,7 @@ inline bool same(const Key& a, const Key& b) {
            a.image_height == b.image_height && a.image_width == b.image_width &&
            a.max_radius == b.max_radius && a.tile_size == b.tile_size &&
            std::memcmp(&a.mb_contrib_floor, &b.mb_contrib_floor, sizeof(float)) == 0 &&
-           a.cull_disabled == b.cull_disabled;
+           a.cull_disabled == b.cull_disabled && a.scene_version == b.scene_version;
 }
 
 class Prefetch {

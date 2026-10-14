@@ -25,6 +25,7 @@
 #include "pfwc.h"
 #include "chunk_cull.h"
 #include "pfwc_deal.h"
+#include "scene_version.h"
 #include "device_state.h"
 #include "env_config.h"
 #include "gather_visible.h"
@@ -147,13 +148,13 @@ struct PfwcDeviceContext {
     // Cached world-space means input buffers (3 SoA streams). iter-133 fusion:
     // the fused kernel reads means directly and runs the means_cam transform in
     // L1, so there is no longer a separate project program / means_cam DRAM
-    // round-trip. Pointer-keyed upload cache (fires on frame 0 only).
+    // round-trip. Upload cache keyed by pointer, N and scene version (#671;
+    // fires on frame 0 and after each bump_scene_version).
     std::shared_ptr<distributed::MeshBuffer> buf_mx;
     std::shared_ptr<distributed::MeshBuffer> buf_my;
     std::shared_ptr<distributed::MeshBuffer> buf_mz;
     std::size_t means_cached_bytes = 0;
-    const float* uploaded_means_ptr = nullptr;
-    std::size_t uploaded_means_N = 0;
+    scene_version::UploadKey uploaded_means;
 
     // Cached cov3d input buffers (6 SoA streams of unique entries).
     std::shared_ptr<distributed::MeshBuffer> buf_c00;
@@ -163,8 +164,7 @@ struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_c12;
     std::shared_ptr<distributed::MeshBuffer> buf_c22;
     std::size_t cov3d_cached_bytes = 0;
-    const float* uploaded_cov3d_ptr = nullptr;
-    std::size_t uploaded_cov3d_N = 0;
+    scene_version::UploadKey uploaded_cov3d;
 
     // Output buffers — published to device_state for downstream stages.
     std::shared_ptr<distributed::MeshBuffer> buf_m2x;
@@ -724,8 +724,7 @@ double pfwc_tt(
         ctx->buf_my = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->buf_mz = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->means_cached_bytes = soa_bytes;
-        ctx->uploaded_means_ptr = nullptr;
-        ctx->uploaded_means_N = 0;
+        ctx->uploaded_means.invalidate();
     }
 
     // Allocate or grow cov3d / output DRAM buffers.
@@ -740,8 +739,7 @@ double pfwc_tt(
         ctx->buf_c12 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->buf_c22 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->cov3d_cached_bytes = soa_bytes;
-        ctx->uploaded_cov3d_ptr = nullptr;
-        ctx->uploaded_cov3d_N = 0;
+        ctx->uploaded_cov3d.invalidate();
     }
     if (!ctx->buf_m2x || ctx->output_cached_bytes < soa_bytes) {
         distributed::DeviceLocalBufferConfig dram_cfg{
@@ -768,9 +766,10 @@ double pfwc_tt(
     }
 
     // world-means upload (cached across views — fires on frame 0 only, since
-    // means_3d is a single tensor reused for all 30 views).
-    const bool means_hit =
-        ctx->uploaded_means_ptr == means && ctx->uploaded_means_N == N;
+    // means_3d is a single tensor reused for all 30 views; again after an
+    // in-place update bumps the scene version, #671).
+    const uint64_t sv = scene_version::current();
+    const bool means_hit = ctx->uploaded_means.hit(means, N, sv);
     if (!means_hit) {
         const auto m_pack0 = std::chrono::high_resolution_clock::now();
         const MeansSoa msoa = pack_means_soa(means, N);
@@ -781,13 +780,11 @@ double pfwc_tt(
         const auto m_pack2 = std::chrono::high_resolution_clock::now();
         T.pack_ms += std::chrono::duration<double, std::milli>(m_pack1 - m_pack0).count();
         T.upload_ms += std::chrono::duration<double, std::milli>(m_pack2 - m_pack1).count();
-        ctx->uploaded_means_ptr = means;
-        ctx->uploaded_means_N = N;
+        ctx->uploaded_means.record(means, N, sv);
     }
 
     // cov3d upload (cached across views).
-    T.cache_hit =
-        ctx->uploaded_cov3d_ptr == cov3d_unique && ctx->uploaded_cov3d_N == N;
+    T.cache_hit = ctx->uploaded_cov3d.hit(cov3d_unique, N, sv);
     if (!T.cache_hit) {
         const auto t_pack0 = std::chrono::high_resolution_clock::now();
         const Cov3dSoa soa = pack_cov3d_soa(cov3d_unique, N);
@@ -801,8 +798,7 @@ double pfwc_tt(
         const auto t_pack2 = std::chrono::high_resolution_clock::now();
         T.pack_ms += std::chrono::duration<double, std::milli>(t_pack1 - t_pack0).count();
         T.upload_ms += std::chrono::duration<double, std::milli>(t_pack2 - t_pack1).count();
-        ctx->uploaded_cov3d_ptr = cov3d_unique;
-        ctx->uploaded_cov3d_N = N;
+        ctx->uploaded_cov3d.record(cov3d_unique, N, sv);
     }
 
     // iter-133 fusion: world means feed the reader directly (the fused compute

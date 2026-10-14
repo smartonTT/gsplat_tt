@@ -48,6 +48,7 @@
 #include "device_state.h"
 #include "env_config.h"
 #include "gather_visible.h"
+#include "scene_version.h"
 #include "vis_mode.h"
 #include "host_profile.h"
 #include "jit_warmup.h"
@@ -93,10 +94,13 @@ gsplat_cpu::ThreadPool& worker_pool() {
 // is view-invariant across the bench, so cache on (pointer, N) — one repack per
 // scene. Bit-identical to the production project_via_device cache.
 const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
+    // Keyed by pointer, N and scene version (#671): pfwc keys its cov3d upload
+    // on this vector's data pointer, which stays put, so a stale copy here
+    // would re-upload old values after an in-place update.
     static std::vector<float> cache;
-    static const float* cached_ptr = nullptr;
-    static std::size_t cached_N = 0;
-    if (cached_ptr == cov3d && cached_N == N && cache.size() == N * 6) {
+    static gsplat_tt::scene_version::UploadKey cached;
+    const uint64_t sv = gsplat_tt::scene_version::current();
+    if (cached.hit(cov3d, N, sv) && cache.size() == N * 6) {
         return cache;
     }
     cache.resize(N * 6);
@@ -109,8 +113,7 @@ const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
         cu[i * 6 + 4] = cov3d[i * 9 + 5];
         cu[i * 6 + 5] = cov3d[i * 9 + 8];
     }
-    cached_ptr = cov3d;
-    cached_N = N;
+    cached.record(cov3d, N, sv);
     return cache;
 }
 
@@ -231,7 +234,7 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
     if (!g_xview.consume(gsplat_tt::xview::make_key(
             means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
             image_height, image_width, max_radius, tile_size, mb_contrib_floor,
-            cull_disabled))) {
+            cull_disabled, gsplat_tt::scene_version::current()))) {
         gsplat_tt::tile_assign_fold_cancel();  // #552: a folded K2 read another pfwc
         enqueue_pfwc(means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
                      image_height, image_width, max_radius, tile_size, mb_contrib_floor,
@@ -455,7 +458,8 @@ py::tuple render_view(
                 g_xview.set(gsplat_tt::xview::make_key(
                     means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
                     min_opacity, N, image_height, image_width, max_radius, tile_size,
-                    mb_contrib_floor_arg, cull_disabled));
+                    mb_contrib_floor_arg, cull_disabled,
+                    gsplat_tt::scene_version::current()));
                 gsplat_tt::PfwcFuseInfo fi;
                 if (gsplat_tt::pfwc_ran_fused(&fi))
                     gsplat_tt::tile_assign_fold_prepare(fi.num_cores, fi.num_tiles, fi.tiles_x,
@@ -482,7 +486,8 @@ py::tuple render_view(
                 g_xview.set(gsplat_tt::xview::make_key(
                     means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
                     min_opacity, N, image_height, image_width, max_radius, tile_size,
-                    mb_contrib_floor_arg, cull_disabled));
+                    mb_contrib_floor_arg, cull_disabled,
+                    gsplat_tt::scene_version::current()));
             });
         }
         {
@@ -632,6 +637,16 @@ PYBIND11_MODULE(render_clean, m) {
         gsplat_tt::device_state::cap_grid(gx, gy);
         return static_cast<int64_t>(gx * gy);
     });
+    // Task #671: call after changing means/cov3d/colors/opacities in place
+    // (same arrays, new values). The device scene caches and a queued xview
+    // pfwc are keyed by pointer, N and this version, so the next render_view
+    // uploads the new values. Takes the render lock: never mid-frame.
+    m.def("bump_scene_version", []() {
+        py::gil_scoped_release nogil;
+        std::lock_guard<std::mutex> lock(render_view_mutex);
+        return gsplat_tt::scene_version::bump();
+    });
+    m.def("scene_version", []() { return gsplat_tt::scene_version::current(); });
     m.def("device_shutdown", []() {
         // Same lock order as render_view: GIL released, then the mutex, so a
         // close() waits for an in-flight viewer frame instead of freeing

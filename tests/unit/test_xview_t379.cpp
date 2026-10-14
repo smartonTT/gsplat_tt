@@ -14,7 +14,7 @@ int main() {
     for (int i = 0; i < 9; i++) intr[i] = 1.0f + i;
     auto key = [&](const float* e) {
         return make_key(means, cov, e, intr, col, op, 0.004f, 6000000, 1037, 1600, 1024, 16,
-                        1.0f / 255, false);
+                        1.0f / 255, false, 1);
     };
     const Key k0 = key(extr);
     assert(same(k0, key(extr)));
@@ -35,6 +35,7 @@ int main() {
         k = k0; k.tile_size = 32; assert(!same(k0, k));
         k = k0; k.mb_contrib_floor = 1.0f / 128; assert(!same(k0, k));
         k = k0; k.cull_disabled = true; assert(!same(k0, k));
+        k = k0; k.scene_version = 2; assert(!same(k0, k));
     }
 
     Prefetch p;
