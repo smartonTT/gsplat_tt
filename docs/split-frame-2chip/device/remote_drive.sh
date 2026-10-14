@@ -78,7 +78,9 @@ for d in t627-dumpA-v t627-dumpC-v; do
   [ -d tmp/$d ] && (cd tmp/$d && md5sum * | sort -k2) > "$S/md5-$d.txt"
 done
 ls -la "$S"/hero-*.png
-[ "$first" = 0 ] || { echo "=== correctness step failed (first rc $first)"; [ "$ONLY" = all ] || exit "$first"; }
+# A1 (chip 1 alone) is diagnostic: only A and the split dump gate the timing runs.
+bad=$(grep -E '^(dumpA|chkA|dumpC) rc=[^0]' "$S/steps.txt")
+[ -z "$bad" ] || { echo "=== correctness step failed: $bad"; exit "$first"; }
 [ "$ONLY" = all ] || exit "$first"
 
 # Timing: warm-up round (discarded), then 3 rotated rounds.
