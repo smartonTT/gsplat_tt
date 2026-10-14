@@ -23,7 +23,7 @@ own JIT cache (same-day A/A).
 | mean r1-r4 | **8.063** | **8.078** | 8.068 |
 | spread r1-r4 | 0.002 | 0.003 | 0.010 |
 
-Order rotated per round (off/probe/aa, probe/aa/off, aa/off/probe, probe/off/aa).
+Run order per round: r0 and r1 off/probe/aa, r2 probe/aa/off, r3 aa/off/probe, r4 probe/off/aa.
 probe - off = **+0.015 ms/view** (r1-r4; +0.014 over r0-r4). A/A (aa - off) = +0.005, so the cost
 is just beyond the same-day noise and far under the 0.1 ms/view bar. off matches iter 229's
 recorded 8.063.
