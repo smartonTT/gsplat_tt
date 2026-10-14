@@ -238,3 +238,124 @@ def test_train_step_defaults_split_on_kcap8():
     src = (ROOT / "render" / "train" / "train_step.cpp").read_text()
     assert 'envu("T2_SPLIT", 1)' in src
     assert 'envu("T2_KCAP", 8)' in src
+
+
+# ---- #801: k-grouped light rows (T2_KGROUP=1): phase L sums light rows sorted by count
+
+MODEL_COUNTS = ROOT / "tests" / "fixtures" / "t801" / "hero_model_counts.npz"
+
+
+def test_light_planes_mac_model_kgroup():
+    """#799 Mac pair model (hero, 3-sigma rect, no jclamp): grouping rows by capped k cuts the
+    light planes at kcap 16 from 191,492 to 51,449."""
+    c = np.load(MODEL_COUNTS)["counts"].astype(np.int64)
+    assert c.size == 1809729
+    assert sp.light_planes(c, 16) == 191492
+    assert sp.light_planes(c, 16, kgroup=True) == 51449
+
+
+def test_light_planes_small():
+    c = np.array([0, 3, 1, 1, 20, 2, 0, 1])
+    assert sp.light_planes(c, 16, group=2) == 3 + 16 + 2  # (3,1) (1,16) (2,1)
+    assert sp.light_planes(c, 16, kgroup=True, group=2) == 16 + 2 + 1  # (16,3) (2,1) (1,1)
+
+
+def _row_slots(meta, rows):
+    """(P, count) each row reads, from the original meta."""
+    return meta[rows // 64, rows % 64].astype(np.int64), meta[rows // 64, 64 + rows % 64].astype(np.int64)
+
+
+def test_device_plan_kgroup_keeps_each_rows_slot_run():
+    """Every light row with 2 <= k <= kcap moves to exactly one phase-L lane holding its own
+    (P, count), so its slot sequence P .. P+k-1 is unchanged; its count word points at that
+    lane's hsum record; every other row keeps its count word; phase B runs 1 plane per group."""
+    c = _heavy_tail_counts(5000, 3)
+    act = np.random.default_rng(3).random(-(-c.size // 64)) < 0.8
+    meta, vis, act = _dev_inputs(c, act)
+    p0 = sp.device_plan(meta, vis, kcap=8, hl=16, n_cores=7)
+    p = sp.device_plan(meta, vis, kcap=8, hl=16, n_cores=7, kgroup=True)
+    cf = meta[:, 64:].ravel().astype(np.int64)
+    live = np.repeat(act, 64)
+    want = np.flatnonzero(live & (cf >= 2) & (cf <= 8))
+    assert np.array_equal(np.sort(p["lrows"]), want)
+    assert (np.diff(cf[p["lrows"]]) <= 0).all()                 # count descending
+    jl = p["jl"]
+    assert jl == sp.heavy_pages(p["heavy"].size, 16)
+    q = np.arange(p["lrows"].size)
+    t = p["htab"][jl + q // 64]
+    P0, k0 = _row_slots(meta, p["lrows"])
+    assert np.array_equal(t[q, q % 64].astype(np.int64), P0)
+    assert np.array_equal(t[q, 64 + q % 64].astype(np.int64), k0)
+    rec = (jl + q // 64) * 64 + q % 64
+    lr = p["lrows"]
+    assert np.array_equal(p["metab"][lr // 64, 64 + lr % 64], (sp.HFLAG | rec).astype(np.uint32))
+    assert rec.min(initial=jl * 64) >= (-(-p["heavy"].size // 16)) * 16  # past every heavy record
+    other = np.setdiff1d(np.arange(cf.size), lr)
+    assert np.array_equal(p["metab"][:, 64:].ravel()[other], p0["metab"][:, 64:].ravel()[other])
+    assert np.array_equal(p["heavy"], p0["heavy"]) and np.array_equal(p["htab"][:p0["htab"].shape[0]], p0["htab"])
+    assert p["light_planes"] == int(act.sum())                  # phase B: 1 plane per group
+    assert sorted(j for js in p["core_l"] for j in js) == list(range(jl, jl + -(-lr.size // 64)))
+    assert p["l_planes"] == int(t[q % 64 == 0, 64].sum())       # a group runs its first lane's count
+
+
+@pytest.mark.parametrize("n,kcap,hl,cores", [(5000, 16, 16, 110), (4999, 8, 16, 7), (777, 1, 8, 3),
+                                             (3000, 16, 64, 5), (130, 0, 4, 200), (20000, 8, 16, 110)])
+def test_device_split_sums_kgroup_bit_equal(n, kcap, hl, cores):
+    """k-grouped sums equal the in-order split and segment_reduce bit for bit, except the sign of
+    a zero sum whose slots are all -0.0 (it depends on how many +0.0 padding planes a lane gets,
+    as in #784; the sparse Adam is blind to it: m starts +0.0 and never becomes -0.0, v takes
+    g * g). Without -0.0 slots they are bit-equal outright."""
+    s, P, c = _case(_heavy_tail_counts(n, n), seed=n)
+    act = np.random.default_rng(n).random(-(-n // 64)) < 0.8
+    meta, vis, act = _dev_inputs(c, act)
+    kw = dict(kcap=kcap, hl=hl, n_cores=cores)
+    got = sp.device_split_sums(s, meta, vis, kgroup=True, **kw)[:n]
+    _assert_bits_equal_but_zero_sign(sp.device_split_sums(s, meta, vis, **kw)[:n], got)
+    live = np.repeat(act, 64)[:n]
+    _assert_bits_equal_but_zero_sign(t2.segment_reduce(s, P, c)[live], got[live])
+    assert not got[~live].any()
+    s2 = np.where(s == 0, np.float32(0), s)
+    got2 = sp.device_split_sums(s2, meta, vis, kgroup=True, **kw)[:n]
+    assert np.array_equal(_bits(got2), _bits(sp.device_split_sums(s2, meta, vis, **kw)[:n]))
+    assert np.array_equal(_bits(t2.segment_reduce(s2, P, c)[live]), _bits(got2[live]))
+
+
+def test_device_split_kgroup_catches_wrong_record():
+    """The bit test sees a phase-L lane summed into another lane's record."""
+    s, P, c = _case(_heavy_tail_counts(3000, 6), seed=6)
+    meta, vis, _ = _dev_inputs(c)
+    p = sp.device_plan(meta, vis, kgroup=True)
+    j = p["jl"]
+    bad = dict(p, htab=p["htab"].copy())
+    bad["htab"][j, [0, 1]] = bad["htab"][j, [1, 0]]  # lanes 0 and 1 swap slot runs
+    orig = sp.device_plan
+    try:
+        sp.device_plan = lambda *a, **k: bad
+        wrong = sp.device_split_sums(s, meta, vis, kgroup=True)[:c.size]
+    finally:
+        sp.device_plan = orig
+    ok = sp.device_split_sums(s, meta, vis, kgroup=True)[:c.size]
+    assert not np.array_equal(_bits(ok), _bits(wrong))
+
+
+def test_device_plan_kgroup_hero_counts():
+    """Hero device counts (all groups active), kcap 16 and 8: phase L + phase B planes are well
+    under the in-order light planes, phase L is balanced, and no core gets over LMAX groups."""
+    c = np.load(HERO_COUNTS)["counts"].astype(np.int64)
+    meta, vis, _ = _dev_inputs(c)
+    for kcap in (16, 8):
+        p0 = sp.device_plan(meta, vis, kcap=kcap)
+        p = sp.device_plan(meta, vis, kcap=kcap, kgroup=True)
+        ng = meta.shape[0]
+        assert p["light_planes"] == ng
+        assert p["l_planes"] + p["light_planes"] < 0.6 * p0["light_planes"]
+        assert p["l_max_planes"] <= p["l_planes"] / 110 + kcap
+        assert max(len(x) for x in p["core_l"]) <= sp.LMAX
+
+
+def test_train_step_kgroup_flag_default_off():
+    src = (ROOT / "render" / "train" / "train_step.cpp").read_text()
+    assert 'envu("T2_KGROUP", 0)' in src
+    # the C++ plan uses the mirror's phase-L limits and the phase-A kernels at 64 lanes
+    assert f"LMAX = {sp.LMAX}" in src
+    assert "build_hsum_prog(pl, 64," in src

@@ -78,6 +78,18 @@ def heavy_order(counts: np.ndarray, kcap: int = KCAP) -> np.ndarray:
     return h[np.lexsort((h, -c[h]))]
 
 
+def light_planes(counts: np.ndarray, kcap: int = KCAP, kgroup: bool = False, group: int = G) -> int:
+    """#799 pair-model unit (docs/training-plan/t799/pair_model.py kstats): the rows with k > 0,
+    in order, cut into groups of `group` (last one zero-padded); planes = sum over groups of the
+    largest min(k, kcap). kgroup=True (#801) sorts the rows by min(k, kcap) first."""
+    c = np.asarray(counts, np.int64)
+    c = np.minimum(c[c > 0], kcap)
+    if kgroup:
+        c = np.sort(c)[::-1]
+    ng = -(-c.size // group)
+    return int(np.concatenate([c, np.zeros(ng * group - c.size, np.int64)]).reshape(ng, group).max(1).sum())
+
+
 def _contig_fill(w: np.ndarray, cap: np.ndarray) -> np.ndarray | None:
     """Greedy contiguous split of item weights w over cores with capacities cap (in order).
     Returns bounds (len(cap)+1,) or None when the items do not fit."""
@@ -187,8 +199,19 @@ def segment_reduce_split(slots: np.ndarray, P: np.ndarray, counts: np.ndarray,
 HFLAG = 0x80000000
 
 
+LMAX = 320    # phase-L groups per core (train_step.cpp: fixed runtime-arg list, 3 + LMAX words)
+
+
+def heavy_pages(n_heavy: int, hl: int = 16) -> int:
+    """train_step.cpp: hsum holds nhrec = max(64, 2 * ceil(heavy / hl) * hl) heavy records (sized
+    from the first view's plan); #801 phase-L table pages start at page nhrec / hl of htab, so a
+    phase-L lane's record (page * 64 + lane) lies past every heavy record."""
+    return max(64, 2 * (-(-n_heavy // hl) * hl)) // hl
+
+
 def device_plan(meta: np.ndarray, vis: np.ndarray, kcap: int = KCAP, hl: int = 16, ovh: int = 2,
-                n_cores: int = CORES) -> dict:
+                n_cores: int = CORES, kgroup: bool = False, jl: int | None = None,
+                lmax: int = LMAX) -> dict:
     """#784: the device split plan exactly as render/train/train_step.cpp builds it (T2_SPLIT=1)
     from the T2 prep's meta.u32 (per group: P[64], counts[64]) and vis.u32 (16 groups x 2 words per
     128 B page).
@@ -198,7 +221,17 @@ def device_plan(meta: np.ndarray, vis: np.ndarray, kcap: int = KCAP, hl: int = 1
     groups go largest first onto the least-loaded core (ties: lowest core). Phase B (program 2):
     metab = meta with a heavy lane's count word set to HFLAG | h (its hsum record), and one
     contiguous group range per core with the smallest capacity that fits, weight = planes + ovh
-    per active group (planes = max(light counts, 1))."""
+    per active group (planes = max(light counts, 1)).
+
+    kgroup (#801, T2_KGROUP=1): light rows of active groups with 2 <= count <= kcap are sorted by
+    count descending (then row ascending) and cut into phase-L groups of 64 lanes, so a group runs
+    its first lane's count in planes instead of padding to the longest row of its param page.
+    Phase-L table pages go into htab from page jl on (default heavy_pages(heavy, hl)); lane i of
+    page j sums into hsum record j * 64 + i, and the row's count word in metab is HFLAG | that
+    record, exactly like a heavy lane. Each lane keeps its own (P, count), so its slot sequence and
+    sum order are unchanged. Phase L runs the phase-A kernels with T2_HL=64; its groups go largest
+    first onto the least-loaded core (at most lmax per core). Phase B then runs 1 plane per active
+    group (count 0 / 1 lanes and records only)."""
     meta = np.asarray(meta, np.uint32).reshape(-1, 128)
     ng = meta.shape[0]
     vis = np.asarray(vis, np.uint32).reshape(-1, 32)
@@ -220,6 +253,25 @@ def device_plan(meta: np.ndarray, vis: np.ndarray, kcap: int = KCAP, hl: int = 1
         c = int(np.argmin(load))
         core_h[c].append(j)
         load[c] += int(htab[j, 64])
+    lrows, core_l, lload = np.zeros(0, np.int64), [[] for _ in range(n_cores)], np.zeros(n_cores, np.int64)
+    if kgroup:
+        jl = heavy_pages(heavy.size, hl) if jl is None else jl
+        assert jl >= max(nhg, 1) and jl * 64 >= nhg * hl, "phase-L pages overlap the heavy table"
+        cf = cnt.ravel()
+        cand = np.flatnonzero((active[:, None] & (cnt >= 2) & (cnt <= kcap)).ravel())
+        lrows = cand[np.argsort(-cf[cand], kind="stable")]
+        q = np.arange(lrows.size)
+        ltab = np.zeros((-(-lrows.size // 64), 128), np.uint32)
+        ltab[q // 64, q % 64] = meta[lrows // 64, lrows % 64]
+        ltab[q // 64, 64 + q % 64] = cf[lrows]
+        htab = np.concatenate([htab, np.zeros((jl - htab.shape[0], 128), np.uint32), ltab])
+        metab[lrows // 64, 64 + lrows % 64] = HFLAG | ((jl + q // 64) * 64 + q % 64).astype(np.uint32)
+        for j in range(ltab.shape[0]):  # already largest first
+            c = int(np.argmin(lload))
+            core_l[c].append(jl + j)
+            lload[c] += int(ltab[j, 64])
+            if len(core_l[c]) > lmax:
+                raise ValueError(f"over {lmax} phase-L groups on core {c}")
     lc = np.where(metab[:, 64:] & HFLAG, 0, metab[:, 64:]).astype(np.int64)
     planes = np.maximum(lc.max(1), 1)
     w = np.where(active, planes + ovh, 0)
@@ -247,7 +299,8 @@ def device_plan(meta: np.ndarray, vis: np.ndarray, kcap: int = KCAP, hl: int = 1
     bounds = np.array(fill(lo), np.int64)
     return dict(heavy=heavy, htab=htab, metab=metab, core_h=core_h, bounds=bounds, active=active,
                 a_max_planes=int(load.max(initial=0)), heavy_planes=int(htab[:nhg, 64].sum()),
-                light_planes=int(planes[active].sum()), hl=hl,
+                light_planes=int(planes[active].sum()), hl=hl, kgroup=kgroup, jl=jl, lrows=lrows,
+                core_l=core_l, l_planes=int(lload.sum()), l_max_planes=int(lload.max(initial=0)),
                 b_max_weight=int(max(w[bounds[i]:bounds[i + 1]].sum() for i in range(n_cores))))
 
 
@@ -273,10 +326,13 @@ def device_split_sums(slots: np.ndarray, meta: np.ndarray, vis: np.ndarray, **kw
     slots = np.asarray(slots, f32)
     meta = np.asarray(meta, np.uint32).reshape(-1, 128)
     hl = p["hl"]
-    hs = np.zeros((p["htab"].shape[0] * hl, slots.shape[1]), f32)
-    for j in range(p["heavy"].size and p["htab"].shape[0]):
+    hs = np.zeros((p["htab"].shape[0] * 64, slots.shape[1]), f32)
+    for j in range(-(-p["heavy"].size // hl)):
         t = p["htab"][j].astype(np.int64)
         hs[j * hl:(j + 1) * hl] = _lanes_sum(slots, t[:hl], t[64:64 + hl], int(t[64]))
+    for j in sorted(j for js in p["core_l"] for j in js):  # #801 phase L: 64 lanes per group
+        t = p["htab"][j].astype(np.int64)
+        hs[j * 64:(j + 1) * 64] = _lanes_sum(slots, t[:64], t[64:], int(t[64]))
     out = np.zeros((meta.shape[0] * 64, slots.shape[1]), f32)
     for g in np.flatnonzero(p["active"]):
         m = p["metab"][g].astype(np.int64)

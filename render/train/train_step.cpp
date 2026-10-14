@@ -17,6 +17,11 @@
 // T2_G2D=1 skips the projection backward + Adam, so pfwc.f32 holds the per-row slot sums (g2d).
 // #793 T2_PERVIEW=1 (with T2_SPLIT=1) adds a per-view loop: the split plan is rebuilt, uploaded
 // and its runtime args rewritten every step, serial vs overlapped with T1 (view_*_ms in timing.json).
+// #801 T2_KGROUP=1 (default 0, with T2_SPLIT=1) adds phase L: light rows with 2 <= k <= T2_KCAP are
+// sorted by k descending and summed in 64-lane groups by the phase-A kernels (T2_HL=64) into hsum
+// records past the heavy ones (htab pages from JL on), flagged in metab like heavy lanes; each lane
+// keeps its own (P, count), so its slot run and sum order are unchanged. Phase B then runs 1 plane
+// per active group. Mirror and tests: gsplat/t2_split.py device_plan(kgroup=True).
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -25,6 +30,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
@@ -149,6 +155,7 @@ int main(int argc, char** argv) {
     const bool split = envu("T2_SPLIT", 1) != 0, g2d_only = envu("T2_G2D", 0) != 0;
     const uint32_t kcap = envu("T2_KCAP", 8), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
     if (split && (HL == 0 || HL > 64 || 64 % HL != 0)) { std::fprintf(stderr, "T2_HL must divide 64\n"); return 2; }
+    const bool kgroup = split && envu("T2_KGROUP", 0) != 0;  // #801 phase L (off by default)
 
     auto dev = distributed::MeshDevice::create_unit_mesh(0);
     auto* cq = &dev->mesh_command_queue();
@@ -253,19 +260,23 @@ int main(int argc, char** argv) {
     // copy per view) and goes to b_meta (T1 does not read it; base T2 does not run in split mode);
     // the contiguous fill searches [lo, lo + wmax] over active groups only (greedy always fits at
     // lo + wmax). Same plan as #784 bit for bit. T2_PERVIEW=1 reruns it per step (see below).
-    constexpr uint32_t HFLAG = 0x80000000u, AMAX = 64;  // AMAX: phase-A groups per core (fixed RTA size)
-    std::vector<uint32_t> heavy, metab, htab, act;
-    std::vector<std::vector<uint32_t>> core_h(want);
+    // LMAX: phase-L groups per core (#801; fixed RTA size 3 + LMAX, under the 341-word RTA limit).
+    constexpr uint32_t HFLAG = 0x80000000u, AMAX = 64, LMAX = 320;  // AMAX: phase-A groups per core (fixed RTA size)
+    std::vector<uint32_t> heavy, metab, htab, act, lrows;
+    std::vector<std::vector<uint32_t>> core_h(want), core_l(want);
     std::vector<uint32_t> core_g(want + 1, ng), core_n(want, 0);
-    std::vector<uint64_t> w(split ? ng : 0, 0), load(want, 0);
-    uint64_t light_planes = 0, heavy_planes = 0, a_max = 0, b_max = 0;
+    std::vector<uint64_t> w(split ? ng : 0, 0), load(want, 0), lload(want, 0);
+    uint64_t light_planes = 0, heavy_planes = 0, a_max = 0, b_max = 0, l_planes = 0, l_max = 0;
+    uint32_t JL = 0;  // #801: first phase-L htab page = nhrec / HL, fixed by the first plan
     if (split) metab = meta;  // once (a trainer patches its fresh per-view meta in place)
     auto cnt = [&](uint32_t r) { return meta[(r / 64) * 128 + 64 + r % 64]; };
     auto make_plan = [&]() -> bool {
         for (uint32_t r : heavy) metab[(r / 64) * 128 + 64 + r % 64] = cnt(r);
+        for (uint32_t r : lrows) metab[(r / 64) * 128 + 64 + r % 64] = cnt(r);
         heavy.clear();
+        lrows.clear();
         act.clear();
-        light_planes = heavy_planes = a_max = b_max = 0;
+        light_planes = heavy_planes = a_max = b_max = l_planes = l_max = 0;
         uint64_t wsum = 0, wmax = 0;
         for (uint32_t g = 0; g < ng; g++) {
             const uint32_t* vb = &vis[(g / GPB) * 32 + 2 * (g % GPB)];
@@ -275,6 +286,7 @@ int main(int argc, char** argv) {
             uint32_t k = 1;
             for (uint32_t i = 0; i < 64; i++) {
                 if (cg[i] > kcap) heavy.push_back(g * 64 + i);
+                else if (kgroup && cg[i] >= 2) lrows.push_back(g * 64 + i);
                 else k = std::max(k, cg[i]);
             }
             act.push_back(g);
@@ -285,6 +297,8 @@ int main(int argc, char** argv) {
         }
         std::stable_sort(heavy.begin(), heavy.end(), [&](uint32_t a, uint32_t b) { return cnt(a) > cnt(b); });
         const uint32_t nhg = (uint32_t(heavy.size()) + HL - 1) / HL;
+        if (JL == 0) JL = std::max<uint32_t>(64, 2 * nhg * HL) / HL;  // hsum: nhrec = JL * HL heavy records
+        if (kgroup && nhg > JL) { std::fprintf(stderr, "heavy groups %u over phase-L page %u\n", nhg, JL); return false; }
         htab.assign(size_t(std::max<uint32_t>(nhg, 1)) * 128, 0u);
         for (uint32_t h = 0; h < heavy.size(); h++) {
             const uint32_t r = heavy[h], j = h / HL, i = h % HL;
@@ -304,6 +318,30 @@ int main(int argc, char** argv) {
             if (core_h[c].size() > AMAX) { std::fprintf(stderr, "too many heavy groups on core %u\n", c); return false; }
         }
         a_max = *std::max_element(load.begin(), load.end());
+        // #801 phase L: light rows (2 <= k <= kcap) by count descending (rows ascending on ties), 64
+        // lanes per group, table pages from JL on; lane i of page j -> hsum record j * 64 + i. LPT as
+        // in phase A (groups already largest first).
+        if (kgroup) {
+            std::stable_sort(lrows.begin(), lrows.end(), [&](uint32_t a, uint32_t b) { return cnt(a) > cnt(b); });
+            const uint32_t nlg = (uint32_t(lrows.size()) + 63) / 64;
+            htab.resize(size_t(JL + nlg) * 128, 0u);
+            for (uint32_t q = 0; q < lrows.size(); q++) {
+                const uint32_t r = lrows[q], j = JL + q / 64, i = q % 64;
+                htab[size_t(j) * 128 + i] = meta[(r / 64) * 128 + r % 64];
+                htab[size_t(j) * 128 + 64 + i] = cnt(r);
+                metab[(r / 64) * 128 + 64 + r % 64] = HFLAG | (j * 64 + i);
+            }
+            for (auto& v : core_l) v.clear();
+            std::fill(lload.begin(), lload.end(), 0);
+            for (uint32_t j = JL; j < JL + nlg; j++) {
+                const uint32_t c = uint32_t(std::min_element(lload.begin(), lload.end()) - lload.begin());
+                core_l[c].push_back(j);
+                lload[c] += htab[size_t(j) * 128 + 64];
+                l_planes += htab[size_t(j) * 128 + 64];
+                if (core_l[c].size() > LMAX) { std::fprintf(stderr, "too many phase-L groups on core %u\n", c); return false; }
+            }
+            l_max = *std::max_element(lload.begin(), lload.end());
+        }
         // Phase B: light planes per active group (a heavy lane feeds plane 0 only), one contiguous
         // range per core, smallest capacity that fits (binary search on the greedy fill).
         auto fill = [&](uint64_t cap, std::vector<uint32_t>* b) {
@@ -343,12 +381,16 @@ int main(int argc, char** argv) {
     const auto tp0 = std::chrono::steady_clock::now();
     if (split && !make_plan()) return 2;
     const double plan_ms = ms_since(tp0);
-    // hsum / htab sized for twice this view's heavy rows (fixed buffers for the per-view loop).
-    const uint32_t nhrec = split ? std::max<uint32_t>(64, 2 * ((uint32_t(heavy.size()) + HL - 1) / HL * HL)) : 1;
-    auto b_htab = make_dram(dev.get(), uint64_t(split ? nhrec / HL : 1) * META_PAGE, META_PAGE);
-    auto b_hs = make_dram(dev.get(), uint64_t((nhrec + 63) / 64) * SLOT_PAGE, SLOT_PAGE);
+    // hsum / htab sized for twice this view's heavy rows (fixed buffers for the per-view loop);
+    // #801: plus twice this view's phase-L groups (one htab page and one hsum page each, from JL on).
+    const uint32_t nhrec = split ? JL * HL : 1;
+    const uint32_t nlcap = kgroup ? std::min<uint32_t>(ng, std::max<uint32_t>(1, 2 * ((uint32_t(lrows.size()) + 63) / 64))) : 0;
+    const uint32_t htab_pages = split ? JL + nlcap : 1;
+    auto b_htab = make_dram(dev.get(), uint64_t(htab_pages) * META_PAGE, META_PAGE);
+    auto b_hs = make_dram(dev.get(), uint64_t(kgroup ? JL + nlcap : (nhrec + 63) / 64) * SLOT_PAGE, SLOT_PAGE);
     auto upload_plan = [&](bool blocking) -> bool {
         if (heavy.size() > nhrec) { std::fprintf(stderr, "heavy rows %zu over hsum size %u\n", heavy.size(), nhrec); return false; }
+        if (htab.size() / 128 > htab_pages) { std::fprintf(stderr, "htab pages %zu over %u\n", htab.size() / 128, htab_pages); return false; }
         distributed::EnqueueWriteMeshBuffer(*cq, b_meta, metab, blocking);
         distributed::EnqueueWriteMeshBuffer(*cq, b_htab, htab, blocking);
         return true;
@@ -358,10 +400,11 @@ int main(int argc, char** argv) {
     const double split_upload_ms = ms_since(tu0);
     if (split)
         std::printf("[SPLIT] kcap %u hl %u ovh %u heavy_rows %zu heavy_groups %zu heavy_planes %llu light_planes %llu "
-                    "a_max_planes %llu b_max_weight %llu plan_ms %.3f upload_ms %.3f\n",
-                    kcap, HL, ovh, heavy.size(), htab.size() / 128, (unsigned long long)heavy_planes,
+                    "a_max_planes %llu b_max_weight %llu plan_ms %.3f upload_ms %.3f kgroup %d l_rows %zu l_planes %llu "
+                    "l_max_planes %llu\n",
+                    kcap, HL, ovh, heavy.size(), std::max<size_t>(1, (heavy.size() + HL - 1) / HL), (unsigned long long)heavy_planes,
                     (unsigned long long)light_planes, (unsigned long long)a_max, (unsigned long long)b_max, plan_ms,
-                    split_upload_ms);
+                    split_upload_ms, int(kgroup), lrows.size(), (unsigned long long)l_planes, (unsigned long long)l_max);
     // Split-mode runtime args, per core (fixed sizes, so a per-view plan only rewrites values).
     auto split_b_reader = [&](uint32_t lin) -> std::vector<uint32_t> {
         return {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
@@ -377,12 +420,21 @@ int main(int argc, char** argv) {
         for (uint32_t q = 0; q < n; q++) ra[3 + q] = core_h[lin][q];
         return ra;
     };
+    auto split_l_reader = [&](uint32_t lin) -> std::vector<uint32_t> {  // #801 phase L
+        const uint32_t n = lin < want ? uint32_t(core_l[lin].size()) : 0;
+        std::vector<uint32_t> ra(3 + LMAX, 0u);
+        ra[0] = uint32_t(b_s->address());
+        ra[1] = uint32_t(b_htab->address());
+        ra[2] = n;
+        for (uint32_t q = 0; q < n; q++) ra[3 + q] = core_l[lin][q];
+        return ra;
+    };
     auto with_consts = [&](uint32_t n) {
         std::vector<uint32_t> ca = {n};
         for (float f : cst) { uint32_t u; std::memcpy(&u, &f, 4); ca.push_back(u); }
         return ca;
     };
-    KernelHandle k2r = 0, k2w = 0, k2c = 0, kar = 0, kaw = 0, kac = 0;
+    KernelHandle k2r = 0, k2w = 0, k2c = 0, kar = 0, kaw = 0, kac = 0, klr = 0, klw = 0, klc = 0;
 
     // ---- T2 program (t697 gather reduce + SFPU fwd/bwd + sparse Adam)
     Program p2 = CreateProgram();
@@ -449,9 +501,11 @@ int main(int argc, char** argv) {
             }
     }
 
-    // ---- #784 phase A program: heavy groups -> hsum records
-    Program pa = CreateProgram();
-    if (split) {
+    // ---- #784 phase A program: heavy groups -> hsum records. #801 phase L: the same kernels with
+    // T2_HL=64 over the phase-L groups.
+    auto build_hsum_prog = [&](Program& pa, uint32_t hl, KernelHandle& kar, KernelHandle& kaw, KernelHandle& kac,
+                               const std::function<std::vector<uint32_t>(uint32_t)>& rargs,
+                               const std::vector<std::vector<uint32_t>>& groups) {
         enum : uint32_t { CB_HDR = 0, CB_K = 4, CB_WH = 5, CB_WS = 6, CB_HR = 7, CB_FO = 19 };
         add_cb(pa, cores, CB_HDR, 64, 2);
         add_cb(pa, cores, CB_K, P_PAGE, 2);
@@ -463,7 +517,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 2; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
         TensorAccessorArgs::create_dram_interleaved().append_to(wct);
         const std::map<std::string, std::string> def = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"},
-                                                        {"T2_HL", std::to_string(HL) + "u"},
+                                                        {"T2_HL", std::to_string(hl) + "u"},
                                                         {"T2_PHASE_A", "1"}};
         const std::string kd = TRAIN_KERNEL_DIR;
         auto kr = kar = CreateKernel(pa, kd + "t2g_reader.cpp", cores,
@@ -481,17 +535,21 @@ int main(int argc, char** argv) {
         for (uint32_t y = 0; y < grid.y; y++)
             for (uint32_t x = 0; x < grid.x; x++) {
                 const uint32_t lin = y * grid.x + x;
-                const uint32_t n = lin < want ? uint32_t(core_h[lin].size()) : 0;
-                SetRuntimeArgs(pa, kr, CoreCoord{x, y}, split_a_reader(lin));
+                const uint32_t n = lin < want ? uint32_t(groups[lin].size()) : 0;
+                SetRuntimeArgs(pa, kr, CoreCoord{x, y}, rargs(lin));
                 SetRuntimeArgs(pa, kw, CoreCoord{x, y}, {uint32_t(b_hs->address()), n});
                 SetRuntimeArgs(pa, kc, CoreCoord{x, y}, with_consts(n));
             }
-    }
+    };
+    Program pa = CreateProgram(), pl = CreateProgram();
+    if (split) build_hsum_prog(pa, HL, kar, kaw, kac, split_a_reader, core_h);
+    if (kgroup) build_hsum_prog(pl, 64, klr, klw, klc, split_l_reader, core_l);
 
-    distributed::MeshWorkload w1, w2, wa;
+    distributed::MeshWorkload w1, w2, wa, wl;
     w1.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p1));
     w2.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(p2));
     if (split) wa.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(pa));
+    if (kgroup) wl.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(pl));
 
     // Step 0 (the checked one): T1 -> T2 with a Finish between, so each stage is timed alone.
     std::vector<double> t1ms, t2ms, chain;
@@ -502,6 +560,7 @@ int main(int argc, char** argv) {
         t1ms.push_back(ms_since(t0));
         t0 = std::chrono::steady_clock::now();
         if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
+        if (kgroup) distributed::EnqueueMeshWorkload(*cq, wl, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
         t2ms.push_back(ms_since(t0));
@@ -526,6 +585,7 @@ int main(int argc, char** argv) {
         if (split) {  // #784: the host plan, for the check against gsplat.t2_split.device_plan
             save(odir + "/split_heavy.u32", heavy);
             save(odir + "/split_bounds.u32", core_g);
+            if (kgroup) save(odir + "/split_lrows.u32", lrows);  // #801 phase-L rows in lane order
             distributed::EnqueueReadMeshBuffer(*cq, o, b_hs, true);
             save(odir + "/hsum.f32", o);
         }
@@ -536,17 +596,25 @@ int main(int argc, char** argv) {
         const auto t0 = std::chrono::steady_clock::now();
         distributed::EnqueueMeshWorkload(*cq, w1, false);
         if (split) distributed::EnqueueMeshWorkload(*cq, wa, false);
+        if (kgroup) distributed::EnqueueMeshWorkload(*cq, wl, false);
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
         chain.push_back(ms_since(t0));
     }
     // #784: each split phase alone (A only re-sums the same slots; B is a normal T2 step).
-    std::vector<double> tams, tbms;
+    // #801: L (phase L alone) likewise only re-sums the same slots.
+    std::vector<double> tams, tbms, tlms;
     for (int i = 0; split && i < reps; i++) {
         auto t0 = std::chrono::steady_clock::now();
         distributed::EnqueueMeshWorkload(*cq, wa, false);
         distributed::Finish(*cq);
         tams.push_back(ms_since(t0));
+        if (kgroup) {
+            t0 = std::chrono::steady_clock::now();
+            distributed::EnqueueMeshWorkload(*cq, wl, false);
+            distributed::Finish(*cq);
+            tlms.push_back(ms_since(t0));
+        }
         t0 = std::chrono::steady_clock::now();
         distributed::EnqueueMeshWorkload(*cq, w2, false);
         distributed::Finish(*cq);
@@ -562,9 +630,11 @@ int main(int argc, char** argv) {
     bool plan_stable = true;
     if (perview) {
         const auto heavy0 = heavy, htab0 = htab, metab0 = metab, core_g0 = core_g;
-        const auto core_h0 = core_h;
+        const auto core_h0 = core_h, core_l0 = core_l;
+        const auto lrows0 = lrows;
         Program& q2 = w2.get_programs().begin()->second;
         Program& qa = wa.get_programs().begin()->second;
+        Program* ql = kgroup ? &wl.get_programs().begin()->second : nullptr;
         auto set_rtas = [&]() {
             for (uint32_t y = 0; y < grid.y; y++)
                 for (uint32_t x = 0; x < grid.x; x++) {
@@ -578,6 +648,12 @@ int main(int argc, char** argv) {
                     SetRuntimeArgs(qa, kar, CoreCoord{x, y}, split_a_reader(lin));
                     SetRuntimeArgs(qa, kaw, CoreCoord{x, y}, {uint32_t(b_hs->address()), na});
                     SetRuntimeArgs(qa, kac, CoreCoord{x, y}, with_consts(na));
+                    if (ql) {
+                        const uint32_t nl = lin < want ? uint32_t(core_l[lin].size()) : 0;
+                        SetRuntimeArgs(*ql, klr, CoreCoord{x, y}, split_l_reader(lin));
+                        SetRuntimeArgs(*ql, klw, CoreCoord{x, y}, {uint32_t(b_hs->address()), nl});
+                        SetRuntimeArgs(*ql, klc, CoreCoord{x, y}, with_consts(nl));
+                    }
                 }
         };
         for (int i = 0; i < 2 * reps; i++) {
@@ -588,33 +664,37 @@ int main(int argc, char** argv) {
             if (!make_plan()) return 2;
             vplan.push_back(ms_since(tp));
             plan_stable = plan_stable && heavy == heavy0 && htab == htab0 && metab == metab0 && core_g == core_g0 &&
-                          core_h == core_h0;
+                          core_h == core_h0 && core_l == core_l0 && lrows == lrows0;
             if (!upload_plan(false)) return 2;
             set_rtas();
             if (!ov) distributed::EnqueueMeshWorkload(*cq, w1, false);
             distributed::EnqueueMeshWorkload(*cq, wa, false);
+            if (kgroup) distributed::EnqueueMeshWorkload(*cq, wl, false);
             distributed::EnqueueMeshWorkload(*cq, w2, false);
             distributed::Finish(*cq);
             (ov ? vovl : vser).push_back(ms_since(t0));
         }
         std::printf("[PERVIEW] plan_stable %d\n", int(plan_stable));
     }
-    const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain), sa = stat(tams), sb = stat(tbms);
+    const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain), sa = stat(tams), sb = stat(tbms), sl = stat(tlms);
     const Stat svs = stat(vser), svo = stat(vovl), svp = stat(vplan);
-    char sbuf[1100];
+    char sbuf[1500];
     std::snprintf(sbuf, sizeof sbuf,
                   ", \"split\": %s, \"g2d_only\": %s, \"kcap\": %u, \"hl\": %u, \"ovh\": %u, \"heavy_rows\": %zu, "
                   "\"heavy_planes\": %llu, \"light_planes\": %llu, \"a_max_planes\": %llu, \"b_max_weight\": %llu, "
                   "\"plan_ms\": %.3f, \"split_upload_ms\": %.3f, \"ta_ms_min\": %.4f, \"ta_ms_med\": %.4f, "
                   "\"tb_ms_min\": %.4f, \"tb_ms_med\": %.4f, \"perview\": %s, \"plan_stable\": %s, "
                   "\"view_plan_ms_min\": %.4f, \"view_plan_ms_med\": %.4f, \"view_serial_ms_min\": %.4f, "
-                  "\"view_serial_ms_med\": %.4f, \"view_overlap_ms_min\": %.4f, \"view_overlap_ms_med\": %.4f",
+                  "\"view_serial_ms_med\": %.4f, \"view_overlap_ms_min\": %.4f, \"view_overlap_ms_med\": %.4f, "
+                  "\"kgroup\": %s, \"l_rows\": %zu, \"l_planes\": %llu, \"l_max_planes\": %llu, "
+                  "\"tl_ms_min\": %.4f, \"tl_ms_med\": %.4f",
                   split ? "true" : "false", g2d_only ? "true" : "false", kcap, HL, ovh, heavy.size(),
                   (unsigned long long)heavy_planes, (unsigned long long)light_planes, (unsigned long long)a_max,
                   (unsigned long long)b_max, plan_ms, split_upload_ms, sa.min, sa.med, sb.min, sb.med,
                   perview ? "true" : "false", plan_stable ? "true" : "false", svp.min, svp.med, svs.min, svs.med,
-                  svo.min, svo.med);
-    char buf[2200];
+                  svo.min, svo.med, kgroup ? "true" : "false", lrows.size(), (unsigned long long)l_planes,
+                  (unsigned long long)l_max, sl.min, sl.med);
+    char buf[2600];
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"n_groups\": %u, \"groups_processed\": %u, "
                   "\"cores\": %u, \"t1_cores\": %u, \"reps\": %d, \"grads_out\": %s, "
