@@ -115,6 +115,16 @@ breaks on something only the hero has (long tiles, many pairs per core); the tim
 the cost of the work but not yet of a correct result. Breakdown by tile pair count and pair rank:
 `hero_err.py` -> `results/err-hero-v2-p150.json`.
 
+Error breakdown (`results/err-hero-v2-p150.json`): 0.23% of the 4.48M slots are wrong (rel err
+> bar), none non-finite, 39 where the device gives 0 and the reference does not. **Every bad
+slot has rank < 1024 in its tile** (bad fraction 1.0% there, 0.0% for all ranks >= 1024), and
+the first bad rank in the busiest tiles is 1 or 4. Shorter tiles (1024-4096 pairs) carry 78% of
+the squared error. The worst terms are the conic grads dA/dB/dC (up to 5e4); colour and opacity
+are off by about 1. The small dumps never have a tile over 1024 pairs, so the suspect is the
+cross-chunk state handed to the first (front-most) 1024-pair chunk when a tile spans several
+chunks (the back-to-front transmittance / colour suffix carried between chunks), not the per-pair
+body math.
+
 Timing (`results/timing-hero-v2-p150.json`, `runs-hero-v2-p150.json`): 6 runs, first 109.0 ms,
 warm runs 86.33 / 86.67 / 86.32 / 86.32 / 86.32 ms, **median of 5 warm 86.32 ms**. Host reduce 0.
 
@@ -200,7 +210,9 @@ The training quality bar is published 3DGS/gsplat or LiteGS bicycle test PSNR/SS
 
 ## Not done (moved to the follow-up)
 
-- Hero oracle failure (#707): find and fix the cause, then re-time (see the hero section).
+- Hero oracle failure (#707): all bad slots sit in the first 1024-pair chunk of tiles spanning
+  several chunks; fix the cross-chunk carry, check on a synthetic dump with one >1024-pair tile,
+  then re-time the hero (see the hero section).
 - Forward training flag (fp32 image, accurate exp, slab kept alive), with the flag-off b2b
   raw_md5 1d372b94 check and the on/off A/B (opt/ab_jit_check.py on both arms, plus a device
   hero.png, a diff and PSNR against benchmarks/reference_v2/hero.png).
