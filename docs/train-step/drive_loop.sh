@@ -11,7 +11,7 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 rev=${1:?rev}
 TP=${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}
-H=${H:-$(python3 -c "import json;print(json.load(open('$TP/harness/device-hosts.json'))['p100'])")}
+H=${H:-$(python3 -c "import json;print(json.load(open('$TP/harness/project.json'))['device']['hosts']['p100'])")}
 T=${T:-/localdev/smarton/gstt2-sync}
 D=docs/train-step; O=$D/out
 if [ "${2:-}" != --locked ]; then exec ttp lock p100 -- "$PWD/$D/drive_loop.sh" "$rev" --locked; fi
