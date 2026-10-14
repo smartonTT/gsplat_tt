@@ -1,0 +1,1 @@
+{"n_tiles": 1095, "n_recs": 4558416, "n_slots": 4558416, "split_tiles": 81, "partial_slots": 80191, "busiest_bodies": 283210, "mean_bodies": 276903.9, "bodies_busiest_over_mean": 1.023, "busiest_pairs": 46640, "busiest_ms": 50.09, "mean_ms": 49.94, "mean_over_busiest": 0.997}

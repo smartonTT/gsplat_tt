@@ -1,0 +1,10 @@
+7106fe71ce92d6165094caac604482a9  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-hero/cores.u32
+65b1492cc54af632d79d01617d42c592  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-s1/cores.u32
+32613ddf0cb9637fb58a5c3c4548707f  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-s2/cores.u32
+6e62eb4df53d8ee9fa8f7c46894462e5  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-sh0/cores.u32
+6e62eb4df53d8ee9fa8f7c46894462e5  /localdev/smarton/gstt2-sync/tmp/t785in/lpt-sh3/cores.u32
+3adb82bed741e8d78a5f61883e7a787e  /localdev/smarton/gstt2-sync/tmp/t785in/split-hero/cores.u32
+005c58db76f1d8f64f61e4e83c30452a  /localdev/smarton/gstt2-sync/tmp/t785in/split-s1/cores.u32
+d931322096485e82af12f08c9f413af9  /localdev/smarton/gstt2-sync/tmp/t785in/split-s2/cores.u32
+adb4899d1111df25b65f4ae08aee3bff  /localdev/smarton/gstt2-sync/tmp/t785in/split-sh0/cores.u32
+adb4899d1111df25b65f4ae08aee3bff  /localdev/smarton/gstt2-sync/tmp/t785in/split-sh3/cores.u32
