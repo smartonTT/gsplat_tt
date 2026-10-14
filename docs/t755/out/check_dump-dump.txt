@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-sync/docs/t708/check_dump.py", line 74, in <module>
+    sys.exit(main())
+  File "/localdev/smarton/gstt2-sync/docs/t708/check_dump.py", line 48, in main
+    img = np.asarray(Image.open(png_path).convert("RGB")).astype(np.int32)
+  File "/localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/PIL/Image.py", line 3639, in open
+    fp = builtins.open(filename, "rb")
+FileNotFoundError: [Errno 2] No such file or directory: '/localdev/smarton/gstt2-sync/tmp/t755-r0-dump/view00_hero.png'

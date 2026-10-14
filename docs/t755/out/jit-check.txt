@@ -1,0 +1,10 @@
+== on vs aa
+A/A all 13 kernels identical between on and aa
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+A/A all 13 kernels identical between on and aa
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+== on vs r3
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] r3=['4181888706426779564']
+JIT-HASH OK
+A/A sort_bin_onelaunch: same hashes ['10202092990400216591', '8988695824088243788'] in on and r3
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
