@@ -11,6 +11,8 @@
 // into their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp; 2 also loads all
 // words before the first instruction-buffer store. On bh-49 vs 0: 1 is slower (setup 172.9 -> 198.2
 // cycles/pair, hero 82.66 -> 83.33 ms), 2 is faster (hero 82.66 -> 82.39 ms), both bit-identical.
+// BWD_SKIPDEAD=1 (default; 0 = off) (#782): the compute kernel skips vectors whose pixels are all
+// dead (T == 0), from a T plane packed to CB_TL at each mid-tile ACC pack; bit-identical.
 // Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
@@ -36,6 +38,7 @@ using namespace tt::tt_metal;
 namespace {
 constexpr uint32_t SMALL = 64, TILE_B = 4096, N_PLANES = 5, REC_WORDS = 16;
 constexpr uint32_t CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16, CB_WS = 17;
+constexpr uint32_t CB_TL = 18, CB_LIVE = 19;  // BWD_SKIPDEAD: packed T plane, dead-mask mailbox
 
 template <class T>
 std::vector<T> load(const std::string& p) {
@@ -97,6 +100,8 @@ int main(int argc, char** argv) {
     constexpr uint32_t ST_PAGE = 128, ST_N = 11;
     const char* ps_env = std::getenv("BWD_PRESTAGE");
     const int prestage = ps_env ? std::atoi(ps_env) : 2;
+    const char* sd_env = std::getenv("BWD_SKIPDEAD");
+    const bool skipdead = !(sd_env && std::string(sd_env) == "0");
 
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
@@ -132,6 +137,10 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_REC, prestage ? 2 * SMALL : SMALL, 4);
     add_cb(prog, cores, CB_OUT, TILE_B, 2);
     add_cb(prog, cores, CB_WS, TILE_B, 1);  // writer scratch: header, 16 recs, 16 staging pages
+    if (skipdead) {
+        add_cb(prog, cores, CB_TL, TILE_B, 1);
+        add_cb(prog, cores, CB_LIVE, SMALL, 1);
+    }
 
     std::vector<uint32_t> rct, wct;
     for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
@@ -159,6 +168,7 @@ int main(int argc, char** argv) {
     };
     if (stats) cdef["BWD_STATS"] = "1";
     if (prestage) cdef["BWD_PRESTAGE"] = std::to_string(prestage);
+    if (skipdead) cdef["BWD_SKIPDEAD"] = "1";
     auto kc = CreateKernel(prog, kd + "blend_bwd_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,

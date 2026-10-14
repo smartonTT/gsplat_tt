@@ -281,23 +281,32 @@ def write(p: dict, out: str) -> None:
         json.dump(meta, f, indent=1)
 
 
-def emulate(p: dict, exp=np.exp) -> np.ndarray:
+def emulate(p: dict, exp=np.exp, skipdead: bool = False, stats: dict | None = None) -> np.ndarray:
     """numpy model of the device kernel (same planes, masks, lane math order). `exp` is the
-    kernel's exp (fp32-accurate on device; exp21f() models the forward's bf16-grade one)."""
+    kernel's exp (fp32-accurate on device; exp21f() models the forward's bf16-grade one).
+    skipdead models BWD_SKIPDEAD (#782): T is snapshotted at each mid-tile ACC pack (pair p with
+    p % BATCH == BATCH - 1 and not the tile's last); after each later pair one block (vectors
+    2b, 2b+1, b = p % BATCH) of the snapshot is scanned and its all-zero vectors leave the masks
+    of the following pairs (no publish lag here: the device's lag only skips fewer).
+    stats["visits"] counts the vector bodies run."""
     cfg = p["cfg"]
+    visits = 0
     lanes = vector_lanes().reshape(32, 32)
     xr, yr = p["ramps"][0][lanes], p["ramps"][1][lanes]
     slots = np.zeros((p["n_slots"], 9), f32)
     amax, amin, tmin, one = f32(cfg.alpha_max), f32(cfg.alpha_min), f32(cfg.t_min), f32(1.0)
     for (tid, start, cnt, _), pl in zip(p["tiles"], p["planes"]):
         T, BH, g0, g1, g2 = (pl[k][lanes].copy() for k in range(N_PLANES))
-        for rec in p["recs"][start:start + cnt]:
+        dead, snap = 0, None
+        for i, rec in enumerate(p["recs"][start:start + cnt]):
+            mask = int(rec[12]) & ~dead
+            visits += bin(mask).count("1")
             fr = rec[:12].view(f32)
             Af, Bf, Cf, mx, my, op, cr, cgc, cb, P0, Lx, Ly = fr
             A, B, C = f32(-2) * Af, -Bf, f32(-2) * Cf
             acc = np.zeros((9, 32, 32), f32)
             for V in range(32):
-                if not (int(rec[12]) >> V) & 1:
+                if not (mask >> V) & 1:
                     continue
                 u, v = xr[V] - mx, yr[V] - my
                 pw = centred_power(Af, Bf, Cf, P0, Lx, Ly, xr[V] - f32(16), yr[V] - f32(16))
@@ -327,6 +336,15 @@ def emulate(p: dict, exp=np.exp) -> np.ndarray:
             dw, ag0, ag1, ag2, Suu, Suv, Svv, Su, Sv = s
             slots[int(rec[13])] = [A * Su + B * Sv, B * Su + C * Sv, f32(-0.5) * Suu, -Suv,
                                    f32(-0.5) * Svv, dw, ag0, ag1, ag2]
+            if skipdead and snap is not None:
+                b = i % BATCH
+                for V in (2 * b, 2 * b + 1):
+                    if not snap[V].view(np.uint32).any():
+                        dead |= 1 << V
+            if skipdead and i % BATCH == BATCH - 1 and i + 1 != cnt:
+                snap = T.copy()
+    if stats is not None:
+        stats["visits"] = visits
     return slots
 
 

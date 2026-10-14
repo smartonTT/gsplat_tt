@@ -154,3 +154,23 @@ def test_prestage_page_loads_the_record_bits():
         t = (src / f).read_text()
         assert f"K_LOAD_LO = {dev.SFPLOADI_LO:#010x}u" in t and f"K_LOAD_HI = {dev.SFPLOADI_HI:#010x}u" in t, f
     assert "REC_MASK_W = 24" in (src / "blend_bwd_compute.cpp").read_text()
+
+
+def test_skipdead_model_is_exact_and_skips(tmp_path):
+    """#782 BWD_SKIPDEAD: dropping all-dead vectors (from the T snapshot at each mid-tile pack)
+    leaves every slot bit-identical and runs fewer bodies."""
+    import subprocess
+    out = tmp_path / "s.npz"
+    subprocess.run([sys.executable, str(ROOT / "docs/t685/synth.py"), str(out), "64", "96", "120", "3"],
+                   check=True, env={**os.environ, "PYTHONPATH": str(ROOT)})
+    d, cfg = dev.load_dump(str(out))
+    op = np.maximum(np.asarray(d["opacity"], np.float32), np.float32(0.9))
+    conic = np.asarray(d["conic"], np.float32) * np.float32(0.05)   # wider splats: pixels die
+    p = dev.prep(d["means2d"], conic, op, d["colors"], d["order"], d["valid"],
+                 d["image"], d["dL_dimage"], cfg)
+    assert int(p["tiles"][:, 2].max()) > 2 * dev.BATCH
+    s0, s1 = {}, {}
+    a = dev.emulate(p, stats=s0)
+    b = dev.emulate(p, skipdead=True, stats=s1)
+    assert np.array_equal(a.view(np.uint32), b.view(np.uint32))
+    assert s1["visits"] < s0["visits"], (s0, s1)

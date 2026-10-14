@@ -181,13 +181,21 @@ int main(int argc, char** argv) {
     // ---- T1 program (blend_bwd_bench layout, stats off, slot pages in T2 layout)
     Program p1 = CreateProgram();
     {
-        enum : uint32_t { CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16, CB_WS = 17 };
+        enum : uint32_t { CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16, CB_WS = 17,
+                          CB_TL = 18, CB_LIVE = 19 };
+        // BWD_SKIPDEAD=1 (default; 0 = off) (#782): skip all-dead vectors, bit-identical.
+        const char* sd_env = std::getenv("BWD_SKIPDEAD");
+        const bool skipdead = !(sd_env && std::string(sd_env) == "0");
         add_cb(p1, cores, CB_HDR, SMALL, 2);
         add_cb(p1, cores, CB_PLANE, TILE_B, N_PLANES);
         add_cb(p1, cores, CB_RAMP, TILE_B, 2);
         add_cb(p1, cores, CB_REC, SMALL, 4);
         add_cb(p1, cores, CB_OUT, TILE_B, 2);
         add_cb(p1, cores, CB_WS, TILE_B, 1);
+        if (skipdead) {
+            add_cb(p1, cores, CB_TL, TILE_B, 1);
+            add_cb(p1, cores, CB_LIVE, SMALL, 1);
+        }
         std::vector<uint32_t> rct, wct;
         for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
         for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
@@ -207,6 +215,7 @@ int main(int argc, char** argv) {
             {"BWD_AMIN_BITS", std::to_string(meta_int(j1, "alpha_min_bits")) + "u"},
             {"BWD_TMIN_BITS", std::to_string(meta_int(j1, "t_min_bits")) + "u"},
         };
+        if (skipdead) cdef["BWD_SKIPDEAD"] = "1";
         auto kc = CreateKernel(p1, kd + "blend_bwd_compute.cpp", cores,
                                ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                              .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,

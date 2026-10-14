@@ -21,6 +21,12 @@
 // BWD_PRESTAGE (#767): the reader hands over each record float as its two SFPLOADI instruction
 // words (bwd_reader.cpp), so pair setup is copy word, copy word, SFPSTORE per value instead of
 // building both words on the MATH RISC-V; same instructions, bit-identical results.
+// BWD_SKIPDEAD (#782): skip vectors whose 32 pixels are all dead (T == 0). With T == 0 a body
+// changes nothing but scratch rows 18-23 (Tn = 0 < t_min), and a dead pixel never comes back,
+// so any stale dead mask is exact. At each mid-tile ACC pack the T plane is also packed to
+// CB_TL; over the next 16 pairs PACK ORs one 64-word block per pair (vectors 2b, 2b+1) and
+// publishes the tile's dead mask in CB_LIVE (word 1, then word 0 = tile tag); MATH drops the
+// dead vectors from each pair's mask. Bit-identical results.
 #include <cstdint>
 
 #include "api/compute/common.h"
@@ -34,6 +40,7 @@
 
 namespace {
 constexpr uint32_t CB_HDR = 0, CB_PLANE = 1, CB_RAMP = 2, CB_REC = 3, CB_OUT = 16;
+constexpr uint32_t CB_TL = 18, CB_LIVE = 19;  // BWD_SKIPDEAD: packed T plane, dead-mask mailbox
 constexpr uint32_t N_PLANES = 5;
 constexpr uint32_t DR_T = 0, DR_BH = 32, DR_G0 = 64, DR_G1 = 96, DR_G2 = 128, DR_X = 160, DR_Y = 192;
 constexpr uint32_t ACC_TILE = 7, DR_ACC = 224;
@@ -371,6 +378,54 @@ inline void bwd_bodies(uint32_t mask) {
 }
 #endif
 
+#ifdef BWD_SKIPDEAD
+static_assert(NB == 16, "BWD_SKIPDEAD scans one 64-word T block per pair, 16 per ACC pack");
+inline volatile uint32_t* bwd_live_mb() {
+    return reinterpret_cast<volatile uint32_t*>(get_local_cb_interface(CB_LIVE).fifo_rd_ptr << 4);
+}
+#ifdef TRISC_MATH
+// Dead-vector mask of tile t as last published by PACK (0 if none yet for this tile).
+inline uint32_t bwd_dead(uint32_t t) {
+    volatile uint32_t* mb = bwd_live_mb();
+    if (mb[0] != t) return 0u;
+    asm volatile("fence" ::: "memory");
+    return mb[1];
+}
+#endif
+#ifdef TRISC_PACK
+uint32_t g_dead, g_tl_ok;
+// After the T pack's push: wait until the packer has written CB_TL (its received count).
+inline void bwd_tl_wait() {
+    const uint16_t want = get_local_cb_interface(CB_TL).tiles_received;
+    volatile tt_l1_ptr uint32_t* rp = get_cb_tiles_received_ptr(CB_TL);
+    while (static_cast<uint16_t>(reg_read(reinterpret_cast<uint32_t>(rp))) != want) {
+    }
+    asm volatile("fence" ::: "memory");
+    g_tl_ok = 1u;
+}
+// Block b of the packed T tile (tilized words 64b..64b+63): even words are vector 2b, odd 2b+1.
+// T is +0.0 or positive, so a vector is dead iff the OR of its words is 0.
+inline void bwd_scan_block(uint32_t b, uint32_t t) {
+    if (g_tl_ok == 0u) return;
+    const volatile uint32_t* w =
+        reinterpret_cast<const volatile uint32_t*>((get_local_cb_interface(CB_TL).fifo_rd_ptr << 4) + 256u * b);
+    uint32_t e = 0, o = 0;
+#pragma GCC unroll 8
+    for (uint32_t i = 0; i < 64; i += 2) {
+        e |= w[i];
+        o |= w[i + 1];
+    }
+    const uint32_t nd = ((e == 0u ? 1u : 0u) | (o == 0u ? 2u : 0u)) << (2u * b);
+    if ((nd & ~g_dead) == 0u) return;
+    g_dead |= nd;
+    volatile uint32_t* mb = bwd_live_mb();
+    mb[1] = g_dead;
+    asm volatile("fence" ::: "memory");
+    mb[0] = t;
+}
+#endif
+#endif
+
 #if defined(BWD_STATS) && defined(TRISC_MATH)
 enum : uint32_t { ST_TOT, ST_TILE, ST_REC, ST_SETUP, ST_BODY, ST_FIN, ST_PACK, ST_NT, ST_NP, ST_NV, ST_MARK, ST_N };
 uint32_t g_st[ST_N];
@@ -402,6 +457,10 @@ void kernel_main() {
     MATH((bwd_bodies_init<0>()));
     if (n_tiles == 0) return;
     cb_wait_front(CB_RAMP, 2);
+#if defined(BWD_SKIPDEAD) && defined(TRISC_MATH)
+    bwd_live_mb()[0] = ~0u;  // no tile tag yet (L1 keeps the last run's); PACK writes only after MATH commits
+    asm volatile("fence" ::: "memory");
+#endif
 #if defined(BWD_STATS) && defined(TRISC_MATH)
     for (uint32_t k = 0; k < ST_N; k++) g_st[k] = 0;
 #endif
@@ -413,6 +472,9 @@ void kernel_main() {
         asm volatile("fence" ::: "memory");
         const uint32_t cnt = reinterpret_cast<const volatile uint32_t*>(ha)[2];
         cb_pop_front(CB_HDR, 1);
+#ifdef BWD_SKIPDEAD
+        PACK((g_dead = 0u, g_tl_ok = 0u));
+#endif
 
         tile_regs_acquire();
         cb_wait_front(CB_PLANE, N_PLANES);
@@ -433,11 +495,14 @@ void kernel_main() {
 #ifdef TRISC_MATH
             ST_LAP(ST_REC, st_c);
 #ifdef BWD_PRESTAGE
-            const uint32_t mask = bwd_stage_record(ra);
+            uint32_t mask = bwd_stage_record(ra);
 #else
             uint32_t s[12];
-            const uint32_t mask = bwd_read_record(ra, s);
+            uint32_t mask = bwd_read_record(ra, s);
             bwd_pair_setup(s);
+#endif
+#ifdef BWD_SKIPDEAD
+            mask &= ~bwd_dead(t);
 #endif
             ST_LAP(ST_SETUP, st_c);
             ST_CNT(ST_NP, 1);
@@ -456,6 +521,9 @@ void kernel_main() {
 #endif
             UNPACK(((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId)));
             cb_pop_front(CB_REC, 1);
+#ifdef BWD_SKIPDEAD
+            PACK((bwd_scan_block(p & 15u, t)));
+#endif
             if ((p % NB) != NB - 1u && p + 1 != cnt) continue;
 
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
@@ -467,9 +535,16 @@ void kernel_main() {
             if (p + 1 == cnt) {
                 tile_regs_release();
             } else {
+#ifdef BWD_SKIPDEAD
+                pack_tile(DR_T / 32u, CB_TL);
+                cb_push_back(CB_TL, 1);
+#endif
                 PACK((non_zeroing_pack_release()));
                 tile_regs_acquire();
                 MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+#ifdef BWD_SKIPDEAD
+                PACK((bwd_tl_wait()));
+#endif
             }
             ST_LAP(ST_PACK, st_c);
         }
