@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=cb904694 bin=2daea514ad5e7394 t724 cb904694 fp32 decode-ahead train mode A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t724-d1  timeout=300s  worry=600s  ts=2026-10-14T03:07:53-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t724-remote.sh 5 dump dump0
+-----------------------------------------
+=== r5-dump cb904694 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t724/train-v0.bin --dump-views t724-dump --view-range 0:1 10:07:56 load=1.20
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t724-on
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=30.5 p50_ms=30.5 min_ms=30.5 max_ms=30.5 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t724-r5-dump
+TTW_TIMING ms_view=30.541
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 10:07 /localdev/smarton/gstt2-sync/tmp/t724/train-v0.bin
+-rw-rw-r-- 1 smarton smarton  1704948 Oct 14 10:08 /localdev/smarton/gstt2-sync/tmp/t724/view00_hero.png
+=== r5-dump0 cb904694 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_DECODE_AHEAD=0 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t724/train-v0-da0.bin --dump-views t724-dump0 --view-range 0:1 10:08:00 load=1.19
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t724-on0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=30.3 p50_ms=30.3 min_ms=30.3 max_ms=30.3 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t724-r5-dump0
+TTW_TIMING ms_view=30.299
+=== done 5 10:08:03
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t724/tmp/ttw-state/logs/t724-d1-20261014-030753.log
