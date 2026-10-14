@@ -157,7 +157,7 @@ __attribute__((noinline)) void sh_pre_body() {
             g = g - 6.0f * C33 * dst_reg[S(XZ)] * dst_reg[SHV(12, c)];
             g = g + C34 * (4.0f * dst_reg[S(ZZ)] - 3.0f * dst_reg[S(XX)] - dst_reg[S(YY)]) * dst_reg[SHV(13, c)];
             g = g + 2.0f * C35 * dst_reg[S(XZ)] * dst_reg[SHV(14, c)];
-            g = g + 3.0f * C36 * (dst_reg[S(XX)] - dst_reg[S(YY)]) * dst_reg[SHV(15, c)];
+            g = g + 3.0f * C36 * (vFloat(dst_reg[S(XX)]) - dst_reg[S(YY)]) * dst_reg[SHV(15, c)];
             dst_reg[S(GX)] = g;
         }
         {
@@ -166,7 +166,7 @@ __attribute__((noinline)) void sh_pre_body() {
             g = g + C21 * dst_reg[S(Z)] * dst_reg[SHV(5, c)];
             g = g - 2.0f * C22 * dst_reg[S(Y)] * dst_reg[SHV(6, c)];
             g = g - 2.0f * C24 * dst_reg[S(Y)] * dst_reg[SHV(8, c)];
-            g = g + 3.0f * C30 * (dst_reg[S(XX)] - dst_reg[S(YY)]) * dst_reg[SHV(9, c)];
+            g = g + 3.0f * C30 * (vFloat(dst_reg[S(XX)]) - dst_reg[S(YY)]) * dst_reg[SHV(9, c)];
             g = g + C31 * dst_reg[S(XZ)] * dst_reg[SHV(10, c)];
             g = g + C32 * (4.0f * dst_reg[S(ZZ)] - dst_reg[S(XX)] - 3.0f * dst_reg[S(YY)]) * dst_reg[SHV(11, c)];
             g = g - 6.0f * C33 * dst_reg[S(YZ)] * dst_reg[SHV(12, c)];
@@ -184,7 +184,7 @@ __attribute__((noinline)) void sh_pre_body() {
             g = g + 8.0f * C32 * dst_reg[S(YZ)] * dst_reg[SHV(11, c)];
             g = g + C33 * (6.0f * dst_reg[S(ZZ)] - 3.0f * dst_reg[S(XX)] - 3.0f * dst_reg[S(YY)]) * dst_reg[SHV(12, c)];
             g = g + 8.0f * C34 * dst_reg[S(XZ)] * dst_reg[SHV(13, c)];
-            g = g + C35 * (dst_reg[S(XX)] - dst_reg[S(YY)]) * dst_reg[SHV(14, c)];
+            g = g + C35 * (vFloat(dst_reg[S(XX)]) - dst_reg[S(YY)]) * dst_reg[SHV(14, c)];
             dst_reg[S(GZ)] = g;
         }
         {

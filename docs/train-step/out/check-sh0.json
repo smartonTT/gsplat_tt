@@ -94,8 +94,7 @@
   },
   "worst_grad": 0.00044757896359538866,
   "worst_param": 0.0001389897294274448,
-  "pass": true,
-  "gated": true
+  "pass": true
  },
  "pass": true
 }
