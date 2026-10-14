@@ -38,7 +38,7 @@ scp -q -o BatchMode=yes "$D/remote.sh" "$H:$T/tmp/t731-remote.sh.tmp" && $SSH "$
 $DEVRUN --host "$H" --no-verify --timeout 560 --tag t731-prof -- \
   "T=$T MESH_DEVICE=$MESH_DEVICE RUN_TIMEOUT=480 bash $T/tmp/t731-remote.sh prof" > "$O/prof.out" 2>&1
 rc=$?
-grep -E "^(===|run rc|B2B |SUMMARY|HANG|NO_DEVICE_CSV|device csv|\[eth\]|\[DEV\] dispatch|TT_FATAL|TT_THROW|.*overflows)" "$O/prof.out" | cut -c1-240
+grep -E "^(===|run rc|B2B |SUMMARY|HANG|NO_DEVICE_CSV|device csv|zones rc|\[eth\]|\[DEV\] dispatch|TT_FATAL|TT_THROW|.*overflows)" "$O/prof.out" | cut -c1-240
 echo "=== devrun rc=$rc"
 scp -q -o BatchMode=yes "$H:$T/tmp/t731/*" "$O/" || rc=${rc/#0/4}
 $SSH "$H" "rm -f $T/tmp/t731/prof-device.csv.gz; df -h /localdev/smarton | tail -1" > "$O/disk.txt" 2>&1; cat "$O/disk.txt"
