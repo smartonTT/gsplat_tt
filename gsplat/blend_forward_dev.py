@@ -248,6 +248,16 @@ def main(argv=None) -> int:
     train = np.fromfile(os.path.join(args.prep_dir, "train.f32"), f32).reshape(-1, 4, 1024)
     img, fT, stop = to_image(train, p["tiles"], H, W, cfg.background)
     rep = compare(d, img, fT, args.bar)
+    if "fwd_model_image" in d.files:
+        # #781 hero: the dump image is forward_fast's (centred power form, fp32 colours), which
+        # differs from the device math by up to 2e-2 at hero size (fp32 alpha_min / T_min flips
+        # over up to 25k Gaussians a tile). The gate is the numpy model of the device math
+        # (emulate_fast on prep_binned, computed once on the host), as on the crops.
+        rep["max_abs_image_vs_dump"] = rep["max_abs_image"]
+        rep["gate"] = "fwd_model"
+        rep["max_abs_image_vs_model"] = float(np.abs(img - d["fwd_model_image"]).max())
+        rep["max_abs_final_T_vs_model"] = float(np.abs(fT - d["fwd_model_final_T"]).max())
+        rep["pass"] = bool(rep["max_abs_image_vs_model"] <= args.bar and rep["max_abs_final_T_vs_model"] <= args.bar)
     rep["stopped_px"] = int(stop.sum())
     if not args.no_model:
         model = to_image(emulate_fast(p, cfg), p["tiles"], H, W, cfg.background)

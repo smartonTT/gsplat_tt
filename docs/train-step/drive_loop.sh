@@ -50,7 +50,9 @@ d = np.load(sys.argv[1]); k = {n: d[n] for n in d.files}
 assert hashlib.md5(open(sys.argv[3], 'rb').read()).hexdigest() == str(k['target_md5']), 'target md5'
 H, W = int(k['H']), int(k['W'])
 k['target'] = np.fromfile(sys.argv[4], np.uint8).reshape(H, W, 3).astype(np.float32) / np.float32(255)
-np.savez(sys.argv[2], **k)" "$src" "$L/hero_chain.npz" "$jpg" "$L/target.rgb8" || return 5
+m = np.load(sys.argv[5])   # docs/train-step/hero_model.py: emulate_fast(prep_binned(hero)), the forward gate
+k['fwd_model_image'], k['fwd_model_final_T'] = m['image'], m['final_T']
+np.savez(sys.argv[2], **k)" "$src" "$L/hero_chain.npz" "$jpg" "$L/target.rgb8" "${HERO_MODEL:-tmp/t781/hero_model.npz}" || return 5
   t0=$(date +%s)
   COPYFILE_DISABLE=1 tar -C "$L" --no-xattrs -cf - hero_chain.npz | zstd -3 -T4 -q \
     | timeout 2400 "${SSH[@]}" "rm -rf $R && mkdir -p $R && zstd -dc | tar -C $R -xf - && df -h $R | tail -1"
