@@ -43,6 +43,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "tile_window.h"
 
 // Task #280 (GSPLAT_TT_MATBLEND_FUSE): in the fused mat+blend program this body
 // runs after the mat mover on the same RISC (matblend_ncrisc.cpp), with its CB
@@ -139,7 +140,10 @@ void kernel_main() {
     const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(11);
     const uint32_t lpt_meta_addr  = get_arg_val<uint32_t>(12);
     const uint32_t core_index     = get_arg_val<uint32_t>(13);
-    const uint32_t tiles_x        = get_arg_val<uint32_t>(14);
+    // Task #623: arg 14 may carry a tile window (tile_window::pack); tile ids
+    // stay window-local, the origin is global.
+    const tile_window::Origin win = tile_window::decode(get_arg_val<uint32_t>(14));
+    const uint32_t tiles_x        = win.w;
     const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(15));
     const bool cull_disabled      = get_arg_val<uint32_t>(16) != 0;
     // M3: cull_masks / cull_mask_base are gone — the mask travels in slab word3.
@@ -328,8 +332,8 @@ void kernel_main() {
         cb_reserve_back(CB_TILE_Q, 1);
         reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = tile_id;
         cb_push_back(CB_TILE_Q, 1);
-        const uint32_t tx = tile_id % tiles_x;
-        const uint32_t ty = tile_id / tiles_x;
+        const uint32_t tx = tile_id % tiles_x + win.x0;
+        const uint32_t ty = tile_id / tiles_x + win.y0;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
 

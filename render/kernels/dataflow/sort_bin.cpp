@@ -58,6 +58,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
+#include "tile_window.h"
 
 namespace {
 
@@ -164,7 +165,9 @@ void kernel_main() {
     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
     const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(20);  // per-tile bucket slot count
-    const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(21);  // tiles per row (tile-local mean)
+    // Task #623: arg 21 may carry a tile window (tile_window::pack).
+    const tile_window::Origin l1_win = tile_window::decode(get_arg_val<uint32_t>(21));
+    const uint32_t l1_tiles_x    = l1_win.w;  // tiles per row (tile-local mean)
     // iter-138 (Stage-2b overflow pre-pack): for overflow tiles whose count fits
     // the materialize L1 cap, emit pre-packs the FULL tile (all records, not just
     // the first BUCKET_FIT) into a SEPARATE compact overflow region so the
@@ -603,8 +606,8 @@ void kernel_main() {
         // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x (shift/mask on a
         // power-of-two grid). Integer fl(mean - origin) (bit-exact); float
         // only outside sort_bin_fp32::sub_int's range.
-        const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x);
-        const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x);
+        const uint32_t txi = (tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x)) + l1_win.x0;
+        const uint32_t tyi = (tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x)) + l1_win.y0;
         uint32_t mx_bits;
         if (!sort_bin_fp32::sub_int(inv_mx_bits, txi * L1_TILE_SIZE, &mx_bits)) {
             const float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);

@@ -48,6 +48,13 @@ void DeviceTimestampedData(const char*, uint64_t);  // task #202 (EMIT_PROF vari
 bool cb_pages_reservable_at_back(int32_t operand, int32_t num_pages);
 bool cb_pages_available_at_front(int32_t operand, int32_t num_pages);
 extern uint8_t noc_index;
+extern uint8_t my_x[2];
+extern uint8_t my_y[2];
+#ifndef NOC_XY_ADDR
+#define NOC_XY_ADDR(x, y, addr) ((static_cast<uint64_t>(y) << 38) | (static_cast<uint64_t>(x) << 32) | (addr))
+#endif
+inline void noc_async_read_one_packet_set_state(uint64_t, uint32_t) {}
+inline void noc_async_read_one_packet_with_state(uint32_t, uint32_t) {}
 bool ncrisc_noc_reads_flushed(uint32_t noc);
 // NoC register reads (task #232: the physical NoC0 column).
 uint32_t NOC_CMD_BUF_READ_REG(uint32_t noc, uint32_t buf, uint32_t addr);

@@ -48,6 +48,7 @@
 #include "device_state.h"
 #include "env_config.h"
 #include "gather_visible.h"
+#include "scene_version.h"
 #include "vis_mode.h"
 #include "host_profile.h"
 #include "jit_warmup.h"
@@ -55,6 +56,7 @@
 #include "pfwc.h"
 #include "project.h"
 #include "sort.h"
+#include "split_window.h"
 #include "stage_timers.h"
 #include "tile_assign.h"
 #include "xview.h"
@@ -92,10 +94,13 @@ gsplat_cpu::ThreadPool& worker_pool() {
 // is view-invariant across the bench, so cache on (pointer, N) — one repack per
 // scene. Bit-identical to the production project_via_device cache.
 const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
+    // Keyed by pointer, N and scene version (#671): pfwc keys its cov3d upload
+    // on this vector's data pointer, which stays put, so a stale copy here
+    // would re-upload old values after an in-place update.
     static std::vector<float> cache;
-    static const float* cached_ptr = nullptr;
-    static std::size_t cached_N = 0;
-    if (cached_ptr == cov3d && cached_N == N && cache.size() == N * 6) {
+    static gsplat_tt::scene_version::UploadKey cached;
+    const uint64_t sv = gsplat_tt::scene_version::current();
+    if (cached.hit(cov3d, N, sv) && cache.size() == N * 6) {
         return cache;
     }
     cache.resize(N * 6);
@@ -108,8 +113,7 @@ const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
         cu[i * 6 + 4] = cov3d[i * 9 + 5];
         cu[i * 6 + 5] = cov3d[i * 9 + 8];
     }
-    cached_ptr = cov3d;
-    cached_N = N;
+    cached.record(cov3d, N, sv);
     return cache;
 }
 
@@ -197,6 +201,20 @@ void enqueue_pfwc(const float* means, const float* cov3d, const float* extrinsic
             vis = &vis_params;
         }
     }
+    // Task #623 (GSPLAT_TT_SPLIT=1): clip pairs to this process's tile window.
+    const gsplat_tt::split_window::Window& win = gsplat_tt::split_window::current();
+    if (win.on) {
+        if (vis == nullptr)
+            throw std::runtime_error("render_clean: GSPLAT_TT_SPLIT=1 needs the SFPU vis pfwc "
+                                     "(GSPLAT_TT_SFPU_VIS, power-of-two tiles, grid <= 512x1024)");
+        if (static_cast<int>(win.screen_tiles_x) != vis_params.tiles_x ||
+            static_cast<int>(win.screen_tiles_y) != vis_params.tiles_y)
+            throw std::runtime_error("render_clean: split window was set for another tile grid");
+        vis_params.tile_x0 = static_cast<int>(win.x0);
+        vis_params.tile_x1 = static_cast<int>(win.x0 + win.w);
+        vis_params.tile_y0 = static_cast<int>(win.y0);
+        vis_params.tile_y1 = static_cast<int>(win.y0 + win.h);
+    }
     gsplat_tt::pfwc_tt(means, cov_u.data(), extrinsics, intrinsics, N,
                        /*mean_2d=*/nullptr, /*depth=*/nullptr, /*cov2d=*/nullptr,
                        /*radii=*/nullptr, /*timings_out=*/nullptr, vis);
@@ -216,7 +234,7 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
     if (!g_xview.consume(gsplat_tt::xview::make_key(
             means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
             image_height, image_width, max_radius, tile_size, mb_contrib_floor,
-            cull_disabled))) {
+            cull_disabled, gsplat_tt::scene_version::current()))) {
         gsplat_tt::tile_assign_fold_cancel();  // #552: a folded K2 read another pfwc
         enqueue_pfwc(means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
                      image_height, image_width, max_radius, tile_size, mb_contrib_floor,
@@ -279,6 +297,17 @@ py::tuple render_view(
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
 
+    // Task #623 (GSPLAT_TT_SPLIT=1, GSPLAT_TT_SPLIT_WINDOW=x0,x1,y0,y1): this
+    // process renders only a tile window of the full image; tile ids past pfwc
+    // are window-local and the blend writes the window's tiles at full-image
+    // pitch. Off: the one-chip path, every kernel arg unchanged.
+    const gsplat_tt::split_window::Window split_win = gsplat_tt::split_window::from_env(
+        static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y));
+    if (split_win.on && !gsplat_tt::sort_matcull_fused()) {
+        throw std::runtime_error("render_clean: GSPLAT_TT_SPLIT=1 needs the fused mat+cull "
+                                 "(GSPLAT_TT_FUSE_MATCULL != 0)");
+    }
+
     // Task #379 (GSPLAT_TT_XVIEW_OVERLAP=1): the caller's next pose (4x4 w2c).
     // This view's blend enqueues its pfwc behind the blend (xview.h). Off for
     // the first-frame GSPLAT_TT_DUMP_PROJ dump, which reads pfwc outputs late.
@@ -323,6 +352,15 @@ py::tuple render_view(
     {
         py::gil_scoped_release nogil;
         view_lock.lock();
+        // Task #623: the next view's pfwc, enqueued by the previous view
+        // (xview), used that view's window; the window must not change under it.
+        if (!gsplat_tt::split_window::same(gsplat_tt::split_window::current(), split_win)) {
+            if (g_xview.pending()) {
+                throw std::runtime_error("render_clean: the split window changed while a "
+                                         "cross-view pfwc was pending (XVIEW overlap)");
+            }
+            gsplat_tt::split_window::current() = split_win;
+        }
         // One-shot JIT compile of all device programs at scene open.
         gsplat_tt::jit_warmup_ideal_path();
         head_span.stop();
@@ -420,7 +458,8 @@ py::tuple render_view(
                 g_xview.set(gsplat_tt::xview::make_key(
                     means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
                     min_opacity, N, image_height, image_width, max_radius, tile_size,
-                    mb_contrib_floor_arg, cull_disabled));
+                    mb_contrib_floor_arg, cull_disabled,
+                    gsplat_tt::scene_version::current()));
                 gsplat_tt::PfwcFuseInfo fi;
                 if (gsplat_tt::pfwc_ran_fused(&fi))
                     gsplat_tt::tile_assign_fold_prepare(fi.num_cores, fi.num_tiles, fi.tiles_x,
@@ -447,7 +486,8 @@ py::tuple render_view(
                 g_xview.set(gsplat_tt::xview::make_key(
                     means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
                     min_opacity, N, image_height, image_width, max_radius, tile_size,
-                    mb_contrib_floor_arg, cull_disabled));
+                    mb_contrib_floor_arg, cull_disabled,
+                    gsplat_tt::scene_version::current()));
             });
         }
         {
@@ -455,7 +495,11 @@ py::tuple render_view(
             st::Span s(st::acc().sort);
             sr = gsplat_tt::sort_and_bin_tt(
                 ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
-                ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(),
+                ta.gaussian_ids.size(), M,
+                // Task #623: the window's grid (tile ids are window-local).
+                static_cast<int>(gsplat_tt::split_window::grid_tiles_x(static_cast<uint32_t>(tiles_x))),
+                static_cast<int>(gsplat_tt::split_window::grid_tiles_y(static_cast<uint32_t>(tiles_y))),
+                &worker_pool(),
                 &sort_ok,
                 &sort_t, /*need_host_sorted_ids=*/false, &sort_blend);
         }
@@ -542,6 +586,10 @@ py::tuple render_view(
 
     stats["num_visible"] = static_cast<int64_t>(M);
     stats["num_entries"] = static_cast<int64_t>(P_kept);
+    if (split_win.on) {  // task #623: tiles [x0, x1) x [y0, y1) of this image are valid
+        stats["split_window"] = py::make_tuple(split_win.x0, split_win.x0 + split_win.w,
+                                               split_win.y0, split_win.y0 + split_win.h);
+    }
 
     // Push this frame's device-profiler zones into the live Tracy stream (no-op
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
@@ -589,6 +637,16 @@ PYBIND11_MODULE(render_clean, m) {
         gsplat_tt::device_state::cap_grid(gx, gy);
         return static_cast<int64_t>(gx * gy);
     });
+    // Task #671: call after changing means/cov3d/colors/opacities in place
+    // (same arrays, new values). The device scene caches and a queued xview
+    // pfwc are keyed by pointer, N and this version, so the next render_view
+    // uploads the new values. Takes the render lock: never mid-frame.
+    m.def("bump_scene_version", []() {
+        py::gil_scoped_release nogil;
+        std::lock_guard<std::mutex> lock(render_view_mutex);
+        return gsplat_tt::scene_version::bump();
+    });
+    m.def("scene_version", []() { return gsplat_tt::scene_version::current(); });
     m.def("device_shutdown", []() {
         // Same lock order as render_view: GIL released, then the mutex, so a
         // close() waits for an in-flight viewer frame instead of freeing

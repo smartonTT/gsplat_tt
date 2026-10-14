@@ -1,0 +1,35 @@
+=== t627 remote_drive 64081e84 on bh-50-special-smarton-for-reservation-133915 Wed Oct 14 01:17:11 UTC 2026
+0
+7
+tt-smi -ls rc=0
+=== dumpA arm=A 64081e84 01:17:12 load=1.27
+run rc=1
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10
+Traceback (most recent call last):
+RuntimeError: [gsplat_tt::pfwc] GSPLAT_TT_PFWC_REC32=1 needs the fused pfwc (GSPLAT_TT_PFWC_FUSE=1), which did not run
+=== chkA arm=A 64081e84 01:17:18 load=1.25
+run rc=1
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10
+Traceback (most recent call last):
+RuntimeError: [gsplat_tt::pfwc] GSPLAT_TT_PFWC_REC32=1 needs the fused pfwc (GSPLAT_TT_PFWC_FUSE=1), which did not run
+=== chkA1 arm=A1 64081e84 01:17:22 load=1.31
+run rc=0
+[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.928 fps=126.14 ms_frame_median=7.929 pass_ms_frame=7.937,7.924,7.926,7.930,7.933,7.924,7.930,7.933,7.926,7.928,7.931,7.949,7.931,7.927,7.950,7.923,7.930,7.927,7.928,7.868 check_pass_ms_frame=8.038 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=7.928 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-chkA1
+TTW_TIMING b2b_ms_frame=7.928
+TTW_TIMING b2b_ms_frame_median=7.929
+=== dumpC arm=C 64081e84 01:17:47 load=2.03
+run rc=1
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10
+[afr0] Traceback (most recent call last):
+[afr0] RuntimeError: [gsplat_tt::pfwc] GSPLAT_TT_SPLIT=1 needs the fused pfwc (GSPLAT_TT_PFWC_FUSE=1), which did not run
+[afr] worker 0 ended while waiting for 'ready'
+[run] AFR: no pass completed (rc 1, workers [1, None])
+md5sum: '*': No such file or directory
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:17 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-chip1.png
+=== correctness step failed: dumpA rc=1
+chkA rc=1
+dumpC rc=1
+=== remote_drive done first_rc=1 01:17:52

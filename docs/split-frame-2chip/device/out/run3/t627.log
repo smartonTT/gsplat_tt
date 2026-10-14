@@ -1,0 +1,612 @@
+=== t627 remote_drive fe9cf434 on bh-50-special-smarton-for-reservation-133915 Wed Oct 14 01:28:58 UTC 2026
+0
+7
+tt-smi -ls rc=0
+=== dumpA arm=A fe9cf434 01:28:59 load=1.45
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=12.3 p50_ms=12.4 min_ms=7.8 max_ms=17.9 n_views=30 warmup_s=13.5 out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-dumpA
+TTW_TIMING ms_view=12.287
+TTW_TIMING blend=12.287
+TTW_TIMING stage_head=0.015
+TTW_TIMING stage_project=0.188
+TTW_TIMING stage_tile_assign=0.016
+TTW_TIMING stage_sort=0.636
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=10.896
+TTW_TIMING stage_d2h=0.007
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.008
+TTW_TIMING stage_xview=0.387
+TTW_TIMING stage_view_total=12.157
+TTW_TIMING stage_pybind=0.130
+TTW_TIMING stage_sort_pread=0.003
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.069
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.409
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.245
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.060
+=== chkA arm=A fe9cf434 01:29:25 load=1.89
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.226 fps=75.61 ms_frame_median=13.227 pass_ms_frame=13.230,13.242,13.227,13.227,13.234,13.225,13.224,13.237,13.221,13.222,13.228,13.225,13.230,13.226,13.227,13.263,13.233,13.241,13.225,13.129 check_pass_ms_frame=13.414 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.226 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-chkA
+TTW_TIMING b2b_ms_frame=13.226
+TTW_TIMING b2b_ms_frame_median=13.227
+=== chkA1 arm=A1 fe9cf434 01:29:41 load=2.51
+run rc=0
+[DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.920 fps=126.27 ms_frame_median=7.917 pass_ms_frame=7.935,7.914,7.916,7.923,7.918,7.915,7.917,7.921,7.920,7.919,7.921,7.912,7.914,7.916,7.914,7.914,7.937,7.937,7.944,7.887 check_pass_ms_frame=8.464 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=7.920 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-chkA1
+TTW_TIMING b2b_ms_frame=7.920
+TTW_TIMING b2b_ms_frame_median=7.917
+=== dumpC arm=C fe9cf434 01:30:05 load=2.72
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 293.6 ms for 30 views = 9.786 ms/frame (coordinator 13.424; chip0 9.783 chip1 5.940 ms per own view)
+[run] AFR pass 1: 288.9 ms for 30 views = 9.630 ms/frame (coordinator 11.899; chip0 9.630 chip1 5.858 ms per own view)
+[run] AFR pass 2: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.893; chip0 9.626 chip1 5.894 ms per own view)
+[run] AFR pass 3: 289.0 ms for 30 views = 9.632 ms/frame (coordinator 11.898; chip0 9.632 chip1 5.864 ms per own view)
+[run] AFR pass 4: 288.7 ms for 30 views = 9.622 ms/frame (coordinator 11.890; chip0 9.622 chip1 5.872 ms per own view)
+[run] AFR pass 5: 289.1 ms for 30 views = 9.638 ms/frame (coordinator 11.904; chip0 9.638 chip1 5.879 ms per own view)
+[run] AFR pass 6: 288.7 ms for 30 views = 9.624 ms/frame (coordinator 11.891; chip0 9.624 chip1 5.859 ms per own view)
+[run] AFR pass 7: 288.7 ms for 30 views = 9.623 ms/frame (coordinator 11.887; chip0 9.623 chip1 5.871 ms per own view)
+[run] AFR pass 8: 289.2 ms for 30 views = 9.639 ms/frame (coordinator 11.904; chip0 9.639 chip1 5.861 ms per own view)
+[run] AFR pass 9: 288.6 ms for 30 views = 9.621 ms/frame (coordinator 11.887; chip0 9.621 chip1 5.864 ms per own view)
+[run] AFR pass 10: 289.1 ms for 30 views = 9.635 ms/frame (coordinator 11.905; chip0 9.635 chip1 5.857 ms per own view)
+[run] AFR pass 11: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.938; chip0 9.626 chip1 5.870 ms per own view)
+[run] AFR pass 12: 288.8 ms for 30 views = 9.627 ms/frame (coordinator 11.896; chip0 9.627 chip1 5.865 ms per own view)
+[run] AFR pass 13: 288.4 ms for 30 views = 9.614 ms/frame (coordinator 11.899; chip0 9.614 chip1 5.867 ms per own view)
+[run] AFR pass 14: 289.7 ms for 30 views = 9.657 ms/frame (coordinator 11.926; chip0 9.657 chip1 5.861 ms per own view)
+[run] AFR pass 15: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.894; chip0 9.628 chip1 5.863 ms per own view)
+[run] AFR pass 16: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.917; chip0 9.651 chip1 5.859 ms per own view)
+[run] AFR pass 17: 288.6 ms for 30 views = 9.619 ms/frame (coordinator 11.885; chip0 9.619 chip1 5.874 ms per own view)
+[run] AFR pass 18: 288.6 ms for 30 views = 9.619 ms/frame (coordinator 11.885; chip0 9.619 chip1 5.873 ms per own view)
+[run] AFR pass 19: 288.4 ms for 30 views = 9.614 ms/frame (coordinator 11.880; chip0 9.614 chip1 5.866 ms per own view)
+[run] AFR pass 20: 288.2 ms for 30 views = 9.605 ms/frame (coordinator 11.871; chip0 9.605 chip1 5.868 ms per own view)
+[run] AFR pass 21: 286.2 ms for 30 views = 9.539 ms/frame (coordinator 11.804; chip0 9.539 chip1 5.813 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.865
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:29 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-1chip-b2b.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:29 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-1chip.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:30 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-chip1.png
+-rw-rw-r-- 1 smarton smarton 1704660 Oct 14 01:30 /localdev/smarton/nosync/t582/gstt2/tmp/t627/hero-split.png
+=== warm-A arm=A fe9cf434 01:30:32 load=3.35
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.228 fps=75.60 ms_frame_median=13.232 pass_ms_frame=13.235,13.227,13.238,13.257,13.232,13.232,13.231,13.240,13.237,13.230,13.219,13.234,13.226,13.225,13.234,13.232,13.235,13.234,13.225,13.145 check_pass_ms_frame=13.419 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.228 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-b2bA
+TTW_TIMING b2b_ms_frame=13.228
+TTW_TIMING b2b_ms_frame_median=13.232
+=== warm-B arm=B fe9cf434 01:30:49 load=3.42
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)] (lockstep latency)
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 309.6 ms for 30 views = 10.320 ms/frame (coordinator 14.084; chip0 10.319 chip1 10.215 ms per own view)
+[run] AFR pass 1: 291.1 ms for 30 views = 9.704 ms/frame (coordinator 12.044; chip0 9.704 chip1 9.597 ms per own view)
+[run] AFR pass 2: 291.1 ms for 30 views = 9.704 ms/frame (coordinator 12.027; chip0 9.704 chip1 9.600 ms per own view)
+[run] AFR pass 3: 289.4 ms for 30 views = 9.647 ms/frame (coordinator 11.943; chip0 9.647 chip1 9.543 ms per own view)
+[run] AFR pass 4: 289.8 ms for 30 views = 9.661 ms/frame (coordinator 11.956; chip0 9.661 chip1 9.555 ms per own view)
+[run] AFR pass 5: 288.9 ms for 30 views = 9.629 ms/frame (coordinator 11.950; chip0 9.629 chip1 9.524 ms per own view)
+[run] AFR pass 6: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 11.927; chip0 9.636 chip1 9.532 ms per own view)
+[run] AFR pass 7: 290.4 ms for 30 views = 9.680 ms/frame (coordinator 11.975; chip0 9.680 chip1 9.569 ms per own view)
+[run] AFR pass 8: 289.6 ms for 30 views = 9.654 ms/frame (coordinator 11.950; chip0 9.654 chip1 9.548 ms per own view)
+[run] AFR pass 9: 289.7 ms for 30 views = 9.656 ms/frame (coordinator 11.976; chip0 9.656 chip1 9.552 ms per own view)
+[run] AFR pass 10: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 11.938; chip0 9.641 chip1 9.536 ms per own view)
+[run] AFR pass 11: 290.5 ms for 30 views = 9.684 ms/frame (coordinator 12.004; chip0 9.684 chip1 9.579 ms per own view)
+[run] AFR pass 12: 289.4 ms for 30 views = 9.647 ms/frame (coordinator 11.942; chip0 9.647 chip1 9.538 ms per own view)
+[run] AFR pass 13: 289.5 ms for 30 views = 9.648 ms/frame (coordinator 11.966; chip0 9.648 chip1 9.543 ms per own view)
+[run] AFR pass 14: 289.1 ms for 30 views = 9.638 ms/frame (coordinator 11.958; chip0 9.638 chip1 9.534 ms per own view)
+[run] AFR pass 15: 290.0 ms for 30 views = 9.666 ms/frame (coordinator 11.960; chip0 9.666 chip1 9.561 ms per own view)
+[run] AFR pass 16: 289.9 ms for 30 views = 9.663 ms/frame (coordinator 11.984; chip0 9.663 chip1 9.558 ms per own view)
+[run] AFR pass 17: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.920; chip0 9.628 chip1 9.525 ms per own view)
+[run] AFR pass 18: 289.4 ms for 30 views = 9.646 ms/frame (coordinator 11.942; chip0 9.646 chip1 9.542 ms per own view)
+[run] AFR pass 19: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 11.932; chip0 9.641 chip1 9.536 ms per own view)
+[run] AFR pass 20: 289.8 ms for 30 views = 9.659 ms/frame (coordinator 11.977; chip0 9.659 chip1 9.551 ms per own view)
+[run] AFR pass 21: 287.4 ms for 30 views = 9.578 ms/frame (coordinator 11.866; chip0 9.578 chip1 9.505 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=9.546
+=== warm-C arm=C fe9cf434 01:31:06 load=3.62
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 293.2 ms for 30 views = 9.773 ms/frame (coordinator 13.422; chip0 9.772 chip1 6.575 ms per own view)
+[run] AFR pass 1: 289.1 ms for 30 views = 9.637 ms/frame (coordinator 11.906; chip0 9.637 chip1 5.884 ms per own view)
+[run] AFR pass 2: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 11.905; chip0 9.636 chip1 5.886 ms per own view)
+[run] AFR pass 3: 289.6 ms for 30 views = 9.653 ms/frame (coordinator 11.957; chip0 9.653 chip1 5.862 ms per own view)
+[run] AFR pass 4: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.918; chip0 9.651 chip1 5.859 ms per own view)
+[run] AFR pass 5: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.893; chip0 9.626 chip1 5.869 ms per own view)
+[run] AFR pass 6: 289.4 ms for 30 views = 9.647 ms/frame (coordinator 11.914; chip0 9.647 chip1 5.867 ms per own view)
+[run] AFR pass 7: 289.4 ms for 30 views = 9.646 ms/frame (coordinator 11.969; chip0 9.646 chip1 5.859 ms per own view)
+[run] AFR pass 8: 288.9 ms for 30 views = 9.629 ms/frame (coordinator 11.938; chip0 9.629 chip1 5.869 ms per own view)
+[run] AFR pass 9: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.892; chip0 9.626 chip1 5.862 ms per own view)
+[run] AFR pass 10: 288.7 ms for 30 views = 9.622 ms/frame (coordinator 11.888; chip0 9.622 chip1 5.860 ms per own view)
+[run] AFR pass 11: 288.5 ms for 30 views = 9.618 ms/frame (coordinator 11.887; chip0 9.618 chip1 5.865 ms per own view)
+[run] AFR pass 12: 288.5 ms for 30 views = 9.616 ms/frame (coordinator 11.882; chip0 9.616 chip1 5.869 ms per own view)
+[run] AFR pass 13: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 11.906; chip0 9.636 chip1 5.865 ms per own view)
+[run] AFR pass 14: 288.4 ms for 30 views = 9.612 ms/frame (coordinator 11.880; chip0 9.612 chip1 5.875 ms per own view)
+[run] AFR pass 15: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.896; chip0 9.628 chip1 5.881 ms per own view)
+[run] AFR pass 16: 288.3 ms for 30 views = 9.611 ms/frame (coordinator 11.879; chip0 9.611 chip1 5.864 ms per own view)
+[run] AFR pass 17: 289.0 ms for 30 views = 9.635 ms/frame (coordinator 11.906; chip0 9.635 chip1 5.875 ms per own view)
+[run] AFR pass 18: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 11.908; chip0 9.640 chip1 5.866 ms per own view)
+[run] AFR pass 19: 288.6 ms for 30 views = 9.621 ms/frame (coordinator 11.918; chip0 9.621 chip1 5.889 ms per own view)
+[run] AFR pass 20: 288.8 ms for 30 views = 9.627 ms/frame (coordinator 11.895; chip0 9.627 chip1 5.871 ms per own view)
+[run] AFR pass 21: 286.0 ms for 30 views = 9.535 ms/frame (coordinator 11.800; chip0 9.535 chip1 5.801 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.865
+=== warm-D arm=D fe9cf434 01:31:24 load=3.74
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 205.2 ms for 30 views = 6.841 ms/frame (coordinator 9.023; chip0 13.682 chip1 8.010 ms per own view)
+[run] AFR pass 1: 199.6 ms for 30 views = 6.652 ms/frame (coordinator 8.829; chip0 13.304 chip1 7.855 ms per own view)
+[run] AFR pass 2: 199.5 ms for 30 views = 6.649 ms/frame (coordinator 8.774; chip0 13.298 chip1 7.850 ms per own view)
+[run] AFR pass 3: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.768; chip0 13.285 chip1 7.864 ms per own view)
+[run] AFR pass 4: 199.2 ms for 30 views = 6.642 ms/frame (coordinator 8.767; chip0 13.283 chip1 7.852 ms per own view)
+[run] AFR pass 5: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.767; chip0 13.281 chip1 7.856 ms per own view)
+[run] AFR pass 6: 199.3 ms for 30 views = 6.642 ms/frame (coordinator 8.766; chip0 13.284 chip1 7.862 ms per own view)
+[run] AFR pass 7: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.767; chip0 13.287 chip1 7.861 ms per own view)
+[run] AFR pass 8: 199.1 ms for 30 views = 6.638 ms/frame (coordinator 8.762; chip0 13.277 chip1 7.859 ms per own view)
+[run] AFR pass 9: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.763; chip0 13.277 chip1 7.854 ms per own view)
+[run] AFR pass 10: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.771; chip0 13.292 chip1 7.859 ms per own view)
+[run] AFR pass 11: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.764; chip0 13.279 chip1 7.859 ms per own view)
+[run] AFR pass 12: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.765; chip0 13.279 chip1 7.855 ms per own view)
+[run] AFR pass 13: 199.5 ms for 30 views = 6.651 ms/frame (coordinator 8.775; chip0 13.302 chip1 7.852 ms per own view)
+[run] AFR pass 14: 199.1 ms for 30 views = 6.638 ms/frame (coordinator 8.762; chip0 13.277 chip1 7.880 ms per own view)
+[run] AFR pass 15: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.771; chip0 13.292 chip1 7.874 ms per own view)
+[run] AFR pass 16: 199.3 ms for 30 views = 6.642 ms/frame (coordinator 8.767; chip0 13.284 chip1 7.855 ms per own view)
+[run] AFR pass 17: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.764; chip0 13.278 chip1 7.858 ms per own view)
+[run] AFR pass 18: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.767; chip0 13.283 chip1 7.857 ms per own view)
+[run] AFR pass 19: 199.0 ms for 30 views = 6.634 ms/frame (coordinator 8.759; chip0 13.268 chip1 7.855 ms per own view)
+[run] AFR pass 20: 199.3 ms for 30 views = 6.645 ms/frame (coordinator 8.770; chip0 13.290 chip1 7.852 ms per own view)
+[run] AFR pass 21: 196.3 ms for 30 views = 6.543 ms/frame (coordinator 8.667; chip0 13.085 chip1 7.762 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=7.853
+=== r1-A arm=A fe9cf434 01:31:39 load=3.83
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.229 fps=75.59 ms_frame_median=13.230 pass_ms_frame=13.218,13.230,13.241,13.231,13.224,13.304,13.225,13.228,13.219,13.241,13.236,13.225,13.254,13.233,13.232,13.233,13.229,13.231,13.222,13.132 check_pass_ms_frame=13.407 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.229 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-b2bA
+TTW_TIMING b2b_ms_frame=13.229
+TTW_TIMING b2b_ms_frame_median=13.230
+=== r1-B arm=B fe9cf434 01:31:55 load=3.65
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)] (lockstep latency)
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 307.2 ms for 30 views = 10.240 ms/frame (coordinator 14.162; chip0 10.240 chip1 10.129 ms per own view)
+[run] AFR pass 1: 290.5 ms for 30 views = 9.684 ms/frame (coordinator 11.992; chip0 9.684 chip1 9.582 ms per own view)
+[run] AFR pass 2: 289.3 ms for 30 views = 9.643 ms/frame (coordinator 11.932; chip0 9.643 chip1 9.542 ms per own view)
+[run] AFR pass 3: 289.3 ms for 30 views = 9.644 ms/frame (coordinator 11.903; chip0 9.644 chip1 9.541 ms per own view)
+[run] AFR pass 4: 291.2 ms for 30 views = 9.708 ms/frame (coordinator 11.970; chip0 9.708 chip1 9.597 ms per own view)
+[run] AFR pass 5: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.913; chip0 9.651 chip1 9.549 ms per own view)
+[run] AFR pass 6: 289.6 ms for 30 views = 9.655 ms/frame (coordinator 11.916; chip0 9.655 chip1 9.550 ms per own view)
+[run] AFR pass 7: 289.7 ms for 30 views = 9.656 ms/frame (coordinator 11.937; chip0 9.656 chip1 9.556 ms per own view)
+[run] AFR pass 8: 289.9 ms for 30 views = 9.665 ms/frame (coordinator 11.954; chip0 9.665 chip1 9.548 ms per own view)
+[run] AFR pass 9: 288.9 ms for 30 views = 9.629 ms/frame (coordinator 11.892; chip0 9.629 chip1 9.526 ms per own view)
+[run] AFR pass 10: 289.0 ms for 30 views = 9.632 ms/frame (coordinator 11.919; chip0 9.632 chip1 9.528 ms per own view)
+[run] AFR pass 11: 289.7 ms for 30 views = 9.655 ms/frame (coordinator 11.919; chip0 9.655 chip1 9.550 ms per own view)
+[run] AFR pass 12: 289.6 ms for 30 views = 9.653 ms/frame (coordinator 11.914; chip0 9.653 chip1 9.548 ms per own view)
+[run] AFR pass 13: 289.7 ms for 30 views = 9.657 ms/frame (coordinator 11.944; chip0 9.657 chip1 9.555 ms per own view)
+[run] AFR pass 14: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 11.901; chip0 9.636 chip1 9.533 ms per own view)
+[run] AFR pass 15: 289.5 ms for 30 views = 9.649 ms/frame (coordinator 11.910; chip0 9.649 chip1 9.551 ms per own view)
+[run] AFR pass 16: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 11.929; chip0 9.640 chip1 9.537 ms per own view)
+[run] AFR pass 17: 289.9 ms for 30 views = 9.663 ms/frame (coordinator 11.963; chip0 9.663 chip1 9.562 ms per own view)
+[run] AFR pass 18: 290.4 ms for 30 views = 9.680 ms/frame (coordinator 11.944; chip0 9.680 chip1 9.576 ms per own view)
+[run] AFR pass 19: 289.9 ms for 30 views = 9.663 ms/frame (coordinator 11.924; chip0 9.663 chip1 9.559 ms per own view)
+[run] AFR pass 20: 289.3 ms for 30 views = 9.645 ms/frame (coordinator 11.931; chip0 9.645 chip1 9.540 ms per own view)
+[run] AFR pass 21: 286.7 ms for 30 views = 9.558 ms/frame (coordinator 11.821; chip0 9.558 chip1 9.483 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=9.546
+=== r1-C arm=C fe9cf434 01:32:13 load=3.90
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 292.8 ms for 30 views = 9.759 ms/frame (coordinator 13.595; chip0 9.759 chip1 5.946 ms per own view)
+[run] AFR pass 1: 288.6 ms for 30 views = 9.620 ms/frame (coordinator 11.892; chip0 9.620 chip1 5.862 ms per own view)
+[run] AFR pass 2: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 11.905; chip0 9.634 chip1 5.861 ms per own view)
+[run] AFR pass 3: 288.5 ms for 30 views = 9.617 ms/frame (coordinator 11.884; chip0 9.617 chip1 5.884 ms per own view)
+[run] AFR pass 4: 288.7 ms for 30 views = 9.624 ms/frame (coordinator 11.891; chip0 9.624 chip1 5.867 ms per own view)
+[run] AFR pass 5: 288.2 ms for 30 views = 9.607 ms/frame (coordinator 11.873; chip0 9.607 chip1 5.852 ms per own view)
+[run] AFR pass 6: 288.4 ms for 30 views = 9.613 ms/frame (coordinator 11.881; chip0 9.613 chip1 5.857 ms per own view)
+[run] AFR pass 7: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 11.907; chip0 9.640 chip1 5.860 ms per own view)
+[run] AFR pass 8: 288.8 ms for 30 views = 9.627 ms/frame (coordinator 11.895; chip0 9.627 chip1 5.860 ms per own view)
+[run] AFR pass 9: 289.0 ms for 30 views = 9.635 ms/frame (coordinator 11.931; chip0 9.635 chip1 5.859 ms per own view)
+[run] AFR pass 10: 288.8 ms for 30 views = 9.625 ms/frame (coordinator 11.904; chip0 9.625 chip1 5.855 ms per own view)
+[run] AFR pass 11: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 11.949; chip0 9.634 chip1 5.861 ms per own view)
+[run] AFR pass 12: 289.4 ms for 30 views = 9.648 ms/frame (coordinator 11.918; chip0 9.648 chip1 5.863 ms per own view)
+[run] AFR pass 13: 288.5 ms for 30 views = 9.616 ms/frame (coordinator 11.881; chip0 9.616 chip1 5.867 ms per own view)
+[run] AFR pass 14: 288.7 ms for 30 views = 9.622 ms/frame (coordinator 11.887; chip0 9.622 chip1 5.855 ms per own view)
+[run] AFR pass 15: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.891; chip0 9.626 chip1 5.861 ms per own view)
+[run] AFR pass 16: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.894; chip0 9.628 chip1 5.855 ms per own view)
+[run] AFR pass 17: 289.5 ms for 30 views = 9.650 ms/frame (coordinator 11.921; chip0 9.650 chip1 5.862 ms per own view)
+[run] AFR pass 18: 288.8 ms for 30 views = 9.626 ms/frame (coordinator 11.892; chip0 9.626 chip1 5.863 ms per own view)
+[run] AFR pass 19: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 11.907; chip0 9.640 chip1 5.867 ms per own view)
+[run] AFR pass 20: 288.7 ms for 30 views = 9.622 ms/frame (coordinator 11.887; chip0 9.622 chip1 5.865 ms per own view)
+[run] AFR pass 21: 286.3 ms for 30 views = 9.542 ms/frame (coordinator 11.807; chip0 9.542 chip1 5.804 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.859
+=== r1-D arm=D fe9cf434 01:32:30 load=3.79
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 207.0 ms for 30 views = 6.900 ms/frame (coordinator 9.078; chip0 13.798 chip1 8.008 ms per own view)
+[run] AFR pass 1: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.840; chip0 13.280 chip1 7.867 ms per own view)
+[run] AFR pass 2: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.826; chip0 13.281 chip1 7.868 ms per own view)
+[run] AFR pass 3: 199.7 ms for 30 views = 6.657 ms/frame (coordinator 8.781; chip0 13.315 chip1 7.863 ms per own view)
+[run] AFR pass 4: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.765; chip0 13.285 chip1 7.870 ms per own view)
+[run] AFR pass 5: 199.0 ms for 30 views = 6.633 ms/frame (coordinator 8.756; chip0 13.266 chip1 7.865 ms per own view)
+[run] AFR pass 6: 199.4 ms for 30 views = 6.647 ms/frame (coordinator 8.772; chip0 13.294 chip1 7.892 ms per own view)
+[run] AFR pass 7: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.768; chip0 13.286 chip1 7.866 ms per own view)
+[run] AFR pass 8: 199.3 ms for 30 views = 6.644 ms/frame (coordinator 8.769; chip0 13.288 chip1 7.878 ms per own view)
+[run] AFR pass 9: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.766; chip0 13.282 chip1 7.866 ms per own view)
+[run] AFR pass 10: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.763; chip0 13.277 chip1 7.865 ms per own view)
+[run] AFR pass 11: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.769; chip0 13.292 chip1 7.856 ms per own view)
+[run] AFR pass 12: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.765; chip0 13.279 chip1 7.865 ms per own view)
+[run] AFR pass 13: 199.4 ms for 30 views = 6.647 ms/frame (coordinator 8.777; chip0 13.294 chip1 7.862 ms per own view)
+[run] AFR pass 14: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.774; chip0 13.292 chip1 7.857 ms per own view)
+[run] AFR pass 15: 199.3 ms for 30 views = 6.644 ms/frame (coordinator 8.768; chip0 13.288 chip1 7.859 ms per own view)
+[run] AFR pass 16: 199.4 ms for 30 views = 6.645 ms/frame (coordinator 8.769; chip0 13.291 chip1 7.858 ms per own view)
+[run] AFR pass 17: 199.4 ms for 30 views = 6.648 ms/frame (coordinator 8.772; chip0 13.296 chip1 7.866 ms per own view)
+[run] AFR pass 18: 199.5 ms for 30 views = 6.649 ms/frame (coordinator 8.772; chip0 13.298 chip1 7.868 ms per own view)
+[run] AFR pass 19: 199.3 ms for 30 views = 6.642 ms/frame (coordinator 8.765; chip0 13.284 chip1 7.864 ms per own view)
+[run] AFR pass 20: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.763; chip0 13.279 chip1 7.872 ms per own view)
+[run] AFR pass 21: 196.5 ms for 30 views = 6.549 ms/frame (coordinator 8.671; chip0 13.098 chip1 7.768 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=7.861
+=== r2-D arm=D fe9cf434 01:32:46 load=3.39
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 207.5 ms for 30 views = 6.917 ms/frame (coordinator 9.101; chip0 13.834 chip1 8.479 ms per own view)
+[run] AFR pass 1: 199.5 ms for 30 views = 6.651 ms/frame (coordinator 8.829; chip0 13.302 chip1 7.870 ms per own view)
+[run] AFR pass 2: 199.5 ms for 30 views = 6.649 ms/frame (coordinator 8.775; chip0 13.298 chip1 7.872 ms per own view)
+[run] AFR pass 3: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.767; chip0 13.283 chip1 7.867 ms per own view)
+[run] AFR pass 4: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.771; chip0 13.292 chip1 7.873 ms per own view)
+[run] AFR pass 5: 199.4 ms for 30 views = 6.647 ms/frame (coordinator 8.773; chip0 13.294 chip1 7.861 ms per own view)
+[run] AFR pass 6: 199.5 ms for 30 views = 6.651 ms/frame (coordinator 8.777; chip0 13.303 chip1 7.913 ms per own view)
+[run] AFR pass 7: 199.5 ms for 30 views = 6.650 ms/frame (coordinator 8.777; chip0 13.300 chip1 7.863 ms per own view)
+[run] AFR pass 8: 199.4 ms for 30 views = 6.648 ms/frame (coordinator 8.773; chip0 13.295 chip1 7.869 ms per own view)
+[run] AFR pass 9: 199.3 ms for 30 views = 6.644 ms/frame (coordinator 8.770; chip0 13.288 chip1 7.875 ms per own view)
+[run] AFR pass 10: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.768; chip0 13.286 chip1 7.869 ms per own view)
+[run] AFR pass 11: 199.4 ms for 30 views = 6.648 ms/frame (coordinator 8.773; chip0 13.295 chip1 7.863 ms per own view)
+[run] AFR pass 12: 199.3 ms for 30 views = 6.644 ms/frame (coordinator 8.770; chip0 13.288 chip1 7.863 ms per own view)
+[run] AFR pass 13: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.772; chip0 13.293 chip1 7.866 ms per own view)
+[run] AFR pass 14: 199.1 ms for 30 views = 6.638 ms/frame (coordinator 8.783; chip0 13.277 chip1 7.861 ms per own view)
+[run] AFR pass 15: 199.5 ms for 30 views = 6.651 ms/frame (coordinator 8.778; chip0 13.302 chip1 7.868 ms per own view)
+[run] AFR pass 16: 199.3 ms for 30 views = 6.643 ms/frame (coordinator 8.769; chip0 13.287 chip1 7.858 ms per own view)
+[run] AFR pass 17: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.764; chip0 13.280 chip1 7.872 ms per own view)
+[run] AFR pass 18: 199.5 ms for 30 views = 6.649 ms/frame (coordinator 8.774; chip0 13.297 chip1 7.862 ms per own view)
+[run] AFR pass 19: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.773; chip0 13.293 chip1 7.871 ms per own view)
+[run] AFR pass 20: 199.4 ms for 30 views = 6.647 ms/frame (coordinator 8.774; chip0 13.294 chip1 7.867 ms per own view)
+[run] AFR pass 21: 196.8 ms for 30 views = 6.558 ms/frame (coordinator 8.684; chip0 13.117 chip1 7.772 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=7.864
+=== r2-C arm=C fe9cf434 01:33:01 load=3.78
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 308.1 ms for 30 views = 10.271 ms/frame (coordinator 14.241; chip0 10.269 chip1 6.696 ms per own view)
+[run] AFR pass 1: 292.4 ms for 30 views = 9.747 ms/frame (coordinator 12.084; chip0 9.747 chip1 5.901 ms per own view)
+[run] AFR pass 2: 290.1 ms for 30 views = 9.671 ms/frame (coordinator 12.046; chip0 9.671 chip1 5.880 ms per own view)
+[run] AFR pass 3: 289.1 ms for 30 views = 9.637 ms/frame (coordinator 12.007; chip0 9.637 chip1 5.892 ms per own view)
+[run] AFR pass 4: 288.7 ms for 30 views = 9.623 ms/frame (coordinator 11.993; chip0 9.623 chip1 5.881 ms per own view)
+[run] AFR pass 5: 289.7 ms for 30 views = 9.657 ms/frame (coordinator 12.026; chip0 9.657 chip1 5.873 ms per own view)
+[run] AFR pass 6: 289.2 ms for 30 views = 9.640 ms/frame (coordinator 12.009; chip0 9.640 chip1 5.868 ms per own view)
+[run] AFR pass 7: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 12.005; chip0 9.636 chip1 5.873 ms per own view)
+[run] AFR pass 8: 290.8 ms for 30 views = 9.692 ms/frame (coordinator 12.141; chip0 9.692 chip1 5.882 ms per own view)
+[run] AFR pass 9: 288.6 ms for 30 views = 9.621 ms/frame (coordinator 11.982; chip0 9.620 chip1 5.913 ms per own view)
+[run] AFR pass 10: 289.3 ms for 30 views = 9.644 ms/frame (coordinator 12.012; chip0 9.644 chip1 5.879 ms per own view)
+[run] AFR pass 11: 289.9 ms for 30 views = 9.663 ms/frame (coordinator 12.024; chip0 9.663 chip1 5.879 ms per own view)
+[run] AFR pass 12: 289.1 ms for 30 views = 9.637 ms/frame (coordinator 11.999; chip0 9.637 chip1 5.876 ms per own view)
+[run] AFR pass 13: 289.0 ms for 30 views = 9.633 ms/frame (coordinator 11.995; chip0 9.633 chip1 5.878 ms per own view)
+[run] AFR pass 14: 290.7 ms for 30 views = 9.691 ms/frame (coordinator 12.089; chip0 9.691 chip1 5.867 ms per own view)
+[run] AFR pass 15: 289.5 ms for 30 views = 9.648 ms/frame (coordinator 12.015; chip0 9.648 chip1 5.890 ms per own view)
+[run] AFR pass 16: 290.3 ms for 30 views = 9.675 ms/frame (coordinator 12.063; chip0 9.675 chip1 5.869 ms per own view)
+[run] AFR pass 17: 289.6 ms for 30 views = 9.652 ms/frame (coordinator 12.019; chip0 9.652 chip1 5.883 ms per own view)
+[run] AFR pass 18: 289.8 ms for 30 views = 9.660 ms/frame (coordinator 12.049; chip0 9.660 chip1 5.875 ms per own view)
+[run] AFR pass 19: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 12.013; chip0 9.651 chip1 5.868 ms per own view)
+[run] AFR pass 20: 289.0 ms for 30 views = 9.632 ms/frame (coordinator 11.995; chip0 9.632 chip1 5.881 ms per own view)
+[run] AFR pass 21: 286.6 ms for 30 views = 9.552 ms/frame (coordinator 11.910; chip0 9.552 chip1 5.838 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.877
+=== r2-B arm=B fe9cf434 01:33:19 load=3.76
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)] (lockstep latency)
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 307.2 ms for 30 views = 10.239 ms/frame (coordinator 14.127; chip0 10.238 chip1 10.102 ms per own view)
+[run] AFR pass 1: 290.9 ms for 30 views = 9.696 ms/frame (coordinator 12.009; chip0 9.696 chip1 9.557 ms per own view)
+[run] AFR pass 2: 289.6 ms for 30 views = 9.654 ms/frame (coordinator 11.990; chip0 9.654 chip1 9.551 ms per own view)
+[run] AFR pass 3: 289.8 ms for 30 views = 9.661 ms/frame (coordinator 11.926; chip0 9.661 chip1 9.558 ms per own view)
+[run] AFR pass 4: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 11.897; chip0 9.634 chip1 9.528 ms per own view)
+[run] AFR pass 5: 289.7 ms for 30 views = 9.656 ms/frame (coordinator 11.918; chip0 9.656 chip1 9.550 ms per own view)
+[run] AFR pass 6: 289.1 ms for 30 views = 9.637 ms/frame (coordinator 11.902; chip0 9.637 chip1 9.532 ms per own view)
+[run] AFR pass 7: 289.5 ms for 30 views = 9.650 ms/frame (coordinator 11.912; chip0 9.650 chip1 9.545 ms per own view)
+[run] AFR pass 8: 289.8 ms for 30 views = 9.659 ms/frame (coordinator 11.923; chip0 9.659 chip1 9.553 ms per own view)
+[run] AFR pass 9: 289.4 ms for 30 views = 9.648 ms/frame (coordinator 11.911; chip0 9.648 chip1 9.543 ms per own view)
+[run] AFR pass 10: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.911; chip0 9.651 chip1 9.545 ms per own view)
+[run] AFR pass 11: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.916; chip0 9.651 chip1 9.546 ms per own view)
+[run] AFR pass 12: 289.3 ms for 30 views = 9.644 ms/frame (coordinator 11.904; chip0 9.644 chip1 9.537 ms per own view)
+[run] AFR pass 13: 289.9 ms for 30 views = 9.663 ms/frame (coordinator 11.924; chip0 9.663 chip1 9.557 ms per own view)
+[run] AFR pass 14: 289.9 ms for 30 views = 9.664 ms/frame (coordinator 11.930; chip0 9.664 chip1 9.558 ms per own view)
+[run] AFR pass 15: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 11.895; chip0 9.634 chip1 9.528 ms per own view)
+[run] AFR pass 16: 289.5 ms for 30 views = 9.651 ms/frame (coordinator 11.914; chip0 9.651 chip1 9.547 ms per own view)
+[run] AFR pass 17: 289.2 ms for 30 views = 9.638 ms/frame (coordinator 11.900; chip0 9.638 chip1 9.535 ms per own view)
+[run] AFR pass 18: 289.5 ms for 30 views = 9.650 ms/frame (coordinator 11.912; chip0 9.650 chip1 9.546 ms per own view)
+[run] AFR pass 19: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 11.905; chip0 9.641 chip1 9.535 ms per own view)
+[run] AFR pass 20: 290.0 ms for 30 views = 9.665 ms/frame (coordinator 11.953; chip0 9.665 chip1 9.557 ms per own view)
+[run] AFR pass 21: 286.9 ms for 30 views = 9.562 ms/frame (coordinator 11.844; chip0 9.562 chip1 9.485 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=9.542
+=== r2-A arm=A fe9cf434 01:33:37 load=4.10
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.233 fps=75.57 ms_frame_median=13.238 pass_ms_frame=13.254,13.242,13.238,13.239,13.238,13.237,13.238,13.236,13.238,13.240,13.239,13.238,13.233,13.237,13.235,13.232,13.232,13.240,13.235,13.143 check_pass_ms_frame=13.419 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.233 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-b2bA
+TTW_TIMING b2b_ms_frame=13.233
+TTW_TIMING b2b_ms_frame_median=13.238
+=== r3-B arm=B fe9cf434 01:33:53 load=4.04
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)] (lockstep latency)
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 306.3 ms for 30 views = 10.209 ms/frame (coordinator 14.137; chip0 10.207 chip1 10.080 ms per own view)
+[run] AFR pass 1: 290.6 ms for 30 views = 9.688 ms/frame (coordinator 12.031; chip0 9.688 chip1 9.549 ms per own view)
+[run] AFR pass 2: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.921; chip0 9.628 chip1 9.523 ms per own view)
+[run] AFR pass 3: 288.9 ms for 30 views = 9.630 ms/frame (coordinator 11.921; chip0 9.630 chip1 9.526 ms per own view)
+[run] AFR pass 4: 288.6 ms for 30 views = 9.620 ms/frame (coordinator 11.911; chip0 9.620 chip1 9.514 ms per own view)
+[run] AFR pass 5: 288.9 ms for 30 views = 9.631 ms/frame (coordinator 11.923; chip0 9.631 chip1 9.526 ms per own view)
+[run] AFR pass 6: 289.6 ms for 30 views = 9.653 ms/frame (coordinator 11.944; chip0 9.653 chip1 9.548 ms per own view)
+[run] AFR pass 7: 289.0 ms for 30 views = 9.635 ms/frame (coordinator 11.955; chip0 9.635 chip1 9.529 ms per own view)
+[run] AFR pass 8: 289.0 ms for 30 views = 9.633 ms/frame (coordinator 11.924; chip0 9.633 chip1 9.527 ms per own view)
+[run] AFR pass 9: 288.4 ms for 30 views = 9.615 ms/frame (coordinator 11.904; chip0 9.615 chip1 9.510 ms per own view)
+[run] AFR pass 10: 289.0 ms for 30 views = 9.633 ms/frame (coordinator 11.982; chip0 9.633 chip1 9.529 ms per own view)
+[run] AFR pass 11: 288.8 ms for 30 views = 9.628 ms/frame (coordinator 11.918; chip0 9.628 chip1 9.523 ms per own view)
+[run] AFR pass 12: 288.6 ms for 30 views = 9.620 ms/frame (coordinator 11.912; chip0 9.620 chip1 9.514 ms per own view)
+[run] AFR pass 13: 288.6 ms for 30 views = 9.622 ms/frame (coordinator 11.913; chip0 9.622 chip1 9.516 ms per own view)
+[run] AFR pass 14: 288.9 ms for 30 views = 9.631 ms/frame (coordinator 11.920; chip0 9.631 chip1 9.527 ms per own view)
+[run] AFR pass 15: 288.5 ms for 30 views = 9.618 ms/frame (coordinator 11.913; chip0 9.618 chip1 9.511 ms per own view)
+[run] AFR pass 16: 289.2 ms for 30 views = 9.639 ms/frame (coordinator 11.931; chip0 9.639 chip1 9.534 ms per own view)
+[run] AFR pass 17: 289.0 ms for 30 views = 9.632 ms/frame (coordinator 11.922; chip0 9.632 chip1 9.525 ms per own view)
+[run] AFR pass 18: 290.0 ms for 30 views = 9.667 ms/frame (coordinator 11.956; chip0 9.667 chip1 9.562 ms per own view)
+[run] AFR pass 19: 288.6 ms for 30 views = 9.621 ms/frame (coordinator 11.912; chip0 9.621 chip1 9.514 ms per own view)
+[run] AFR pass 20: 289.2 ms for 30 views = 9.641 ms/frame (coordinator 11.931; chip0 9.641 chip1 9.537 ms per own view)
+[run] AFR pass 21: 286.7 ms for 30 views = 9.555 ms/frame (coordinator 11.846; chip0 9.555 chip1 9.478 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=9.524
+=== r3-A arm=A fe9cf434 01:34:10 load=4.25
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.235 fps=75.56 ms_frame_median=13.239 pass_ms_frame=13.258,13.234,13.241,13.242,13.232,13.238,13.235,13.247,13.235,13.237,13.242,13.243,13.240,13.228,13.244,13.248,13.240,13.237,13.235,13.142 check_pass_ms_frame=13.397 raw_md5=1d372b94 gap_ms=0.00 render_ms_frame=13.235 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-b2bA
+TTW_TIMING b2b_ms_frame=13.235
+TTW_TIMING b2b_ms_frame_median=13.239
+=== r3-D arm=D fe9cf434 01:34:26 load=4.20
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 206.9 ms for 30 views = 6.898 ms/frame (coordinator 9.097; chip0 13.795 chip1 8.010 ms per own view)
+[run] AFR pass 1: 199.8 ms for 30 views = 6.661 ms/frame (coordinator 8.853; chip0 13.322 chip1 7.870 ms per own view)
+[run] AFR pass 2: 200.6 ms for 30 views = 6.688 ms/frame (coordinator 8.837; chip0 13.375 chip1 7.863 ms per own view)
+[run] AFR pass 3: 199.3 ms for 30 views = 6.642 ms/frame (coordinator 8.789; chip0 13.284 chip1 7.862 ms per own view)
+[run] AFR pass 4: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.790; chip0 13.291 chip1 7.851 ms per own view)
+[run] AFR pass 5: 199.4 ms for 30 views = 6.645 ms/frame (coordinator 8.791; chip0 13.290 chip1 7.855 ms per own view)
+[run] AFR pass 6: 199.0 ms for 30 views = 6.635 ms/frame (coordinator 8.778; chip0 13.270 chip1 7.879 ms per own view)
+[run] AFR pass 7: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.786; chip0 13.282 chip1 7.858 ms per own view)
+[run] AFR pass 8: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.793; chip0 13.292 chip1 7.859 ms per own view)
+[run] AFR pass 9: 199.2 ms for 30 views = 6.639 ms/frame (coordinator 8.785; chip0 13.279 chip1 7.859 ms per own view)
+[run] AFR pass 10: 199.9 ms for 30 views = 6.664 ms/frame (coordinator 8.852; chip0 13.328 chip1 7.856 ms per own view)
+[run] AFR pass 11: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.786; chip0 13.280 chip1 7.863 ms per own view)
+[run] AFR pass 12: 199.1 ms for 30 views = 6.635 ms/frame (coordinator 8.831; chip0 13.270 chip1 7.852 ms per own view)
+[run] AFR pass 13: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.787; chip0 13.283 chip1 7.861 ms per own view)
+[run] AFR pass 14: 199.1 ms for 30 views = 6.635 ms/frame (coordinator 8.780; chip0 13.271 chip1 7.853 ms per own view)
+[run] AFR pass 15: 199.0 ms for 30 views = 6.634 ms/frame (coordinator 8.779; chip0 13.268 chip1 7.865 ms per own view)
+[run] AFR pass 16: 199.2 ms for 30 views = 6.641 ms/frame (coordinator 8.786; chip0 13.283 chip1 7.860 ms per own view)
+[run] AFR pass 17: 199.4 ms for 30 views = 6.646 ms/frame (coordinator 8.790; chip0 13.291 chip1 7.863 ms per own view)
+[run] AFR pass 18: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.789; chip0 13.280 chip1 7.856 ms per own view)
+[run] AFR pass 19: 199.2 ms for 30 views = 6.640 ms/frame (coordinator 8.786; chip0 13.281 chip1 7.860 ms per own view)
+[run] AFR pass 20: 199.1 ms for 30 views = 6.638 ms/frame (coordinator 8.783; chip0 13.276 chip1 7.857 ms per own view)
+[run] AFR pass 21: 196.4 ms for 30 views = 6.546 ms/frame (coordinator 8.689; chip0 13.092 chip1 7.764 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=7.854
+=== r3-C arm=C fe9cf434 01:34:41 load=5.81
+run rc=0
+[run] AFR: 2 chips (devices [0, 1]), 30 views, 22 passes, split x at tile 16: windows [(0, 16, 0, 32), (16, 32, 0, 32)]
+[afr] starting worker 0: TT_VISIBLE_DEVICES=0 GSPLAT_TT_DEVICE_ID=0
+[afr0] [DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+[afr] worker 0 ready
+[afr] starting worker 1: TT_VISIBLE_DEVICES=1 GSPLAT_TT_DEVICE_ID=0
+[afr1] [DEV] device 0 (card 1), dispatch worker (worker), command queues 2, compute grid 11x10
+[afr] worker 1 ready
+[run] AFR pass 0: 304.4 ms for 30 views = 10.146 ms/frame (coordinator 14.106; chip0 10.144 chip1 5.954 ms per own view)
+[run] AFR pass 1: 291.5 ms for 30 views = 9.718 ms/frame (coordinator 12.216; chip0 9.718 chip1 5.871 ms per own view)
+[run] AFR pass 2: 289.4 ms for 30 views = 9.648 ms/frame (coordinator 12.011; chip0 9.648 chip1 5.878 ms per own view)
+[run] AFR pass 3: 289.0 ms for 30 views = 9.635 ms/frame (coordinator 11.998; chip0 9.635 chip1 5.874 ms per own view)
+[run] AFR pass 4: 288.7 ms for 30 views = 9.622 ms/frame (coordinator 11.983; chip0 9.622 chip1 5.868 ms per own view)
+[run] AFR pass 5: 288.9 ms for 30 views = 9.631 ms/frame (coordinator 11.993; chip0 9.631 chip1 5.858 ms per own view)
+[run] AFR pass 6: 288.9 ms for 30 views = 9.629 ms/frame (coordinator 11.994; chip0 9.629 chip1 5.866 ms per own view)
+[run] AFR pass 7: 288.8 ms for 30 views = 9.627 ms/frame (coordinator 11.988; chip0 9.627 chip1 5.861 ms per own view)
+[run] AFR pass 8: 288.9 ms for 30 views = 9.630 ms/frame (coordinator 11.991; chip0 9.630 chip1 5.868 ms per own view)
+[run] AFR pass 9: 290.3 ms for 30 views = 9.676 ms/frame (coordinator 12.081; chip0 9.676 chip1 5.871 ms per own view)
+[run] AFR pass 10: 288.9 ms for 30 views = 9.630 ms/frame (coordinator 12.071; chip0 9.630 chip1 5.866 ms per own view)
+[run] AFR pass 11: 289.2 ms for 30 views = 9.639 ms/frame (coordinator 12.019; chip0 9.639 chip1 5.868 ms per own view)
+[run] AFR pass 12: 289.1 ms for 30 views = 9.636 ms/frame (coordinator 11.993; chip0 9.636 chip1 5.869 ms per own view)
+[run] AFR pass 13: 288.8 ms for 30 views = 9.627 ms/frame (coordinator 12.009; chip0 9.627 chip1 5.870 ms per own view)
+[run] AFR pass 14: 288.7 ms for 30 views = 9.624 ms/frame (coordinator 11.987; chip0 9.624 chip1 5.861 ms per own view)
+[run] AFR pass 15: 289.0 ms for 30 views = 9.633 ms/frame (coordinator 12.070; chip0 9.633 chip1 5.867 ms per own view)
+[run] AFR pass 16: 289.1 ms for 30 views = 9.638 ms/frame (coordinator 11.996; chip0 9.638 chip1 5.865 ms per own view)
+[run] AFR pass 17: 288.6 ms for 30 views = 9.620 ms/frame (coordinator 11.982; chip0 9.620 chip1 5.864 ms per own view)
+[run] AFR pass 18: 289.0 ms for 30 views = 9.634 ms/frame (coordinator 12.016; chip0 9.634 chip1 5.865 ms per own view)
+[run] AFR pass 19: 289.4 ms for 30 views = 9.646 ms/frame (coordinator 12.009; chip0 9.646 chip1 5.878 ms per own view)
+[run] AFR pass 20: 289.7 ms for 30 views = 9.656 ms/frame (coordinator 12.015; chip0 9.656 chip1 5.870 ms per own view)
+[run] AFR pass 21: 286.5 ms for 30 views = 9.550 ms/frame (coordinator 11.907; chip0 9.550 chip1 5.808 ms per own view)
+[afr1] TTW_TIMING b2b_ms_frame=5.864
+=== lat1-A arm=A fe9cf434 01:34:59 load=5.45
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.1 p50_ms=13.3 min_ms=8.5 max_ms=17.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-lat
+TTW_TIMING ms_view=13.141
+TTW_TIMING blend=13.141
+TTW_TIMING stage_head=0.004
+TTW_TIMING stage_project=0.167
+TTW_TIMING stage_tile_assign=0.006
+TTW_TIMING stage_sort=0.538
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=12.137
+TTW_TIMING stage_d2h=0.006
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.007
+TTW_TIMING stage_xview=0.219
+TTW_TIMING stage_view_total=13.086
+TTW_TIMING stage_pybind=0.055
+TTW_TIMING stage_sort_pread=0.001
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.060
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.269
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.205
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.053
+=== lat2-A arm=A fe9cf434 01:35:04 load=5.25
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.1 p50_ms=13.3 min_ms=8.5 max_ms=17.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-lat
+TTW_TIMING ms_view=13.137
+TTW_TIMING blend=13.137
+TTW_TIMING stage_head=0.004
+TTW_TIMING stage_project=0.169
+TTW_TIMING stage_tile_assign=0.006
+TTW_TIMING stage_sort=0.545
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=12.107
+TTW_TIMING stage_d2h=0.007
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.007
+TTW_TIMING stage_xview=0.236
+TTW_TIMING stage_view_total=13.083
+TTW_TIMING stage_pybind=0.054
+TTW_TIMING stage_sort_pread=0.001
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.060
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.271
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.208
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.056
+=== lat3-A arm=A fe9cf434 01:35:09 load=4.99
+run rc=0
+[DEV] device 0 (card 0), dispatch worker (worker), command queues 2, compute grid 13x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.1 p50_ms=13.2 min_ms=8.6 max_ms=17.9 n_views=30 warmup_s=1.8 out=/localdev/smarton/nosync/t582/gstt2/tmp/t627-lat
+TTW_TIMING ms_view=13.125
+TTW_TIMING blend=13.125
+TTW_TIMING stage_head=0.004
+TTW_TIMING stage_project=0.168
+TTW_TIMING stage_tile_assign=0.006
+TTW_TIMING stage_sort=0.548
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=12.086
+TTW_TIMING stage_d2h=0.006
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.007
+TTW_TIMING stage_xview=0.237
+TTW_TIMING stage_view_total=13.064
+TTW_TIMING stage_pybind=0.061
+TTW_TIMING stage_sort_pread=0.001
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.061
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.268
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.211
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.057
+run-chkA ms_frame_median=13.227 raw_md5=1d372b94 ms_frame_median=13.227 
+run-chkA1 ms_frame_median=7.917 raw_md5=1d372b94 ms_frame_median=7.917 
+run-dumpA TTW_TIMING ms_view=12.287 TTW_TIMING blend=12.287 TTW_TIMING stage_head=0.015 TTW_TIMING stage_project=0.188 TTW_TIMING stage_tile_assign=0.016 TTW_TIMING stage_sort=0.636 TTW_TIMING stage_blend_setup=0.000 TTW_TIMING stage_mat=0.000 TTW_TIMING stage_cull=0.000 TTW_TIMING stage_blend=10.896 TTW_TIMING stage_assemble=0.000 TTW_TIMING stage_tail=0.008 TTW_TIMING stage_xview=0.387 TTW_TIMING stage_view_total=12.157 TTW_TIMING stage_pybind=0.130 TTW_TIMING stage_sort_pread=0.003 TTW_TIMING stage_sort_bin_count=0.000 TTW_TIMING stage_sort_bin_layout=0.069 TTW_TIMING stage_sort_upload=0.000 TTW_TIMING stage_sort_bin_emit=0.409 TTW_TIMING stage_sort_kernel=0.000 TTW_TIMING stage_sort_compact=0.000 TTW_TIMING stage_sort_publish_host=0.245 TTW_TIMING stage_sort_publish_wait=0.000 TTW_TIMING stage_sort_mat=0.060 TTW_TIMING stage_sort_pre=0.003 TTW_TIMING stage_sort_log=0.012 TTW_TIMING stage_sort_cont_prep=0.027 TTW_TIMING stage_sort_cont_rtargs=0.065 TTW_TIMING stage_sort_other=0.003 TTW_TIMING stage_project_pfwc_setup=0.009 TTW_TIMING stage_project_pfwc_rtargs=0.071 TTW_TIMING stage_project_pfwc_chunkcull=0.000 TTW_TIMING stage_project_pfwc_enqueue=0.078 TTW_TIMING stage_project_pfwc_finish=0.000 TTW_TIMING stage_project_gather_setup=0.006 TTW_TIMING stage_project_gather_rtargs=0.000 TTW_TIMING stage_project_gather_enqueue=0.000 TTW_TIMING stage_project_gather_wait=0.174 TTW_TIMING stage_project_gather_result=0.000 TTW_TIMING stage_tile_assign_setup=0.013 TTW_TIMING stage_tile_assign_rtargs=0.000 TTW_TIMING stage_tile_assign_enqueue=0.000 TTW_TIMING stage_tile_assign_scan_finish=0.000 TTW_TIMING stage_tile_assign_publish=0.002 TTW_TIMING stage_tile_assign_other=0.001 
+run-dumpC ms_frame_median=5.865 raw_md5=c4d6c3bb ms_frame_median=5.865 ms_frame_median=9.624 raw_md5=86de4e5f ms_frame_median=9.624 ms_frame_median=9.625 raw_md5=1d372b94 afr_chip_ms_own_view=9.625,5.865 split_copy_ms=1.619 ms_frame_median=9.625 
+run-lat1-A TTW_TIMING ms_view=13.141 TTW_TIMING blend=13.141 TTW_TIMING stage_head=0.004 TTW_TIMING stage_project=0.167 TTW_TIMING stage_tile_assign=0.006 TTW_TIMING stage_sort=0.538 TTW_TIMING stage_blend_setup=0.000 TTW_TIMING stage_mat=0.000 TTW_TIMING stage_cull=0.000 TTW_TIMING stage_blend=12.137 TTW_TIMING stage_assemble=0.000 TTW_TIMING stage_tail=0.007 TTW_TIMING stage_xview=0.219 TTW_TIMING stage_view_total=13.086 TTW_TIMING stage_pybind=0.055 TTW_TIMING stage_sort_pread=0.001 TTW_TIMING stage_sort_bin_count=0.000 TTW_TIMING stage_sort_bin_layout=0.060 TTW_TIMING stage_sort_upload=0.000 TTW_TIMING stage_sort_bin_emit=0.269 TTW_TIMING stage_sort_kernel=0.000 TTW_TIMING stage_sort_compact=0.000 TTW_TIMING stage_sort_publish_host=0.205 TTW_TIMING stage_sort_publish_wait=0.000 TTW_TIMING stage_sort_mat=0.053 TTW_TIMING stage_sort_pre=0.001 TTW_TIMING stage_sort_log=0.007 TTW_TIMING stage_sort_cont_prep=0.018 TTW_TIMING stage_sort_cont_rtargs=0.050 TTW_TIMING stage_sort_other=0.002 TTW_TIMING stage_project_pfwc_setup=0.003 TTW_TIMING stage_project_pfwc_rtargs=0.048 TTW_TIMING stage_project_pfwc_chunkcull=0.000 TTW_TIMING stage_project_pfwc_enqueue=0.032 TTW_TIMING stage_project_pfwc_finish=0.000 TTW_TIMING stage_project_gather_setup=0.002 TTW_TIMING stage_project_gather_rtargs=0.000 TTW_TIMING stage_project_gather_enqueue=0.000 TTW_TIMING stage_project_gather_wait=0.161 TTW_TIMING stage_project_gather_result=0.000 TTW_TIMING stage_tile_assign_setup=0.004 TTW_TIMING stage_tile_assign_rtargs=0.000 TTW_TIMING stage_tile_assign_enqueue=0.000 TTW_TIMING stage_tile_assign_scan_finish=0.000 TTW_TIMING stage_tile_assign_publish=0.001 TTW_TIMING stage_tile_assign_other=0.001 
+run-lat2-A TTW_TIMING ms_view=13.137 TTW_TIMING blend=13.137 TTW_TIMING stage_head=0.004 TTW_TIMING stage_project=0.169 TTW_TIMING stage_tile_assign=0.006 TTW_TIMING stage_sort=0.545 TTW_TIMING stage_blend_setup=0.000 TTW_TIMING stage_mat=0.000 TTW_TIMING stage_cull=0.000 TTW_TIMING stage_blend=12.107 TTW_TIMING stage_assemble=0.000 TTW_TIMING stage_tail=0.007 TTW_TIMING stage_xview=0.236 TTW_TIMING stage_view_total=13.083 TTW_TIMING stage_pybind=0.054 TTW_TIMING stage_sort_pread=0.001 TTW_TIMING stage_sort_bin_count=0.000 TTW_TIMING stage_sort_bin_layout=0.060 TTW_TIMING stage_sort_upload=0.000 TTW_TIMING stage_sort_bin_emit=0.271 TTW_TIMING stage_sort_kernel=0.000 TTW_TIMING stage_sort_compact=0.000 TTW_TIMING stage_sort_publish_host=0.208 TTW_TIMING stage_sort_publish_wait=0.000 TTW_TIMING stage_sort_mat=0.056 TTW_TIMING stage_sort_pre=0.001 TTW_TIMING stage_sort_log=0.008 TTW_TIMING stage_sort_cont_prep=0.022 TTW_TIMING stage_sort_cont_rtargs=0.052 TTW_TIMING stage_sort_other=0.002 TTW_TIMING stage_project_pfwc_setup=0.004 TTW_TIMING stage_project_pfwc_rtargs=0.053 TTW_TIMING stage_project_pfwc_chunkcull=0.000 TTW_TIMING stage_project_pfwc_enqueue=0.033 TTW_TIMING stage_project_pfwc_finish=0.000 TTW_TIMING stage_project_gather_setup=0.002 TTW_TIMING stage_project_gather_rtargs=0.000 TTW_TIMING stage_project_gather_enqueue=0.000 TTW_TIMING stage_project_gather_wait=0.161 TTW_TIMING stage_project_gather_result=0.000 TTW_TIMING stage_tile_assign_setup=0.005 TTW_TIMING stage_tile_assign_rtargs=0.000 TTW_TIMING stage_tile_assign_enqueue=0.000 TTW_TIMING stage_tile_assign_scan_finish=0.000 TTW_TIMING stage_tile_assign_publish=0.001 TTW_TIMING stage_tile_assign_other=0.001 
+run-lat3-A TTW_TIMING ms_view=13.125 TTW_TIMING blend=13.125 TTW_TIMING stage_head=0.004 TTW_TIMING stage_project=0.168 TTW_TIMING stage_tile_assign=0.006 TTW_TIMING stage_sort=0.548 TTW_TIMING stage_blend_setup=0.000 TTW_TIMING stage_mat=0.000 TTW_TIMING stage_cull=0.000 TTW_TIMING stage_blend=12.086 TTW_TIMING stage_assemble=0.000 TTW_TIMING stage_tail=0.007 TTW_TIMING stage_xview=0.237 TTW_TIMING stage_view_total=13.064 TTW_TIMING stage_pybind=0.061 TTW_TIMING stage_sort_pread=0.001 TTW_TIMING stage_sort_bin_count=0.000 TTW_TIMING stage_sort_bin_layout=0.061 TTW_TIMING stage_sort_upload=0.000 TTW_TIMING stage_sort_bin_emit=0.268 TTW_TIMING stage_sort_kernel=0.000 TTW_TIMING stage_sort_compact=0.000 TTW_TIMING stage_sort_publish_host=0.211 TTW_TIMING stage_sort_publish_wait=0.000 TTW_TIMING stage_sort_mat=0.057 TTW_TIMING stage_sort_pre=0.001 TTW_TIMING stage_sort_log=0.008 TTW_TIMING stage_sort_cont_prep=0.022 TTW_TIMING stage_sort_cont_rtargs=0.052 TTW_TIMING stage_sort_other=0.003 TTW_TIMING stage_project_pfwc_setup=0.004 TTW_TIMING stage_project_pfwc_rtargs=0.053 TTW_TIMING stage_project_pfwc_chunkcull=0.000 TTW_TIMING stage_project_pfwc_enqueue=0.035 TTW_TIMING stage_project_pfwc_finish=0.000 TTW_TIMING stage_project_gather_setup=0.002 TTW_TIMING stage_project_gather_rtargs=0.000 TTW_TIMING stage_project_gather_enqueue=0.000 TTW_TIMING stage_project_gather_wait=0.160 TTW_TIMING stage_project_gather_result=0.000 TTW_TIMING stage_tile_assign_setup=0.005 TTW_TIMING stage_tile_assign_rtargs=0.000 TTW_TIMING stage_tile_assign_enqueue=0.000 TTW_TIMING stage_tile_assign_scan_finish=0.000 TTW_TIMING stage_tile_assign_publish=0.001 TTW_TIMING stage_tile_assign_other=0.001 
+run-r1-A ms_frame_median=13.230 raw_md5=1d372b94 ms_frame_median=13.230 
+run-r1-B ms_frame_median=9.548 raw_md5=c4d6c3bb ms_frame_median=9.548 ms_frame_median=9.652 raw_md5=86de4e5f ms_frame_median=9.652 ms_frame_median=9.652 raw_md5=1d372b94 afr_chip_ms_own_view=9.652,9.549 split_copy_ms=1.540 split_latency_ms=9.565 split_latency_ms_median=9.546 split_latency_ms=9.565 split_latency_ms_median=9.546 TTW_TIMING split_latency_ms=9.565 TTW_TIMING split_latency_ms_median=9.546 
+run-r1-C ms_frame_median=5.861 raw_md5=c4d6c3bb ms_frame_median=5.861 ms_frame_median=9.626 raw_md5=86de4e5f ms_frame_median=9.626 ms_frame_median=9.626 raw_md5=1d372b94 afr_chip_ms_own_view=9.626,5.861 split_copy_ms=1.599 ms_frame_median=9.626 
+run-r1-D ms_frame_median=7.865 raw_md5=6d8dd585 ms_frame_median=7.865 ms_frame_median=13.286 raw_md5=37b57d91 ms_frame_median=13.286 ms_frame_median=6.643 raw_md5=1d372b94 afr_chip_ms_own_view=13.287,7.865 ms_frame_median=6.643 
+run-r2-A ms_frame_median=13.238 raw_md5=1d372b94 ms_frame_median=13.238 
+run-r2-B ms_frame_median=9.545 raw_md5=c4d6c3bb ms_frame_median=9.545 ms_frame_median=9.650 raw_md5=86de4e5f ms_frame_median=9.650 ms_frame_median=9.651 raw_md5=1d372b94 afr_chip_ms_own_view=9.650,9.546 split_copy_ms=1.621 split_latency_ms=9.553 split_latency_ms_median=9.535 split_latency_ms=9.553 split_latency_ms_median=9.535 TTW_TIMING split_latency_ms=9.553 TTW_TIMING split_latency_ms_median=9.535 
+run-r2-C ms_frame_median=5.878 raw_md5=c4d6c3bb ms_frame_median=5.878 ms_frame_median=9.646 raw_md5=86de4e5f ms_frame_median=9.646 ms_frame_median=9.646 raw_md5=1d372b94 afr_chip_ms_own_view=9.646,5.879 split_copy_ms=1.561 ms_frame_median=9.646 
+run-r2-D ms_frame_median=7.866 raw_md5=6d8dd585 ms_frame_median=7.866 ms_frame_median=13.292 raw_md5=37b57d91 ms_frame_median=13.292 ms_frame_median=6.646 raw_md5=1d372b94 afr_chip_ms_own_view=13.293,7.867 ms_frame_median=6.646 
+run-r3-A ms_frame_median=13.239 raw_md5=1d372b94 ms_frame_median=13.239 
+run-r3-B ms_frame_median=9.526 raw_md5=c4d6c3bb ms_frame_median=9.526 ms_frame_median=9.631 raw_md5=86de4e5f ms_frame_median=9.631 ms_frame_median=9.631 raw_md5=1d372b94 afr_chip_ms_own_view=9.631,9.526 split_copy_ms=1.530 split_latency_ms=9.552 split_latency_ms_median=9.545 split_latency_ms=9.552 split_latency_ms_median=9.545 TTW_TIMING split_latency_ms=9.552 TTW_TIMING split_latency_ms_median=9.545 
+run-r3-C ms_frame_median=5.867 raw_md5=c4d6c3bb ms_frame_median=5.867 ms_frame_median=9.632 raw_md5=86de4e5f ms_frame_median=9.632 ms_frame_median=9.632 raw_md5=1d372b94 afr_chip_ms_own_view=9.632,5.867 split_copy_ms=1.594 ms_frame_median=9.632 
+run-r3-D ms_frame_median=7.858 raw_md5=6d8dd585 ms_frame_median=7.858 ms_frame_median=13.281 raw_md5=37b57d91 ms_frame_median=13.281 ms_frame_median=6.641 raw_md5=1d372b94 afr_chip_ms_own_view=13.282,7.859 ms_frame_median=6.641 
+run-warm-A ms_frame_median=13.232 raw_md5=1d372b94 ms_frame_median=13.232 
+run-warm-B ms_frame_median=9.542 raw_md5=c4d6c3bb ms_frame_median=9.542 ms_frame_median=9.648 raw_md5=86de4e5f ms_frame_median=9.648 ms_frame_median=9.648 raw_md5=1d372b94 afr_chip_ms_own_view=9.648,9.543 split_copy_ms=1.618 split_latency_ms=9.590 split_latency_ms_median=9.563 split_latency_ms=9.590 split_latency_ms_median=9.563 TTW_TIMING split_latency_ms=9.590 TTW_TIMING split_latency_ms_median=9.563 
+run-warm-C ms_frame_median=5.866 raw_md5=c4d6c3bb ms_frame_median=5.866 ms_frame_median=9.627 raw_md5=86de4e5f ms_frame_median=9.627 ms_frame_median=9.628 raw_md5=1d372b94 afr_chip_ms_own_view=9.628,5.867 split_copy_ms=1.595 ms_frame_median=9.628 
+run-warm-D ms_frame_median=7.856 raw_md5=6d8dd585 ms_frame_median=7.856 ms_frame_median=13.282 raw_md5=37b57d91 ms_frame_median=13.282 ms_frame_median=6.641 raw_md5=1d372b94 afr_chip_ms_own_view=13.283,7.857 ms_frame_median=6.641 
+=== remote_drive done first_rc=0 01:35:14

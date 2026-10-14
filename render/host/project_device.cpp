@@ -26,6 +26,7 @@
 
 #include "project.h"
 #include "device_state.h"
+#include "scene_version.h"
 
 #include <algorithm>
 #include <chrono>
@@ -96,12 +97,12 @@ struct ProjectDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_mcz;
     std::size_t cached_bytes = 0;
 
-    // Pointer-keyed means cache: skip pack+upload when the caller hands us
-    // the same means pointer with the same N. In the 30-view bench this
+    // Means cache: skip pack+upload when the caller hands us the same means
+    // pointer with the same N at the same scene version (#671: an in-place
+    // update bumps the version and misses). In the 30-view bench this
     // fires on frame 0 only and saves ~85 ms/frame for the remaining 29
     // frames (3×24 MB H2D + host-side SoA pack work).
-    const float* uploaded_means_ptr = nullptr;
-    std::size_t uploaded_means_N = 0;
+    scene_version::UploadKey uploaded_means;
 };
 
 static void build_program(ProjectDeviceContext& ctx) {
@@ -346,9 +347,8 @@ double transform_means_cam_tt(
         ctx->buf_mcy = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->buf_mcz = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->cached_bytes = soa_bytes;
-        // Buffers fresh — uploaded_means_ptr/N are stale.
-        ctx->uploaded_means_ptr = nullptr;
-        ctx->uploaded_means_N = 0;
+        // Buffers fresh — the uploaded means are gone.
+        ctx->uploaded_means.invalidate();
 
         // Publish output handles for downstream device stages. Re-registers
         // on grow; keys are stable.
@@ -362,7 +362,8 @@ double transform_means_cam_tt(
     // In the 30-view bench, means_3d is a single torch tensor reused across
     // all views, so this fires on frame 0 only (microbench-confirmed:
     // call 0 pack=49.8 ms + upload=7.8 ms; calls 1+ skipped).
-    T.cache_hit = !(ctx->uploaded_means_ptr != means || ctx->uploaded_means_N != N);
+    const uint64_t sv = scene_version::current();
+    T.cache_hit = ctx->uploaded_means.hit(means, N, sv);
     if (!T.cache_hit) {
         const auto t_pack0 = std::chrono::high_resolution_clock::now();
         const SoaInputs soa = pack_means_soa(means, N);
@@ -373,8 +374,7 @@ double transform_means_cam_tt(
         const auto t_pack2 = std::chrono::high_resolution_clock::now();
         T.pack_ms = std::chrono::duration<double, std::milli>(t_pack1 - t_pack0).count();
         T.upload_ms = std::chrono::duration<double, std::milli>(t_pack2 - t_pack1).count();
-        ctx->uploaded_means_ptr = means;
-        ctx->uploaded_means_N = N;
+        ctx->uploaded_means.record(means, N, sv);
     }
 
     auto& buf_mx  = ctx->buf_mx;

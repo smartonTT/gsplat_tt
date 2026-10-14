@@ -1,0 +1,6 @@
+PSNR hero-1chip psnr_vs_ref=42.85 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-1chip-b2b psnr_vs_ref=42.85 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-chip1 psnr_vs_ref=42.85 ref=benchmarks/reference_v2/hero.png size=1024x1024
+PSNR hero-split psnr_vs_ref=42.85 ref=benchmarks/reference_v2/hero.png size=1024x1024
+VS1CHIP hero-split px_diff=0 max=0 cols=-..-
+VS1CHIP hero-chip1 px_diff=0 max=0 cols=-..-

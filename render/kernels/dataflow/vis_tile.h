@@ -59,7 +59,29 @@ struct Params {
     uint32_t tiles_x = 1, tiles_y = 1;
     uint32_t tile_shift = 0;  // tile_size == 1 << tile_shift
     float inv_tile = 1.0f;    // 1.0f / tile_size, as tile_assign_bbox.cpp computes it
+    // Task #623 split frame: tile window [win_x0, win_x0 + win_w) x [win_y0, win_y0 + win_h).
+    // win == 0: full screen (the one-chip path, unchanged).
+    uint32_t win = 0, win_x0 = 0, win_y0 = 0, win_w = 0, win_h = 0;
 };
+
+// Task #623: clip a visible gaussian's rectangle to the tile window. Returns the
+// new tpg word (0: no tile of the window is touched) and rewrites *ab as a
+// window-local rectangle, so pair emit and tile ids are window-local.
+inline uint32_t clip_window(uint32_t t, uint32_t* ab, const Params& p) {
+    const uint32_t a = *ab;
+    const uint32_t w = aabb_w(a);
+    const uint32_t h = (t & PAYLOAD) / w;
+    const uint32_t ax0 = aabb_min_x(a), ay0 = aabb_min_y(a);
+    const uint32_t x0 = ax0 > p.win_x0 ? ax0 : p.win_x0;
+    const uint32_t y0 = ay0 > p.win_y0 ? ay0 : p.win_y0;
+    const uint32_t ax1 = ax0 + w, ay1 = ay0 + h, wx1 = p.win_x0 + p.win_w, wy1 = p.win_y0 + p.win_h;
+    const uint32_t x1 = ax1 < wx1 ? ax1 : wx1;
+    const uint32_t y1 = ay1 < wy1 ? ay1 : wy1;
+    if (x1 <= x0 || y1 <= y0) return 0u;
+    const uint32_t nw = x1 - x0;
+    *ab = TAG | aabb_pack(x0 - p.win_x0, y0 - p.win_y0, nw);
+    return TAG | (nw * (y1 - y0));
+}
 
 inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -104,6 +126,12 @@ inline void classify_tile(volatile uint32_t* tpg, volatile uint32_t* aabb, uint3
                 uint32_t tz, op, mx, my, rx, ry, ab = 0;
                 get_inputs(il, tz, op, mx, my, rx, ry);
                 t = exact_words(tz, op, mx, my, rx, ry, p, &ab);
+                tpg[il] = t;
+                if (t != 0u) aabb[il] = ab;
+            }
+            if (p.win && (t & TAG)) {
+                uint32_t ab = aabb[il];
+                t = clip_window(t, &ab, p);
                 tpg[il] = t;
                 if (t != 0u) aabb[il] = ab;
             }

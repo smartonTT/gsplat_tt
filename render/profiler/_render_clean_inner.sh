@@ -12,7 +12,7 @@
 # maybe_dump_device_profiler() (GSPLAT_TT_PROFILE=1) pushes each view's device
 # zones into the live stream under --dump-device-data-mid-run.
 set -uo pipefail
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/$USER/gstt2-sync}"  # opt/sync_remote.sh default dir, never a ~/dev mirror (#676)
 cd "$REPO" || exit 1
 # shellcheck source=/dev/null
 source "$REPO/.venv/bin/activate"
