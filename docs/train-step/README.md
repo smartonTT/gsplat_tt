@@ -188,3 +188,7 @@ Open problems found (none of these numbers counts as a training ms/view yet):
    numpy D-SSIM+L1 gradient of the device image against the target is needed.
 3. Forward at 440 ms is 2.4x the whole backward; a sustained ms/view (step 4) and the 1-2k-step
    loss curve (step 5) are not run.
+4. sh3 crop, T0 flag false: every gradient matches T0 to about 1e-5 except `means`
+   (max rel 0.57, l2rel 1.0e-2; Adam delta on means 0.26). The sh0 crop passes, so the likely gap is
+   the SH-direction term of dL/dmeans (view-dependent colour) or the raw<0 colour mask on it
+   (decision #763); `out/loop/loop-sh3/out/check.log`.
