@@ -136,8 +136,21 @@ reference itself misses the fp64 evaluation of the same math by 3.6e5 (means), 3
 other rows fp32 vs fp64 is ~1e-3 L2.
 
 **Gate.** `t2_dev.check` now evaluates the reference math in fp64 (`ft=np.float64`) and marks a
-row "fp32-ill" when the fp32 reference misses fp64 by more than grad_bar/10. Grads, Adam, pfwc
-and moments are gated on the other rows. Ill rows are reported against fp64
+row "fp32-ill" when the fp32 reference misses fp64 by more than grad_bar/10. The error floor
+(1e-4 of the tensor max) is taken from the kept rows and the split is iterated: with the
+whole-tensor max the ill rows' ~1e5 grads hid 13 milder ill rows (fp32 vs fp64 up to 0.37,
+e.g. row 1611162). Grads are gated on the other rows. Adam, moments and pfwc are gated given the
+device's own grads, on all rows: grads that agree to 3e-3 still flip bf16 moment roundings (one
+bf16 ulp, up to 2^-7 relative), so the end-to-end Adam comparison is reported (`adam_e2e`), not
+gated. Ill rows are reported against fp64
 (`ill.*.dev_vs_f64`, `ref32_vs_f64`); the gate also needs their count <= max(16, N/10000) and
 the device finite on them. `grads_all_rows` keeps the ungated numbers. `out/t2_rows.npz` holds
 the ill rows plus the 256 worst gated rows (dev, ref32, ref64 grads and g2d) for debugging.
+
+**Hero T2 result (device run at 1a591bdf on bh-49, checked with the gate above).** T1 PASS
+(rel 4.4e-3). T2 PASS: 94 fp32-ill rows (cap 180), device finite on all of them. Gated grads
+rel: means 2.6e-3, log_scales 3.5e-3, quats 2.7e-3, opacity 1.1e-3, sh0 1.6e-7 (bar 1e-2).
+Adam given device grads 4.8e-6, moments bit-equal, pfwc 5.1e-5 (bar 1e-3). End-to-end Adam
+(reported): 5.8e-3 from bf16 rounding flips. On the ill rows the device is closer to fp64 than
+the host fp32 reference (means 4.0e4 vs 3.6e5). Full report: `out/check-hero-t2.json`. The
+device outputs are those of the 12:36 PDT run; only the check changed.

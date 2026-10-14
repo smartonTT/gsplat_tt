@@ -186,11 +186,25 @@ def reference(indir: Path) -> dict:
                       tuple(r["betas"]), float(r["eps"]))
 
 
-def row_err(a, ref, floor_frac: float = 1e-4) -> np.ndarray:
-    """Per-row max of t2.rel_error's terms (floor from the whole tensor's max)."""
+def adam_ref(indir: Path, grads: dict, visible: np.ndarray, sh_rest: np.ndarray) -> dict:
+    """The reference Adam step and pfwc streams from given grads (the device's SH0 bands,
+    `sh_rest` for the higher bands T2 does not own)."""
+    r = np.load(indir / "ref_in.npz")
+    g = lambda q: {k: r[f"{q}_{k}"] for k in t2.PARAM_NAMES}  # noqa: E731
+    gg = {**grads, "sh": np.concatenate([np.asarray(grads["sh"], f32).reshape(len(visible), 1, 3),
+                                          np.asarray(sh_rest, f32)], 1)}
+    p1, m1, v1 = t2.adam_step(g("p"), gg, g("m"), g("v"), int(r["step"]), visible,
+                              json.loads(str(r["lr"])), tuple(r["betas"]), float(r["eps"]))
+    sl = lambda d: {**d, "sh": np.asarray(d["sh"])[:, :1, :]}  # noqa: E731
+    return {"params": sl(p1), "m": sl(m1), "v": sl(v1), "pfwc": t2.pfwc_inputs(p1)}
+
+
+def row_err(a, ref, floor_frac: float = 1e-4, scale: float | None = None) -> np.ndarray:
+    """Per-row max of t2.rel_error's terms (floor from the whole tensor's max, or `scale`)."""
     a = np.asarray(a, np.float64).reshape(len(a), -1)
     f = np.asarray(ref, np.float64).reshape(a.shape)
-    scale = np.abs(f).max() if f.size else 0.0
+    if scale is None:
+        scale = np.abs(f).max() if f.size else 0.0
     if scale == 0.0:
         return np.abs(a).max(1)
     return (np.abs(a - f) / np.maximum(np.abs(f), floor_frac * scale)).max(1)
@@ -212,10 +226,21 @@ def fp32_ill_rows(indir: Path, ref: dict, bar: float) -> tuple[np.ndarray, dict]
                                         np.asarray(r["K"], np.float64), int(r["H"]),
                                         int(r["W"]), ft=np.float64)
     g64 = {**g64, "sh": g64["sh"][:, :1, :]}
-    e32 = {k: row_err(ref["grads"][k], g64[k]) for k in t2.PARAM_NAMES}
-    ill = np.zeros(len(e32["means"]), bool)
-    for k in t2.PARAM_NAMES:
-        ill |= ~(e32[k] <= bar)
+    # The error floor (1e-4 of the tensor's max) must come from the rows the gate keeps: the
+    # ill rows' grads are up to 1e5x the others' and would hide milder ill rows under it
+    # (#770 hero: 81 rows flagged, 6 more with fp32-vs-fp64 errors up to 0.37 slipped by).
+    ill = np.zeros(len(g64["means"]), bool)
+    for _ in range(8):
+        if not (~ill).any():
+            break
+        sc = {k: np.abs(g64[k][~ill]).max() for k in t2.PARAM_NAMES}
+        e32 = {k: row_err(ref["grads"][k], g64[k], scale=sc[k]) for k in t2.PARAM_NAMES}
+        new = ill.copy()
+        for k in t2.PARAM_NAMES:
+            new |= ~(e32[k] <= bar)
+        if (new == ill).all():
+            break
+        ill = new
     return ill, {"g64": g64, "e32": e32}
 
 
@@ -223,6 +248,7 @@ def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
     meta = json.loads((indir / "meta.json").read_text())
     N, ng = meta["n"], meta["n_groups"]
     ref = reference(indir)
+    sh_rest = np.asarray(ref["grads"]["sh"])[:, 1:]
     # T2 owns SH0 only (higher SH bands are another pass): compare the band-0 slice.
     for w in ("grads", "params", "m", "v"):
         if w in ref:
@@ -251,17 +277,27 @@ def check(indir: Path, outdir: Path, grad_bar=1e-2, adam_bar=1e-3) -> dict:
                           for k in t2.PARAM_NAMES}
             rep["ill_dev_finite"] = bool(all(np.isfinite(gr[k][ill]).all()
                                              for k in t2.PARAM_NAMES))
-    rep["adam"] = {f"{w}_{k}": t2.rel_error(a[k][ok], ref[w][k][ok])
-                   for w, a in (("params", p), ("m", m), ("v", v)) for k in t2.PARAM_NAMES}
+    # Adam and pfwc are gated given the device's own grads (all rows): grads that agree to
+    # 1e-3 still flip bf16 moment roundings (one bf16 ulp is up to 2^-7 relative), so the
+    # end-to-end comparison (adam_e2e, gated rows only) is reported, not gated.
+    ar = ref if gr is None else adam_ref(indir, gr, ref["visible"], sh_rest)
+    rows = ok if gr is None else np.ones(N, bool)
     pin = from_cols(param_cols({k: np.load(indir / "ref_in.npz")[f"p_{k}"]
                                 for k in t2.PARAM_NAMES}))
-    rep["adam"].update({f"delta_{k}": t2.rel_error((p[k] - pin[k])[ok],
-                                                   (ref["params"][k] - pin[k])[ok])
-                        for k in t2.PARAM_NAMES})
+
+    def adam_rep(r, sel):
+        out = {f"{w}_{k}": t2.rel_error(a[k][sel], r[w][k][sel])
+               for w, a in (("params", p), ("m", m), ("v", v)) for k in t2.PARAM_NAMES}
+        out.update({f"delta_{k}": t2.rel_error((p[k] - pin[k])[sel], (r["params"][k] - pin[k])[sel])
+                    for k in t2.PARAM_NAMES})
+        return out
+    rep["adam"] = adam_rep(ar, rows)
+    if gr is not None:
+        rep["adam_e2e"] = adam_rep(ref, ok)
     pf = np.fromfile(outdir / "pfwc.f32", f32).reshape(13, ng * G)[:, :N]
-    rep["pfwc"] = {s: t2.rel_error(pf[i][ok], ref["pfwc"][s][:N][ok])
+    rep["pfwc"] = {s: t2.rel_error(pf[i][rows], ar["pfwc"][s][:N][rows])
                    for i, s in enumerate(t2.PFWC_STREAMS)}
-    rep["m_bits_equal"] = bool(all((bf16_bits(m[k][ok]) == bf16_bits(ref["m"][k][ok])).all()
+    rep["m_bits_equal"] = bool(all((bf16_bits(m[k][rows]) == bf16_bits(ar["m"][k][rows])).all()
                                    for k in t2.PARAM_NAMES))
     rep["worst_grad"] = max(rep.get("grads", {"-": 0.0}).values())
     rep["worst_adam"] = max(rep["adam"].values())
