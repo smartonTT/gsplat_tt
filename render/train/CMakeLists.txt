@@ -19,3 +19,9 @@ add_executable(blend_bwd_bench blend_bwd_bench.cpp)
 target_compile_definitions(blend_bwd_bench PRIVATE
   "BWD_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
 gsplat_link_tt_metal(blend_bwd_bench)
+
+# T2 param pass bench (#697): t2_bench <in_dir> <out_dir> [n_cores] [reps] [grads]
+add_executable(t2_bench t2_bench.cpp)
+target_compile_definitions(t2_bench PRIVATE
+  "T2_KERNEL_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/kernels/\"")
+gsplat_link_tt_metal(t2_bench)
