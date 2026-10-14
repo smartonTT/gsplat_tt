@@ -258,6 +258,7 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> core_g(want + 1, ng), core_n(want, 0);
     std::vector<uint64_t> w(split ? ng : 0, 0), load(want, 0);
     uint64_t light_planes = 0, heavy_planes = 0, a_max = 0, b_max = 0;
+    size_t htab_words = 0;  // b_htab size in words once allocated: htab is padded to it (a mesh write needs it all)
     if (split) metab = meta;  // once (a trainer patches its fresh per-view meta in place)
     auto cnt = [&](uint32_t r) { return meta[(r / 64) * 128 + 64 + r % 64]; };
     auto make_plan = [&]() -> bool {
@@ -284,7 +285,7 @@ int main(int argc, char** argv) {
         }
         std::stable_sort(heavy.begin(), heavy.end(), [&](uint32_t a, uint32_t b) { return cnt(a) > cnt(b); });
         const uint32_t nhg = (uint32_t(heavy.size()) + HL - 1) / HL;
-        htab.assign(size_t(std::max<uint32_t>(nhg, 1)) * 128, 0u);
+        htab.assign(std::max(size_t(std::max<uint32_t>(nhg, 1)) * 128, htab_words), 0u);
         for (uint32_t h = 0; h < heavy.size(); h++) {
             const uint32_t r = heavy[h], j = h / HL, i = h % HL;
             htab[j * 128 + i] = meta[(r / 64) * 128 + r % 64];
@@ -346,6 +347,8 @@ int main(int argc, char** argv) {
     const uint32_t nhrec = split ? std::max<uint32_t>(64, 2 * ((uint32_t(heavy.size()) + HL - 1) / HL * HL)) : 1;
     auto b_htab = make_dram(dev.get(), uint64_t(split ? nhrec / HL : 1) * META_PAGE, META_PAGE);
     auto b_hs = make_dram(dev.get(), uint64_t((nhrec + 63) / 64) * SLOT_PAGE, SLOT_PAGE);
+    htab_words = size_t(split ? nhrec / HL : 1) * 128;
+    htab.resize(std::max(htab.size(), htab_words), 0u);
     auto upload_plan = [&](bool blocking) -> bool {
         if (heavy.size() > nhrec) { std::fprintf(stderr, "heavy rows %zu over hsum size %u\n", heavy.size(), nhrec); return false; }
         distributed::EnqueueWriteMeshBuffer(*cq, b_meta, metab, blocking);
@@ -358,7 +361,7 @@ int main(int argc, char** argv) {
     if (split)
         std::printf("[SPLIT] kcap %u hl %u ovh %u heavy_rows %zu heavy_groups %zu heavy_planes %llu light_planes %llu "
                     "a_max_planes %llu b_max_weight %llu plan_ms %.3f upload_ms %.3f\n",
-                    kcap, HL, ovh, heavy.size(), htab.size() / 128, (unsigned long long)heavy_planes,
+                    kcap, HL, ovh, heavy.size(), (heavy.size() + HL - 1) / HL, (unsigned long long)heavy_planes,
                     (unsigned long long)light_planes, (unsigned long long)a_max, (unsigned long long)b_max, plan_ms,
                     split_upload_ms);
     // Split-mode runtime args, per core (fixed sizes, so a per-view plan only rewrites values).
