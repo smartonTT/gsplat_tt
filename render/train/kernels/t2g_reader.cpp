@@ -19,7 +19,7 @@
 //              split copy: a heavy lane's count word is 0x80000000 | h, and its plane 0 is the
 //              phase-A sum (64 B record h of hsum), planes 1.. are zero. Only the slot pages the
 //              light lanes touch are staged. Runtime args: params, m, v, slots, meta, vis, hsum
-//              DRAM addresses, first group, end group.
+//              DRAM addresses, first group, end group (T2_SH: then the aux address, #798).
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
@@ -110,6 +110,11 @@ void kernel_main() {
     constexpr auto ta = TensorAccessorArgs<sa.next_compile_time_args_offset()>();
     constexpr auto ia = TensorAccessorArgs<ta.next_compile_time_args_offset()>();
     constexpr auto hsa = TensorAccessorArgs<ia.next_compile_time_args_offset()>();
+#ifdef T2_SH
+    // #798: the t2sh pre pass aux page per group (arg 9, accessor 8), as in the one-program path.
+    constexpr auto xa = TensorAccessorArgs<hsa.next_compile_time_args_offset()>();
+    const auto AX = TensorAccessor(xa, get_arg_val<uint32_t>(9), P_PAGE);
+#endif
     const auto P = TensorAccessor(pa, p_addr, P_PAGE);
     const auto M = TensorAccessor(ma, m_addr, MV_PAGE);
     const auto V = TensorAccessor(va, v_addr, MV_PAGE);
@@ -143,6 +148,10 @@ void kernel_main() {
         noc_async_read(get_noc_addr(g, M), get_write_ptr(CB_M), MV_PAGE);
         cb_reserve_back(CB_V, 1);
         noc_async_read(get_noc_addr(g, V), get_write_ptr(CB_V), MV_PAGE);
+#ifdef T2_SH
+        cb_reserve_back(CB_AUX, 1);
+        noc_async_read(get_noc_addr(g, AX), get_write_ptr(CB_AUX), P_PAGE);
+#endif
         noc_async_read_barrier();
         // Stage only the pages light lanes touch, in slot order (a lane's <= 2 pages land next to
         // each other, so plane k of a lane is at off + 16 k); heavy lanes read their record.
@@ -181,6 +190,9 @@ void kernel_main() {
         cb_push_back(CB_P, 1);
         cb_push_back(CB_M, 1);
         cb_push_back(CB_V, 1);
+#ifdef T2_SH
+        cb_push_back(CB_AUX, 1);
+#endif
         noc_async_read_barrier();
         for (uint32_t k = 0; k < nk; k++) {
             cb_reserve_back(CB_K, 1);

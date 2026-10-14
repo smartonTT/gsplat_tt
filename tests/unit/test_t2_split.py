@@ -238,3 +238,15 @@ def test_train_step_defaults_split_on_kcap8():
     src = (ROOT / "render" / "train" / "train_step.cpp").read_text()
     assert 'envu("T2_SPLIT", 1)' in src
     assert 'envu("T2_KCAP", 8)' in src
+
+
+def test_split_reader_feeds_sh_aux():
+    """#798: SH mode keeps the split on: the split reader feeds the t2sh aux page per group (the
+    compute pops CB_AUX after the planes in every T2_SH group), from accessor 8 / runtime arg 9."""
+    src = (ROOT / "render" / "train" / "kernels" / "t2g_reader.cpp").read_text()
+    split = src.split("#elif defined(T2_SPLIT)", 1)[1].split("\n#else", 1)[0]
+    assert "TensorAccessorArgs<hsa.next_compile_time_args_offset()>" in split
+    assert "get_arg_val<uint32_t>(9)" in split
+    assert split.count("cb_reserve_back(CB_AUX, 1)") == 1 and split.count("cb_push_back(CB_AUX, 1)") == 1
+    host = (ROOT / "render" / "train" / "train_step.cpp").read_text()
+    assert "6 + int(split) + int(sh)" in host and host.count("if (sh) ra.push_back(uint32_t(b_x->address()));") == 2

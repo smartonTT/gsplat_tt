@@ -165,8 +165,7 @@ int main(int argc, char** argv) {
         }
     }
     auto envu = [](const char* k, uint32_t d) { const char* e = std::getenv(k); return e && *e ? uint32_t(std::atoi(e)) : d; };
-    // SH mode runs the one-program T2: the split reader (#784) has no T2_SH aux path yet.
-    const bool split = !sh && envu("T2_SPLIT", 1) != 0, g2d_only = !sh && envu("T2_G2D", 0) != 0;
+    const bool split = envu("T2_SPLIT", 1) != 0, g2d_only = envu("T2_G2D", 0) != 0;
     const uint32_t kcap = envu("T2_KCAP", 8), HL = envu("T2_HL", 16), ovh = envu("T2_OVH", 2);
     if (split && (HL == 0 || HL > 64 || 64 % HL != 0)) { std::fprintf(stderr, "T2_HL must divide 64\n"); return 2; }
 
@@ -398,7 +397,7 @@ int main(int argc, char** argv) {
         add_cb(p2, cores, CB_FO, P_PAGE, 2);
         add_cb(p2, cores, CB_GO, P_PAGE, 2);
         std::vector<uint32_t> rct, wct;
-        for (int i = 0; i < (split || sh ? 7 : 6); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
+        for (int i = 0; i < 6 + int(split) + int(sh); i++) TensorAccessorArgs::create_dram_interleaved().append_to(rct);
         for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
         std::map<std::string, std::string> rdef = {{"T2_STAGE_PAGES", std::to_string(STAGE_PAGES) + "u"}}, wdef;
         // SH mode: the post pass reads T2's grads page, so they always go out.
@@ -432,11 +431,12 @@ int main(int argc, char** argv) {
                 uint32_t n = 0;
                 if (split) {
                     n = lin < want ? core_n[lin] : 0;
-                    SetRuntimeArgs(p2, kr, CoreCoord{x, y},
-                                   {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
-                                    uint32_t(b_s->address()), uint32_t(b_metab->address()), uint32_t(b_vis->address()),
-                                    uint32_t(b_hs->address()), lin < want ? core_g[lin] : ng,
-                                    lin < want ? core_g[lin + 1] : ng});
+                    std::vector<uint32_t> ra = {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
+                                                uint32_t(b_s->address()), uint32_t(b_metab->address()), uint32_t(b_vis->address()),
+                                                uint32_t(b_hs->address()), lin < want ? core_g[lin] : ng,
+                                                lin < want ? core_g[lin + 1] : ng};
+                    if (sh) ra.push_back(uint32_t(b_x->address()));
+                    SetRuntimeArgs(p2, kr, CoreCoord{x, y}, ra);
                 } else {
                 if (lin < want)
                     for (uint32_t b = lin; b < nb; b += want)
