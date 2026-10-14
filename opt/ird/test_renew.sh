@@ -151,6 +151,16 @@ c() { \
 c() { [ -z "$(sj .pending_machine measure)" ] && [ -z "$(sj .release_job measure)" ]; }; check "state: no pending, no release left" c
 c() { [ "$(calls 'bh-30')" = 0 ] && [ "$(calls 'lock viewer')" = 0 ]; }; check "measure never touches bh-30 or the viewer lock" c
 
+# 2k. Same move with --keep-old (#687): the old p100 job is another task's: never extended or released.
+new_case keep_old
+echo '{"host":"yyzo-bh-04","pending_machine":"bh-50","pending_job":"777","pending_cluster":"tt_bgd"}' > "$F/state/measure.json"
+echo '3 tt_bgd bh-50 13:50:00 777' >> "$F/list"; echo 'tt_bgd 777 R bh-50' >> "$F/slurm"
+run measure --keep-old
+c() { [ "$RC" = 0 ] && [ "$(j .action)" = moved ] && [ "$(j .host)" = bh-50 ] && [[ $(j .note) == *"--keep-old"* ]]; }; check "keep-old: moved to bh-50, exit 0, noted" c
+c() { [ "$(calls 'ird change-timeout 2 ')" = 0 ] && [ "$(calls 'ird release')" = 0 ] \
+  && [ "$(calls 'ttp lock p100 -- opt/sync_remote.sh bh-50')" = 1 ]; }; check "keep-old: old job neither extended nor released; new box synced" c
+check "keep-old: no release_job in state" [ -z "$(sj .release_job measure)" ]
+
 # 2b. Adopted, but setup_box.sh failed on the new box: report (exit 6), keep and extend the old box.
 new_case setup_failed
 echo '{"host":"yyzo-bh-04","pending_machine":"bh-50","pending_job":"777","pending_cluster":"tt_bgd"}' > "$F/state/measure.json"
@@ -172,6 +182,10 @@ run measure
 c() { [ "$RC" = 0 ] && [ "$(j .action)" = reserved ] && [ "$(j .host)" = bh-50 ] && [ "$(j .job_id)" = 888 ]; }; check "reserved bh-50, exit 0" c
 c() { [ -z "$(sj .pending_machine measure)" ] && [[ $(j .note) == *"cleared stale request"* ]]; }; check "pending cleared" c
 
+# 3t. ird reserve names the machine's team and card model (#687: bh-49 in bgd_interactive).
+c() { [ "$(calls 'ird reserve --cluster tt_bgd --team bgd --ssh-port 46483 --timeout 14:00:00 --no-shell blackhole --model p150 --machine bh-50')" = 1 ]; }
+check "reserve carries --team bgd and --model p150" c
+
 # 4. ird crashes (utils.py:244 traceback) on the p150: not 'queued'; fall back to the p100.
 new_case crash
 printf '1 tt_aus bh-30 13:00:00 135630\n' > "$F/list"; printf 'tt_aus 135630 R bh-30\n' > "$F/slurm"
@@ -180,6 +194,7 @@ echo crash > "$F/reserve_bh-50"; echo ok:999 > "$F/reserve_yyzo-bh-04"
 run measure
 c() { [ "$RC" = 0 ] && [ "$(j .host)" = yyzo-bh-04 ] && [ "$(j .job_id)" = 999 ]; }; check "crash is no request; reserved yyzo-bh-04" c
 check "no pending in state" [ -z "$(sj .pending_machine measure)" ]
+check "sw_interactive machine: no --team" [ "$(calls 'ird reserve --cluster tt_yyz --ssh-port 46483 --timeout 14:00:00 --no-shell blackhole --model p100 --machine yyzo-bh-04')" = 1 ]
 # 4b. Crash on the move attempt while the p100 is alive: stay, extend, nothing pending.
 new_case crash_move; echo crash > "$F/reserve_bh-50"
 run measure

@@ -1,0 +1,33 @@
+== run-r1-orbit.log
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.337 fps=136.29 ms_frame_median=7.339 pass_ms_frame=7.343,7.346,7.337,7.341,7.337,7.344,7.341,7.339,7.339,7.338,7.335,7.338,7.337,7.340,7.341,7.336,7.343,7.339,7.342,7.292 check_pass_ms_frame=7.469 raw_md5=c194c715 gap_ms=0.00 render_ms_frame=7.337 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r1-orbit
+TTW_TIMING b2b_ms_frame_median=7.339
+== run-r2-orbit.log
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.334 fps=136.35 ms_frame_median=7.336 pass_ms_frame=7.340,7.334,7.334,7.332,7.335,7.333,7.339,7.330,7.339,7.336,7.336,7.341,7.342,7.345,7.332,7.338,7.334,7.337,7.344,7.282 check_pass_ms_frame=7.465 raw_md5=c194c715 gap_ms=0.00 render_ms_frame=7.334 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r2-orbit
+TTW_TIMING b2b_ms_frame_median=7.336
+== run-r3-orbit.log
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.336 fps=136.31 ms_frame_median=7.339 pass_ms_frame=7.343,7.336,7.341,7.343,7.331,7.341,7.341,7.344,7.334,7.339,7.343,7.343,7.335,7.338,7.331,7.335,7.346,7.339,7.333,7.294 check_pass_ms_frame=7.461 raw_md5=c194c715 gap_ms=0.00 render_ms_frame=7.336 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r3-orbit
+TTW_TIMING b2b_ms_frame_median=7.339
+== run-r4-orbit.log
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=7.338 fps=136.28 ms_frame_median=7.340 pass_ms_frame=7.339,7.341,7.344,7.342,7.333,7.345,7.337,7.336,7.340,7.345,7.342,7.339,7.344,7.345,7.346,7.337,7.337,7.341,7.336,7.288 check_pass_ms_frame=7.460 raw_md5=c194c715 gap_ms=0.00 render_ms_frame=7.338 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r4-orbit
+TTW_TIMING b2b_ms_frame_median=7.340
+== run-r5-lat-orbit.log
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.3 p50_ms=7.4 min_ms=4.8 max_ms=10.0 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-sync/tmp/t687-r5-lat-orbit
+TTW_TIMING ms_view=7.304
+== run-r6-lat-orbit.log
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.3 p50_ms=7.4 min_ms=4.8 max_ms=10.0 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-sync/tmp/t687-r6-lat-orbit
+TTW_TIMING ms_view=7.307
+== run-r7-lat-orbit.log
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.3 p50_ms=7.4 min_ms=4.8 max_ms=10.1 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-sync/tmp/t687-r7-lat-orbit
+TTW_TIMING ms_view=7.307
+== run-r1-nn.log
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.915 fps=126.33 ms_frame_median=7.916 pass_ms_frame=7.916,7.917,7.916,7.916,7.917,7.911 check_pass_ms_frame=7.969 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.915 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r1-nn
+TTW_TIMING b2b_ms_frame_median=7.916
+== run-r2-nn.log
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.917 fps=126.32 ms_frame_median=7.918 pass_ms_frame=7.918,7.916,7.917,7.919,7.918,7.910 check_pass_ms_frame=7.969 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.917 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r2-nn
+TTW_TIMING b2b_ms_frame_median=7.918
+== run-r3-nn.log
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.917 fps=126.31 ms_frame_median=7.918 pass_ms_frame=7.916,7.918,7.919,7.920,7.919,7.910 check_pass_ms_frame=7.968 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.917 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r3-nn
+TTW_TIMING b2b_ms_frame_median=7.918
+== run-r4-nn.log
+B2B scene=bicycle n_views=169 passes=6 warmup=1 drop=no ms_frame=7.916 fps=126.33 ms_frame_median=7.916 pass_ms_frame=7.915,7.917,7.916,7.917,7.918,7.911 check_pass_ms_frame=7.966 raw_md5=21ed4759 gap_ms=0.00 render_ms_frame=7.916 xview_hits=1351 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-sync/tmp/t687-r4-nn
+TTW_TIMING b2b_ms_frame_median=7.916
