@@ -8,7 +8,8 @@
 # HERO=1 (#781, full 1237x822 view): forward prep binned to 3-sigma tile rectangles (the hero
 # dump's forward_fast rule, prep_binned), forward check against the dump image without the numpy
 # model (minutes at hero size), outputs under LOOP_DIR (default tmp/t750) and the big files
-# (records, chain npz, T1/T2 inputs and outputs) deleted at the end, json and logs kept.
+# (records, chain npz, T1/T2 inputs and outputs) deleted at the end, json and logs kept, and the
+# device image.f32 and fwd/tiles.u32 kept for the per-tile forward gate (#798).
 set -u
 n=$1 P=$2 REPS=${3:-5} D=${LOOP_DIR:-tmp/t750}/loop-$1
 FB=; [ "${HERO:-0}" = 1 ] && FB="--binned"
@@ -36,7 +37,9 @@ echo "--- $n step"; cat "$D/out/timing.json" 2>/dev/null; echo
 python3 -c "import json;r=json.load(open('$D/out/check.json'));print('CHAIN $n pass=%s t1=%s t2=%s t0=%s' % (r['pass'], r['t1']['pass'], r['t2']['pass'], r.get('t0', {}).get('pass')))"
 rm -f "$D/chain.npz"
 if [ "${HERO:-0}" = 1 ]; then
-  rm -f "$D"/fwd/*.u32 "$D"/fwd/*.f32 "$D"/loss/*.f32 "$D"/loss/out/*.f32 "$D"/image.f32
+  # #798: image.f32 (12 MB) and fwd/tiles.u32 stay for the per-tile forward gate on the Mac
+  # (drive_loop.sh moves them out of docs/ after the pull; docs/train-step/hero_fwd_tiles.py).
+  find "$D/fwd" -name '*.u32' ! -name tiles.u32 -delete; rm -f "$D"/fwd/*.f32 "$D"/loss/*.f32 "$D"/loss/out/*.f32
   find "$D/in" "$D/out" -type f ! -name '*.json' ! -name '*.log' -delete
   du -sh "$D"
 fi

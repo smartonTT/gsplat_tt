@@ -28,6 +28,8 @@ SSH=(ssh -o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostK
 sha=$(git rev-parse "$rev^{commit}")
 echo "=== t750 loop $rev=$sha to $H:$T $(TZ=America/Los_Angeles date)"
 opt/sync_remote.sh --no-build "$H" "$T" "$rev" > "$O/sync-loop.log" 2>&1; rc=$?
+# rc 3 = sync_remote's stale-build heuristic (render/train changed, render_clean did not): one resync (#792).
+if [ $rc = 3 ]; then echo "sync rc=3, resync"; opt/sync_remote.sh --no-build "$H" "$T" "$rev" > "$O/sync-loop.log" 2>&1; rc=$?; fi
 echo "sync rc=$rc"; grep '^\[sync_remote\]' "$O/sync-loop.log"
 [ $rc = 0 ] || { tail -30 "$O/sync-loop.log"; exit 3; }
 rsha=$(timeout 60 "${SSH[@]}" "sed -n 's/^sha=//p' $T/SYNC_STAMP")
@@ -86,6 +88,12 @@ if [ $brc = 0 ]; then
     echo "loop $n rc=$?"
   done
 fi
-case " ${RUNS:-sh0 sh3} " in *" hero "*) opt/sync_remote.sh --pull tmp/t781 "$O/loop-hero" "$H" "$T"; echo "pull hero rc=$?" ;; esac
+case " ${RUNS:-sh0 sh3} " in *" hero "*)
+  opt/sync_remote.sh --pull tmp/t781 "$O/loop-hero" "$H" "$T"; echo "pull hero rc=$?"
+  # #798: the device image and tile table leave docs/ (never committed) for the per-tile gate.
+  mkdir -p tmp/hero-fwd && mv -f "$O/loop-hero/loop-hero/image.f32" "$O/loop-hero/loop-hero/fwd/tiles.u32" tmp/hero-fwd/
+  echo "hero image rc=$?"
+  python3 docs/train-step/hero_fwd_tiles.py tmp/hero-fwd/image.f32 tmp/hero-fwd/tiles.u32 \
+    "${HERO_MODEL:-tmp/t781/hero_model.npz}" > "$O/loop-hero/fwd_tiles.json"; echo "fwd tiles rc=$?" ;; esac
 case " ${RUNS:-sh0 sh3} " in *" sh"*) opt/sync_remote.sh --pull tmp/t750 "$O/loop" "$H" "$T"; echo "pull rc=$?" ;; esac
 echo "=== done $(TZ=America/Los_Angeles date)"

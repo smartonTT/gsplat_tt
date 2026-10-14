@@ -13,6 +13,8 @@ per-view constant computed once per dataset, not per step.
 chain-dump: the dump with image and dL_dimage replaced by the device forward image and the device
 loss gradient, the input of `train_step_dev prep`. The T0 oracle keys (autograd grads, bf16 Adam)
 stay, so `train_step_dev check` gates the whole device chain against the oracle.
+A dump without the oracle's loss (the #781 hero dump: its dL/dimage is not a D-SSIM+L1 gradient)
+is checked against dssim_l1_f64 of the device image instead (#795 step c, the hero loss oracle).
 Each prints one JSON line with its host ms; chain-dump also compares the device loss and dL/dimage
 with the oracle's.
 """
@@ -38,6 +40,41 @@ def target_consts(y: np.ndarray) -> np.ndarray:
             sys.path.insert(0, str(root / "opt" / p))
     from ssim_check import consts
     return consts(np.asarray(y, f32))
+
+
+def _gauss_f64(z: np.ndarray, win: int = 11, sigma: float = 1.5) -> np.ndarray:
+    """3DGS's 11x11 Gaussian window on the last two axes, zero padding ('same' size), fp64. The
+    kernel is symmetric, so this is also its own adjoint."""
+    r = win // 2
+    g = np.exp(-((np.arange(win) - r) ** 2) / (2.0 * sigma * sigma))
+    g /= g.sum()
+    H, W = z.shape[-2:]
+    zp = np.pad(np.asarray(z, np.float64), [(0, 0)] * (z.ndim - 2) + [(r, r), (r, r)])
+    v = sum(g[k] * zp[..., k:k + H, :] for k in range(win))
+    return sum(g[k] * v[..., k:k + W] for k in range(win))
+
+
+def dssim_l1_f64(image: np.ndarray, target: np.ndarray, lambda_dssim: float = 0.2):
+    """Host oracle of the 3DGS loss (1 - l) L1 + l (1 - SSIM) and its dL/dimage, fp64, written
+    directly from the definition (gsplat/train_oracle.py loss_fn: per-channel 11x11 Gaussian
+    window, sigma 1.5, zero padding, mean over all H W 3 values; torch's sign(0) = 0 for L1),
+    independent of the device's tile-matmul form (gsplat/train_loss.py). (H, W, 3) in and out."""
+    x = np.moveaxis(np.asarray(image, np.float64), -1, 0)
+    y = np.moveaxis(np.asarray(target, np.float64), -1, 0)
+    c1, c2, n = 0.01 ** 2, 0.03 ** 2, float(x.size)
+    mx, my = _gauss_f64(x), _gauss_f64(y)
+    exx, eyy, exy = _gauss_f64(x * x), _gauss_f64(y * y), _gauss_f64(x * y)
+    A, B = 2 * mx * my + c1, 2 * (exy - mx * my) + c2
+    C, D = mx * mx + my * my + c1, (exx - mx * mx) + (eyy - my * my) + c2
+    S = A * B / (C * D)
+    w = -lambda_dssim / n
+    d_mu = w * S * (2 * my / A - 2 * my / B - 2 * mx / C + 2 * mx / D)
+    d_xx, d_xy = -w * S / D, 2 * w * S / B
+    g = _gauss_f64(d_mu) + 2 * x * _gauss_f64(d_xx) + y * _gauss_f64(d_xy)
+    g += (1.0 - lambda_dssim) / n * np.sign(x - y)
+    l1 = float(np.abs(x - y).mean())
+    loss = (1.0 - lambda_dssim) * l1 + lambda_dssim * (1.0 - float(S.mean()))
+    return loss, np.moveaxis(g, 0, -1)
 
 
 def loss_prep(dump: str, image: str, out: str) -> dict:
@@ -67,10 +104,14 @@ def chain_dump(dump: str, loss_dir: str, out: str) -> dict:
     g = np.fromfile(ld / "out" / "grad.f32", f32).reshape(H, W, 3)
     loss = float((ld / "out" / "loss.txt").read_text().split()[0])
     keys = {k: d[k] for k in d.files}
-    ref = np.asarray(keys["dL_dimage"], np.float64)
-    rep = {"loss": loss, "oracle_loss": float(keys["loss"]) if "loss" in keys else None,
-           "grad_l2rel_vs_oracle": float(np.linalg.norm(g - ref) / max(np.linalg.norm(ref), 1e-30)),
-           "grad_finite": bool(np.isfinite(g).all())}
+    if "loss" in keys:
+        ref, ref_loss, rep = np.asarray(keys["dL_dimage"], np.float64), float(keys["loss"]), {"oracle": "dump"}
+    else:  # no oracle loss in the dump (hero): the fp64 host loss of the device image
+        ref_loss, ref = dssim_l1_f64(x, keys["target"])
+        rep = {"oracle": "host_f64_dssim_l1"}
+    rep.update({"loss": loss, "oracle_loss": ref_loss, "loss_abs_vs_oracle": abs(loss - ref_loss),
+                "grad_l2rel_vs_oracle": float(np.linalg.norm(g - ref) / max(np.linalg.norm(ref), 1e-30)),
+                "grad_finite": bool(np.isfinite(g).all())})
     rep["grad_max_rel_vs_oracle"] = float(np.abs(g - ref).max() / max(np.abs(ref).max(), 1e-30))
     keys["image"], keys["dL_dimage"] = x, g
     keys["chain_dl_dimage_max_rel"] = np.float64(rep["grad_max_rel_vs_oracle"])
