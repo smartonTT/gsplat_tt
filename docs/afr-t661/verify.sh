@@ -60,6 +60,9 @@ run() {  # run <label> <env...> [-- sweep]
   env "$@" VIEWER_GRID_X=${GX:-12} timeout 300 opt/viewer/viewer.sh restart
   arm "$L" "${SW:-}"
 }
+n=$(ssh "${S[@]}" bh-50 "ls /dev/tenstorrent/ | wc -l")
+echo "=== cards visible: $n"
+[ "$n" -ge 2 ] || { echo "=== need 2 cards (reserve with --num-pcie-chips 2 --model p150)"; exit 6; }
 run b0 VIEWER_VISIBLE_DEVICES=0
 run b1 VIEWER_VISIBLE_DEVICES=1
 SW=sweep run afr VIEWER_AFR_DEVICES=0,1
