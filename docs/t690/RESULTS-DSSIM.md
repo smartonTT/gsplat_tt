@@ -310,3 +310,72 @@ The one-off target pre-filter is 6 planes per GT image. On the device it would c
 6 x 0.053 = 0.32 ms per image (derived from the measured sfilt per-plane cost, not measured),
 once per training image, so it does not affect the per-step time. No device run was made for
 t742: the change it asked for is already in the measured t736 arm.
+
+## t743: what the fused loss spends its time on, and a reader that reads less
+
+Profiled with ablation knobs that skip one part at a time (results are wrong in ablated arms; the
+knobs are compile-time and default off, so the shipped kernels are unchanged): `LOSS_SSIM_ABL`
+(compute bit mask: 1 skips the 11-tap FMA rows, 2 the transposes, 4 the pointwise passes, 8 the
+TConv), `LOSS_SSIM_DMABL` (1 drops reader DRAM reads, 2 drops writer DRAM writes). Driver
+`docs/t743/drive.sh`, p150 bh-49, 1237x822, 110 cores, b2b, iters=50, 2 rounds each (measured;
+logs `docs/t743/t743prof-bh-49.log`, `docs/t743/t743dm-bh-49.log`, 2026-10-14 08:26-08:40 PDT).
+
+| arm (t736/t7b kernels) | b2b ms/view | forward |
+|---|---|---|
+| base | 1.306, 1.310 | 0.664 |
+| no filter FMA rows | 1.281, 1.280 | |
+| no TConv | 1.300, 1.298 | |
+| no FMA rows + no TConv (whole V filter) | 1.271, 1.272 | |
+| no transposes | 1.300, 1.298 | |
+| no pointwise math | 1.299, 1.304 | |
+| all SFPU work above off | 1.242, 1.242 | 0.614 |
+| no DRAM reads | 0.700, 0.700 | 0.402 |
+| no DRAM writes | 1.315, 1.311 | |
+| no DRAM reads or writes | 0.703, 0.698 | |
+| no DRAM + all SFPU work off | 0.368, 0.364 | 0.149 |
+
+The t736/t742 claim that filtering is about 97% of the cost is wrong. The loss is bound by
+DRAM reads: dropping them saves 0.61 ms/view, while dropping all filter, transpose and pointwise
+SFPU work saves only 0.07 ms (it runs under the reads). Writes are free. Without reads the
+compute costs 0.70 ms: about 0.33 ms SFPU and about 0.37 ms unpack, pack, CB traffic and launch.
+
+Why the reads cost so much: each output tile's H step reads the tiles at J-1, J, J+1 whole for
+every plane, and the forward pointwise pass re-reads x, y and wm from DRAM. Per output tile the
+forward reader fetched about 11.9 tiles and the backward about 12.3. The 11-tap filter (radius 5)
+only needs columns 27..31 of the left neighbour (faces 1, 3) and columns 0..4 of the right one
+(faces 0, 2).
+
+Change (`reader_ssim.cpp`, `SSIM_RD`, on by default, `LOSS_SSIM_RD=0` gives the t736 reader):
+neighbour tiles are read as their two needed 1 KB faces; the other two faces are left stale and
+never touch the result (no tap of the radius-5 filter for the centre tile reaches them; only the
+centre tile's H result is packed). Forward x and y for the pointwise pass are copied from the centre tile already in L1
+(the last H row), and wm (a constant inside the image) is copied from a constant tile in L1, read
+from DRAM only for edge tiles that carry the mask. Same bytes reach the compute; the compute
+kernels are unchanged. Reads per output tile: forward about 6.6 (-45%), backward about 8.8
+(-28%). `LOSS_SSIM_CBD` sets the reader prefetch depth (default 2).
+
+A/B (measured, p150 bh-49, 1237x822 syn, 110 cores, b2b, iters=50, 4 alternated rounds, own JIT
+cache per arm; commit 2d266353, log `docs/t743/run-2d266353-ab-bh-49.log`, 2026-10-14 08:40-08:46 PDT):
+
+| arm | b2b ms/view (4 rounds) | mean | forward | backward | ms per filtered plane (18) |
+|---|---|---|---|---|---|
+| t7b (t736 reader, `LOSS_SSIM_RD=0`) | 1.3141, 1.3118, 1.3090, 1.3092 | 1.311 | 0.664 | 0.647 | 0.0728 |
+| **t743 reader (`SSIM_RD`, default)** | 0.9541, 0.9539, 0.9535, 0.9534 | **0.954** | 0.439 | 0.515 | 0.0530 |
+| t743 reader, prefetch depth 3 | 0.9769, 0.9727, 0.9730, 0.9736 | 0.974 | 0.454 | 0.520 | 0.0541 |
+
+**-0.357 ms/view (-27%)**, round-to-round spread 0.001 ms (rd) and 0.005 ms (t7b), far above the
+0.1 ms noise line. The loss value is bit-identical in all arms (0.149902639). Deeper prefetch
+(depth 3) is 0.020 ms slower, so depth 2 stays the default. The whole fused loss + dL/dimage now
+costs the same as the t736 filter-only arm (0.954). `opt/ab_jit_check.py` (kernel reader_ssim):
+**JIT-HASH OK**, rc 0 (the arms really ran different reader binaries).
+
+T0 oracle (`opt/t736/ssim_check.py`, the rd arm, same run): every case matches the t736 numbers
+to all printed digits.
+
+| case | device loss err | device grad l2rel | device max abs rel | result |
+|---|---|---|---|---|
+| dump64 | -6.19e-9 | 1.97e-7 | 4.76e-7 | PASS |
+| syncrop | -4.61e-8 | 8.49e-6 | 2.41e-5 | PASS |
+| bike_top | +1.73e-8 | 1.15e-5 | 4.67e-5 | PASS |
+| bike_mid | -6.29e-9 | 2.11e-6 | 1.42e-5 | PASS |
+| syn | -6.02e-8 | 7.52e-6 | 2.91e-5 | PASS |
