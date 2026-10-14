@@ -87,17 +87,20 @@ void add_cb(Program& p, const CoreRangeSet& cores, uint32_t id, uint32_t pages) 
     CreateCircularBuffer(p, cores, c);
 }
 
+// hi part of a split3 operand: HI_MASK of filt_compute.cpp. LOSS_HIBITS explicit mantissa
+// bits (default 9; 10 = exact TF32, the run-1971 setting).
+uint32_t HI_MASK_U = 0xFFFFC000u;
 inline float trunc_tf32(float v) {
     uint32_t u;
     std::memcpy(&u, &v, 4);
-    u &= 0xFFFFE000u;
+    u &= HI_MASK_U;
     std::memcpy(&v, &u, 4);
     return v;
 }
 
 // 12 constant band tiles for filt_compute.cpp: Rh[-1,0,1], Rl[...], RTh[...], RTl[...].
 // R[k][a][b] = g[32 k + a - b + 5], g the normalized 11-tap Gaussian (sigma 1.5), as
-// gsplat/train_loss.py band_tiles(); h = fp32 truncated to TF32, l = TF32(fp32 - h).
+// gsplat/train_loss.py band_tiles(); h = fp32 & HI_MASK_U, l = (fp32 - h) & HI_MASK_U.
 std::vector<float> band_consts() {
     double g[11], sum = 0.0;
     for (int i = 0; i < 11; i++) sum += g[i] = std::exp(-double((i - 5) * (i - 5)) / (2.0 * 1.5 * 1.5));
@@ -139,19 +142,20 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
              const std::string& out, int iters) {
     auto& cq = dev->mesh_command_queue();
     const CoreCoord grid = dev->compute_with_storage_grid_size();
-    const uint32_t ncores = grid.x * grid.y, T = L.tiles(), S = 3 * L.nw;
+    const uint32_t ncores = grid.x * grid.y, T = L.tiles(), S = 3 * L.nw, NT = S * L.nh;
     auto bx = make_dram(dev, uint64_t(T) * TILE_BYTES), bo = make_dram(dev, uint64_t(T) * TILE_BYTES);
     auto br = make_dram(dev, 12ull * TILE_BYTES);
     distributed::EnqueueWriteMeshBuffer(cq, bx, x, true);
-    distributed::EnqueueWriteMeshBuffer(cq, br, band_consts(), true);
     Program prog = CreateProgram();
     const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
     add_cb(prog, cores, 0, 6);   // X (u2d)
     add_cb(prog, cores, 2, 12);  // band constants
     add_cb(prog, cores, 4, 3);   // XH
     add_cb(prog, cores, 5, 3);   // XL
-    add_cb(prog, cores, 6, 4);   // row pass, hi (3-tile window + 1)
-    add_cb(prog, cores, 7, 4);   // row pass, lo
+    for (uint32_t q = 0; q < 3; q++) {
+        add_cb(prog, cores, 6 + q, 1);  // row-pass slot q, hi
+        add_cb(prog, cores, 9 + q, 1);  // row-pass slot q, lo
+    }
     add_cb(prog, cores, 16, 2);  // out
     std::vector<uint32_t> ct_r, ct_w;
     TensorAccessorArgs::create_dram_interleaved().append_to(ct_r);
@@ -166,17 +170,23 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
                                               .noc = NOC::RISCV_0_default, .compile_args = ct_w});
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[0] = UnpackToDestMode::UnpackToDestFp32;
+    const char* hb = std::getenv("LOSS_HIBITS");
+    const int hibits = hb ? std::atoi(hb) : 9;
+    HI_MASK_U = ~((1u << (23 - hibits)) - 1u);
     auto kc = CreateKernel(prog, kd + "filt_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi4, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
-                                         .math_approx_mode = false});
+                                         .math_approx_mode = false,
+                                         .defines = {{"HI_MASK", std::to_string(int32_t(HI_MASK_U))}}});
+    distributed::EnqueueWriteMeshBuffer(cq, br, band_consts(), true);
     for (uint32_t cy = 0, k = 0; cy < grid.y; cy++)
         for (uint32_t cx = 0; cx < grid.x; cx++, k++) {
-            const uint32_t s0 = uint32_t(uint64_t(S) * k / ncores), s1 = uint32_t(uint64_t(S) * (k + 1) / ncores);
+            // balanced: contiguous runs of output tiles (strip-major), not whole strips
+            const uint32_t t0 = uint32_t(uint64_t(NT) * k / ncores), t1 = uint32_t(uint64_t(NT) * (k + 1) / ncores);
             const CoreCoord c{cx, cy};
-            SetRuntimeArgs(prog, kr, c, {uint32_t(bx->address()), uint32_t(br->address()), s0, s1, L.nh, L.nw});
-            SetRuntimeArgs(prog, kw, c, {uint32_t(bo->address()), s0, s1, L.nh, L.nw});
-            SetRuntimeArgs(prog, kc, c, {s1 - s0, L.nh});
+            SetRuntimeArgs(prog, kr, c, {uint32_t(bx->address()), uint32_t(br->address()), t0, t1, L.nh, L.nw});
+            SetRuntimeArgs(prog, kw, c, {uint32_t(bo->address()), t0, t1, L.nh, L.nw});
+            SetRuntimeArgs(prog, kc, c, {t0, t1, L.nh});
         }
     distributed::MeshWorkload wl;
     wl.add_program(distributed::MeshCoordinateRange(dev->shape()), std::move(prog));
@@ -193,9 +203,9 @@ int run_filt(distributed::MeshDevice* dev, const std::vector<float>& x, const Lo
     }
     std::vector<double> ms;
     const double b2b = time_b2b(cq, wl, iters, ms);
-    std::printf("[LOSS] mode=filt H=%u W=%u tiles=%u strips=%u cores=%u b2b_ms=%.4f launch_ms_med=%.4f "
+    std::printf("[LOSS] mode=filt hibits=%d H=%u W=%u tiles=%u strips=%u cores=%u b2b_ms=%.4f launch_ms_med=%.4f "
                 "launch_ms_min=%.4f iters=%d\n",
-                L.H, L.W, T, S, ncores, b2b, ms.empty() ? 0.0 : ms[ms.size() / 2], ms.empty() ? 0.0 : ms[0],
+                hibits, L.H, L.W, T, S, ncores, b2b, ms.empty() ? 0.0 : ms[ms.size() / 2], ms.empty() ? 0.0 : ms[0],
                 iters);
     return 0;
 }
