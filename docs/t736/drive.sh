@@ -4,7 +4,7 @@
 #   ttp detach t736 -- docs/t736/drive.sh <rev>       (Mac, worktree root)
 # ssh preflight @p100, opt/sync_remote.sh <rev> (one-way, repo-scoped), build render/bench, prep dump64/syncrop/syn
 # on the box; the JPG cases (bike_top, bike_mid, hero) are prepped on the Mac into tmp/t736/mac (derived f32,
-# never committed) and copied one-way with rsync. Correctness runs, ROUNDS interleaved timing rounds of both arms
+# never committed) and copied one-way with ssh+tar (bh-49 has no rsync). Correctness runs, ROUNDS interleaved timing rounds of both arms
 # (own JIT caches), JIT listings for opt/ab_jit_check.py, pull tmp/t736, T0 oracle check on the Mac.
 # Existing measurement reservation only (no ird reserve/extend/release), never bh-30, StrictHostKeyChecking=yes.
 set -u
@@ -37,7 +37,9 @@ timeout 600 "${SSH[@]}" "$ENV && CXX=\$(grep '^CMAKE_CXX_COMPILER:' render/build
   rm -rf tmp/t736 $C-ssim $C-sfilt && source .venv/bin/activate && python3 opt/t736/ssim_check.py prep tmp/t736 dump64 syncrop syn && \
   python3 opt/t720/sfilt_check.py prep tmp/t736/sf syn6"; rc=$?
 echo "build+prep rc=$rc"; [ $rc = 0 ] || exit 5
-rsync -a -e "ssh ${SO[*]}" tmp/t736/mac/ "$H:$T/tmp/t736/"; echo "upload rc=$?"
+# bh-49 has no rsync: one-way copies use ssh+tar (bsdtar on the Mac, no ._ files)
+TARC=(env COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs)
+"${TARC[@]}" -C tmp/t736/mac -cf - . | timeout 300 "${SSH[@]}" "mkdir -p $T/tmp/t736 && tar -C $T/tmp/t736 -xf - 2>/dev/null"; echo "upload rc=$?"
 timeout 600 "${SSH[@]}" "$ENV && for c in dump64 syncrop bike_top bike_mid hero syn; do o=tmp/t736/\$c/out; mkdir -p \$o; \
     TT_METAL_CACHE=$C-ssim LOSS_MODE=ssim timeout $RUN_TO \$B tmp/t736/\$c \$o 5 > \$o/run.log 2>&1; \
     echo \"check-run \$c rc=\$?\"; grep -E '^\[LOSS\] mode|TT_THROW|TT_FATAL|error' \$o/run.log | head -20; done"
@@ -51,12 +53,13 @@ timeout 600 "${SSH[@]}" "$ENV && for r in \$(seq 1 $ROUNDS); do \
 echo "timing rc=$?"
 rm -rf "$O/remote"
 mkdir -p "$O/remote"
-rsync -a -e "ssh ${SO[*]}" --exclude '*.f32' "$H:$T/tmp/t736/" "$O/remote/"; echo "pull rc=$?"
+timeout 300 "${SSH[@]}" "cd $T/tmp/t736 && tar --exclude='*.f32' -cf - ." | tar -C "$O/remote" -xf -; echo "pull rc=$?"
 for c in dump64 syncrop bike_top bike_mid hero syn; do
   [ -d "$O/remote/$c/out" ] || continue
-  rsync -a -e "ssh ${SO[*]}" "$H:$T/tmp/t736/$c/out/grad.f32" "$O/remote/$c/out/" 2>/dev/null
+  timeout 120 "${SSH[@]}" "cat $T/tmp/t736/$c/out/grad.f32" > "$O/remote/$c/out/grad.f32" || rm -f "$O/remote/$c/out/grad.f32"
   for f in hw.txt image.f32 target.f32; do
-    if [ -f "tmp/t736/mac/$c/$f" ]; then cp "tmp/t736/mac/$c/$f" "$O/remote/$c/"; else rsync -a -e "ssh ${SO[*]}" "$H:$T/tmp/t736/$c/$f" "$O/remote/$c/"; fi
+    if [ -f "tmp/t736/mac/$c/$f" ]; then cp "tmp/t736/mac/$c/$f" "$O/remote/$c/"
+    else timeout 120 "${SSH[@]}" "cat $T/tmp/t736/$c/$f" > "$O/remote/$c/$f" || rm -f "$O/remote/$c/$f"; fi
   done
 done
 timeout 120 "${SSH[@]}" "rm -rf $T/tmp/t736"; echo "remote cleanup rc=$?"
