@@ -234,3 +234,52 @@ Next: (1) fused L1 + 0.2*(1-SSIM) forward+backward kernel built on this filter (
 SSIM map and backward maps formed in the same pass, so the 18 planes never go to DRAM);
 (2) cut the per-plane cost (keep the H-pass result in Dst/LRegs for the V pass, fewer Dst
 round trips per tap, reuse loaded rows across the 6 maps of one channel).
+
+## t736: fused L1 + D-SSIM loss and dL/dimage on the sfilt filter (`LOSS_MODE=ssim`)
+
+Kernels: `render/bench/kernels/loss/ssim_fwd_compute.cpp` (15 filtered planes: mu_x, mu_y, E[x^2],
+E[y^2], E[xy] per channel, SSIM map, L1 + 0.2*(1-SSIM) loss partials and the 9 backward d-map
+planes, all formed in L1/Dst; only the d maps leave the core) and `ssim_bwd_compute.cpp` (filters
+the 9 d-map planes, read back from DRAM for the filter halo, and forms dL/dimage with the L1
+sign term). Lambda 0.2 as in 3DGS. Shared SFPU helpers in `ssim_sfpu.h`; host in `loss_bench.cpp`.
+Check: `opt/t736/ssim_check.py` (bit model, prep, device check vs the T0 oracle). Driver
+`docs/t736/drive.sh`; log `docs/t736/run-7b6d018a-bh-49.log` (commit 7b6d018a, p150 bh-49,
+2026-10-14 04:58-05:02 PDT).
+
+T0 oracle (pass: grad l2rel <= 1e-4, |loss err| < 1e-5). Bit model: `docs/t736/model-oracle.txt`.
+Device (measured): **PASS** on all 6 cases.
+
+| case | model loss err | model grad l2rel | device loss err | device grad l2rel | device max abs rel |
+|---|---|---|---|---|---|
+| dump64 (T0 dump) | +9.7e-10 | 2.2e-7 | -6.2e-9 | 2.0e-7 | 4.8e-7 |
+| syncrop | -4.8e-8 | 8.1e-6 | -4.6e-8 | 8.5e-6 | 2.4e-5 |
+| bike_top (render vs _DSC8679) | +1.9e-8 | 1.2e-5 | +1.7e-8 | 1.2e-5 | 4.7e-5 |
+| bike_mid | -5.0e-9 | 2.2e-6 | -6.3e-9 | 2.1e-6 | 1.4e-5 |
+| hero (T1, 1237x822) | +8.3e-10 | 1.8e-6 | +5.5e-9 | 1.8e-6 | 8.8e-6 |
+| syn (1237x822) | - | - | -6.0e-8 | 7.5e-6 | 2.9e-5 |
+
+Timing (p150 bh-49, 1237x822, 110 cores, b2b, 4 alternated rounds, iters=50 each):
+
+| arm | planes filtered | b2b ms/view (4 rounds) | mean |
+|---|---|---|---|
+| fused ssim: full loss + dL/dimage (fwd + bwd programs) | 24 | 1.3110, 1.3100, 1.3106, 1.3078 | 1.310 |
+| of which forward program | 15 | 0.664, 0.665, 0.666, 0.667 | 0.666 |
+| unfused sfilt syn6: filter only, target maps cached | 18 | 0.9541, 0.9565, 0.9530, 0.9537 | 0.954 |
+
+The two arms are not the same work. The fused arm is the whole loss and gradient but filters 24
+planes (it refilters mu_y and E[y^2] of the target each step). The sfilt arm filters only, with the
+target maps cached. Per filtered plane: fused 0.0546 ms vs filter only 0.0530 ms, so all the SSIM
+math, L1, loss reduction and d-map forming cost about 0.04 ms per view on top of filtering
+(under the 0.1 ms noise line). Filtering is still about 97% of the loss cost.
+`opt/ab_jit_check.py` exits 1 as expected: each arm's compute kernels (ssim_fwd/ssim_bwd vs
+sfilt_compute) exist only in their own arm, so the gate cannot be A/A here; both arms ran from
+their own JIT caches in the same session. The render path is not touched (loss bench only), so no
+hero.png is needed for this step.
+
+Next toward the 1-2 ms/view training target:
+1. Cache the target's filtered maps (mu_y, E[y^2]: 6 planes) once per training image. Expected
+   about 0.33 ms off (24 -> 18 planes), bringing the loss to about 0.98 ms/view.
+2. Cut the per-plane filter cost (~0.053 ms): keep the H-pass result in Dst/LRegs for the V pass,
+   share loaded rows across the 5 maps of one channel, fewer Dst round trips per tap.
+3. Fuse the loss into the end of the device rasterizer backward so the rendered image never
+   goes through DRAM.
