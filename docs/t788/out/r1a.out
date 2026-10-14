@@ -1,0 +1,46 @@
+[ttw 2026-10-14T15:46:16-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=600s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T15:46:16-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 600s.
+[ttw 2026-10-14T15:46:16-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T15:46:16-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T15:46:16-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T15:46:16-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T15:46:16-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T15:46:16-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T15:46:16-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T15:46:16-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T15:46:16-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T15:46:16-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t788-r1a  timeout=600s  worry=600s  ts=2026-10-14T15:46:17-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t788-remote.sh 1 tro tpo fzo mmo allo
+-----------------------------------------
+=== r1-tro faea0299 GSPLAT_TT_BLEND_TRAIN=1 benchmarks/cameras_v2.json --back-to-back 22:46:20 load=1.04
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.690 fps=68.08 ms_frame_median=14.691 pass_ms_frame=14.701,14.693,14.693,14.690,14.699,14.687,14.684,14.692,14.692,14.684,14.694,14.684,14.689,14.690,14.707,14.697,14.686,14.696,14.685,14.651 check_pass_ms_frame=14.761 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.690 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.690
+TTW_TIMING b2b_ms_frame_median=14.691
+=== r1-tpo faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_T_PERIOD=512 benchmarks/cameras_v2.json --back-to-back 22:46:35 load=1.11
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=13.975 fps=71.56 ms_frame_median=13.978 pass_ms_frame=13.975,13.978,13.983,13.980,13.982,13.969,13.980,13.979,13.975,13.970,13.979,13.979,13.971,13.972,13.990,13.978,13.977,13.977,13.969,13.941 check_pass_ms_frame=14.025 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=13.975 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=13.975
+TTW_TIMING b2b_ms_frame_median=13.978
+=== r1-fzo faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_FUSE=1 benchmarks/cameras_v2.json --back-to-back 22:46:50 load=1.24
+run rc=1
+2026-10-14 22:46:53.650 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1591168 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r1-mmo faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_MINMAX=1 benchmarks/cameras_v2.json --back-to-back 22:46:53 load=1.22
+run rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.302 fps=69.92 ms_frame_median=14.303 pass_ms_frame=14.312,14.306,14.308,14.306,14.302,14.300,14.304,14.302,14.302,14.302,14.310,14.301,14.321,14.302,14.298,14.310,14.306,14.292,14.307,14.246 check_pass_ms_frame=14.351 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.302 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.302
+TTW_TIMING b2b_ms_frame_median=14.303
+=== r1-allo faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_T_PERIOD=512 GSPLAT_TT_TRAIN_FUSE=1 GSPLAT_TT_TRAIN_MINMAX=1 benchmarks/cameras_v2.json --back-to-back 22:47:08 load=1.25
+run rc=1
+2026-10-14 22:47:11.953 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1591168 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== done 1 22:47:12
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t788/tmp/ttw-state/logs/t788-r1a-20261014-154617.log

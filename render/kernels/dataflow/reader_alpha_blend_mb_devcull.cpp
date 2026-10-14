@@ -199,13 +199,10 @@ void kernel_main() {
     const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(22);
     const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(23);
 #if defined(BLEND_TRAIN) && BLEND_TRAIN
-#ifndef TRAIN_OPC_ARG
-#define TRAIN_OPC_ARG 28  // task #788: 30 in the fused program (28/29 = ready flags)
-#endif
-    const uint32_t train_opc_addr = get_arg_val<uint32_t>(TRAIN_OPC_ARG);  // task #717: scene_train_opc
+    const uint32_t train_opc_addr = get_arg_val<uint32_t>(28);  // task #717: scene_train_opc
 #if TRAIN_OPC_SIDE
-    const uint32_t side_addr = get_arg_val<uint32_t>(TRAIN_OPC_ARG + 1);  // task #741: train_opc_side (0: gather)
-    const uint32_t side_cap = get_arg_val<uint32_t>(TRAIN_OPC_ARG + 2);   // its tile cap (entries per tile)
+    const uint32_t side_addr = get_arg_val<uint32_t>(29);  // task #741: train_opc_side (0: gather)
+    const uint32_t side_cap = get_arg_val<uint32_t>(30);   // its tile cap (entries per tile)
 #endif
 #endif
 

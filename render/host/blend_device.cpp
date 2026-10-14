@@ -352,9 +352,6 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (gsplat_tt::blend_train::enabled()) {
         writer_defines["BLEND_TRAIN"] = "1";
         reader_defines["BLEND_TRAIN"] = "1";  // task #717: fp32 op/colour gather
-        if (fused) {  // task #788: opc args after the fused ready flags
-            reader_defines["TRAIN_OPC_ARG"] = std::to_string(gsplat_tt::blend_train::kOpcReaderArgFused);
-        }
         // Task #727: gather knobs (reads per barrier, skip mask-0 records) and
         // diagnostics (GSPLAT_TT_T727_DIAG 1/2: output wrong, timing attribution only).
         const char* opc_batch = std::getenv("GSPLAT_TT_TRAIN_OPC_BATCH");
@@ -967,13 +964,9 @@ static double process_frame_mb_devcull_resident(
     uint32_t train_opc_addr = 0u;
     if (gsplat_tt::blend_train::enabled()) {
         auto buf_opc = ds::get_buffer("scene_train_opc");
-        if (!buf_opc) {
+        if (!buf_opc || fz) {
             throw std::runtime_error(
                 "[gsplat_tt::blend] GSPLAT_TT_BLEND_TRAIN: no scene_train_opc buffer (task #717)");
-        }
-        if (fz && gsplat_tt::blend_train::opc_on_writer()) {  // task #788: not wired when fused
-            throw std::runtime_error(
-                "[gsplat_tt::blend] GSPLAT_TT_TRAIN_FUSE=1 does not support GSPLAT_TT_TRAIN_OPC_WRITER=1");
         }
         train_opc_addr = static_cast<uint32_t>(buf_opc->address());
     }
@@ -1022,13 +1015,8 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(static_cast<uint32_t>(ctr_core.y));  // arg 26
                     reader_args.push_back(fz ? ctx.fz_claim_sem : ctx.claim_sem);  // arg 27
                     if (train_opc_addr != 0u) {
-                        // Task #717: fp32 op/colour per scene index (arg 28; task #788:
-                        // arg 30 when fused, after the ready flags at 28/29).
+                        // Task #717: fp32 op/colour per scene index (arg 28, not fused).
                         reader_args.resize(gsplat_tt::blend_train::kOpcReaderArg, 0u);
-                        if (fz) {
-                            reader_args.push_back(pend.flags_addr);  // arg 28
-                            reader_args.push_back(pend.epoch);       // arg 29
-                        }
                         reader_args.push_back(train_opc_addr);
                         // Task #741: side bucket (arg 29, 0 = gather) and its tile cap (arg 30).
                         reader_args.push_back(side_cap != 0u ? side_addr : 0u);
@@ -1038,10 +1026,8 @@ static double process_frame_mb_devcull_resident(
                         // Mat args first, blend args from the kDmRtaBase /
                         // kCpRtaBase offsets, ready flags at reader args 28/29.
                         const mbf::CoreArgs& ma = pend.cores.at(mbf::core_key(x, y));
-                        if (train_opc_addr == 0u) {  // task #788: else pushed above
-                            reader_args.push_back(pend.flags_addr);  // arg 28
-                            reader_args.push_back(pend.epoch);       // arg 29
-                        }
+                        reader_args.push_back(pend.flags_addr);  // arg 28
+                        reader_args.push_back(pend.epoch);       // arg 29
                         std::vector<uint32_t> n = ma.n;
                         n.push_back(pend.flags_addr);  // mat arg 18
                         n.push_back(pend.epoch);       // mat arg 19
@@ -1056,11 +1042,6 @@ static double process_frame_mb_devcull_resident(
                         if (out_pinned) {
                             m0.insert(m0.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
                                                  static_cast<uint32_t>(out_pin_addr >> 32)});
-                        }
-                        if (gsplat_tt::blend_train::enabled()) {  // task #788: writer args 9/10
-                            m0.resize(mbf::kDmRtaBase + 9u, 0u);
-                            m0.push_back(static_cast<uint32_t>(ctx.res_train->address()));
-                            m0.push_back(image_tiles_x);
                         }
                         std::vector<uint32_t> cp = ma.cp;
                         cp.resize(mbf::kCpRtaBase, 0u);

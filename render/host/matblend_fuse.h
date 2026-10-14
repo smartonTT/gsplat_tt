@@ -37,9 +37,8 @@ namespace gsplat_tt::matblend_fuse {
 inline bool enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_MATBLEND_FUSE");
-        // Task #708: the training forward runs the unfused blend program,
-        // unless GSPLAT_TT_TRAIN_FUSE=1 (task #788).
-        return (e == nullptr || e[0] != '0') && (!blend_train::enabled() || blend_train::train_fuse());
+        // Task #708: the training forward runs the unfused blend program.
+        return (e == nullptr || e[0] != '0') && !blend_train::enabled();
     }();
     return on;
 }

@@ -114,19 +114,6 @@ inline bool opc_ring3() {
 }
 constexpr uint32_t kOpcStageCb = 15;
 
-// Task #788: GSPLAT_TT_TRAIN_FUSE=1 keeps the fused mat+blend program
-// (matblend_fuse.h) in train mode. The blend reader's opc args then move to
-// kOpcReaderArgFused (28/29 are the fused ready flags) and the fused BRISC gets
-// the writer's train args 9/10. Not with the writer gather.
-inline bool train_fuse() {
-    static const bool on = [] {
-        const char* e = std::getenv("GSPLAT_TT_TRAIN_FUSE");
-        return e != nullptr && e[0] == '1';
-    }();
-    return enabled() && on && !opc_on_writer();
-}
-constexpr uint32_t kOpcReaderArgFused = 30u;
-
 // Task #724: decode-ahead ring slot in train mode (alpha_blend_compute_mb.cpp
 // DA_SLOT_BYTES with BLEND_TRAIN): 18 SFPLOADI words for 9 fp32 values, mask
 // and marker kind in the last two words. Flag off keeps 64 B slots.

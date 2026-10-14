@@ -1,0 +1,30 @@
+--- tr vs tp (alpha_blend_compute_mb)
+OK alpha_blend_compute_mb: tr=['4630941003219756279'] tp=['16281678577337687952']
+JIT-HASH OK
+rc=0
+--- tr vs mm (alpha_blend_compute_mb)
+OK alpha_blend_compute_mb: tr=['4630941003219756279'] mm=['13288629289502006331']
+JIT-HASH OK
+rc=0
+--- tr vs fz (alpha_blend_compute_mb)
+MISSING alpha_blend_compute_mb: tr=['4630941003219756279'] fz=[]
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1
+--- tr vs all (alpha_blend_compute_mb)
+MISSING alpha_blend_compute_mb: tr=['4630941003219756279'] all=[]
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1
+--- tr vs fz (--allow-kernel-swap alpha_blend_compute_mb / matblend_compute)
+OK (swap) alpha_blend_compute_mb: only in tr
+OK (swap) matblend_compute: only in fz
+shared kernels: 8, identical: 8, differ: []
+only in tr: ['alpha_blend_compute_mb', 'mat_cull_compute', 'reader_alpha_blend_mb_devcull', 'sort_subchunk_materialize', 'writer_alpha_blend']; only in fz: ['matblend_brisc', 'matblend_compute', 'matblend_ncrisc']
+JIT-HASH OK
+rc=0
+--- tr vs all (--allow-kernel-swap alpha_blend_compute_mb / matblend_compute)
+OK (swap) alpha_blend_compute_mb: only in tr
+OK (swap) matblend_compute: only in all
+shared kernels: 8, identical: 8, differ: []
+only in tr: ['alpha_blend_compute_mb', 'mat_cull_compute', 'reader_alpha_blend_mb_devcull', 'sort_subchunk_materialize', 'writer_alpha_blend']; only in all: ['matblend_brisc', 'matblend_compute', 'matblend_ncrisc']
+JIT-HASH OK
+rc=0

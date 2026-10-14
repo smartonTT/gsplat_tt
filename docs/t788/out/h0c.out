@@ -1,0 +1,37 @@
+[ttw 2026-10-14T15:45:32-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T15:45:32-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-14T15:45:32-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T15:45:33-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T15:45:33-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T15:45:33-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T15:45:33-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T15:45:33-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T15:45:33-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T15:45:33-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T15:45:33-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T15:45:33-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t788-h0c  timeout=540s  worry=600s  ts=2026-10-14T15:45:34-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t788-remote.sh 0 trnh tpnh fznh
+-----------------------------------------
+=== r0-trnh faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_HASH=1 benchmarks/cameras_train_nn.json --view-range 0:30 22:45:36 load=1.24
+run rc=0
+SUMMARY scene=bicycle hero='_DSC8680' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=27.5 p50_ms=28.1 min_ms=23.4 max_ms=32.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t788-r0-trnh
+TTW_TIMING ms_view=27.480
+hashes 31 md5 990e48ac
+=== r0-tpnh faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_T_PERIOD=512 GSPLAT_TT_BLEND_TRAIN_HASH=1 benchmarks/cameras_train_nn.json --view-range 0:30 22:45:41 load=1.22
+run rc=0
+SUMMARY scene=bicycle hero='_DSC8680' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=26.9 p50_ms=27.3 min_ms=23.2 max_ms=31.3 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-sync/tmp/t788-r0-tpnh
+TTW_TIMING ms_view=26.891
+hashes 31 md5 990e48ac
+=== r0-fznh faea0299 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_TRAIN_FUSE=1 GSPLAT_TT_BLEND_TRAIN_HASH=1 benchmarks/cameras_train_nn.json --view-range 0:30 22:45:45 load=1.22
+run rc=1
+2026-10-14 22:45:48.685 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1591168 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+hashes 0 md5 d41d8cd9
+=== done 0 22:45:48
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t788/tmp/ttw-state/logs/t788-h0c-20261014-154533.log
