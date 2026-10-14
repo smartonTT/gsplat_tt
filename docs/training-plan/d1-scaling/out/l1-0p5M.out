@@ -12,7 +12,7 @@
 [ttw 2026-10-14T00:50:51-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=e515eb2a bin=7f442ac3b98c0722 t691 3702fbb5 D1 sweep (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t691-l1-0p5M  timeout=560s  worry=600s  ts=2026-10-14T00:50:52-0700
 cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/docs/training-plan/d1-scaling/remote.sh 1 lat 0p5M_s1 0p5M_s2 0p5M_s4
