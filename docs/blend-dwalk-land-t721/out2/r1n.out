@@ -12,7 +12,7 @@
 [ttw 2026-10-14T03:17:19-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=094635e8 bin=e34a61be3031c271 t721 094635e8 BLEND_DWALK default on, iter 231 (bh-49)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-49  tag=t721-r1n  timeout=500s  worry=600s  ts=2026-10-14T03:17:20-0700
 cmd: T=/localdev/smarton/gstt2-sync T2=/localdev/smarton/gstt2-b230 MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t721-remote.sh 1 nb230 nnew nbase
