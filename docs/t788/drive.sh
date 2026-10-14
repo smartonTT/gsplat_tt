@@ -49,10 +49,10 @@ step() {  # name timeout round arms...
 }
 # Identity first (latency mode, per-forward train-buffer hash; also compiles each cfg), then
 # 4 timed b2b rounds per arm with the order rotated.
-step h0a 900 0 troh tpoh fzoh
-step h0b 900 0 mmoh alloh
-step h0c 900 0 trnh tpnh fznh
-step h0d 900 0 mmnh allnh
+step h0a 540 0 troh tpoh fzoh
+step h0b 540 0 mmoh alloh
+step h0c 540 0 trnh tpnh fznh
+step h0d 540 0 mmnh allnh
 step r1a 600 1 tro tpo fzo mmo allo
 step r1b 600 1 trn tpn fzn mmn alln
 step r2a 600 2 allo mmo fzo tpo tro

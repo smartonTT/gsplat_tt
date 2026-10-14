@@ -967,9 +967,13 @@ static double process_frame_mb_devcull_resident(
     uint32_t train_opc_addr = 0u;
     if (gsplat_tt::blend_train::enabled()) {
         auto buf_opc = ds::get_buffer("scene_train_opc");
-        if (!buf_opc || fz) {
+        if (!buf_opc) {
             throw std::runtime_error(
                 "[gsplat_tt::blend] GSPLAT_TT_BLEND_TRAIN: no scene_train_opc buffer (task #717)");
+        }
+        if (fz && gsplat_tt::blend_train::opc_on_writer()) {  // task #788: not wired when fused
+            throw std::runtime_error(
+                "[gsplat_tt::blend] GSPLAT_TT_TRAIN_FUSE=1 does not support GSPLAT_TT_TRAIN_OPC_WRITER=1");
         }
         train_opc_addr = static_cast<uint32_t>(buf_opc->address());
     }
