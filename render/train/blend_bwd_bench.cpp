@@ -11,6 +11,9 @@
 // into their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp; 2 also loads all
 // words before the first instruction-buffer store. On bh-49 vs 0: 1 is slower (setup 172.9 -> 198.2
 // cycles/pair, hero 82.66 -> 83.33 ms), 2 is faster (hero 82.66 -> 82.39 ms), both bit-identical.
+// #785: a prep dir with cores.u32 (python3 -m gsplat.t1_balance_dev plan: LPT row order by body
+// count, optionally split rows) gives each core its rows by those boundaries in place of the
+// contiguous split; BWD_BALANCE=0 ignores it. Its cores.u32 length - 1 sets the core count.
 // Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
@@ -98,9 +101,22 @@ int main(int argc, char** argv) {
     const char* ps_env = std::getenv("BWD_PRESTAGE");
     const int prestage = ps_env ? std::atoi(ps_env) : 2;
 
+    const char* bal_env = std::getenv("BWD_BALANCE");
+    std::vector<uint32_t> plan_beg;
+    if (!(bal_env && std::string(bal_env) == "0") && std::ifstream(dir + "/cores.u32").good()) {
+        plan_beg = load<uint32_t>(dir + "/cores.u32");
+        if (plan_beg.size() < 2 || plan_beg.size() - 1 > size_t(grid.x) * grid.y || plan_beg.front() != 0 ||
+            plan_beg.back() != n_tiles || !std::is_sorted(plan_beg.begin(), plan_beg.end())) {
+            std::fprintf(stderr, "cores.u32 does not fit %u tiles on %u cores\n", n_tiles, grid.x * grid.y);
+            return 2;
+        }
+        want = uint32_t(plan_beg.size() - 1);
+    }
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
-    {
+    if (!plan_beg.empty()) {
+        t_beg = plan_beg;
+    } else {
         uint64_t total = 0;
         for (uint32_t t = 0; t < n_tiles; t++) total += tiles[t * 16 + 2] + 1;
         uint64_t acc = 0;
@@ -212,9 +228,9 @@ int main(int argc, char** argv) {
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"cores\": %u, \"max_core_recs\": %u, "
                   "\"device_ms_first\": %.4f, \"device_ms_min\": %.4f, \"device_ms_med\": %.4f, "
-                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"prestage\": %d, \"version\": \"v2\"}",
+                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"prestage\": %d, \"balance\": %d, \"version\": \"v2\"}",
                   n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], med, host_ms, ms.size(), int(stats),
-                  int(prestage));
+                  int(prestage), int(!plan_beg.empty()));
     std::ofstream(odir + "/timing.json") << buf << "\n";
     {
         std::string all = "[";
