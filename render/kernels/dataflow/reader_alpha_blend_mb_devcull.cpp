@@ -70,6 +70,12 @@ constexpr uint32_t CB_SCR_ATTR  = BLEND_CB_BASE + 5;   // reader-private: attr p
 constexpr uint32_t CB_SCR_MASK  = BLEND_CB_BASE + 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = BLEND_CB_BASE + 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
 constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk: bulk L1 slab records (mask in word3)
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+// Task #717: fp32 [op, r, g, b] per bulk record (16 B each), same slot cadence
+// as CB_BUCKET_BULK. Reuses the unfused program's idle CB_BUCKET ring (id 9).
+constexpr uint32_t CB_TRAIN_OPC = BLEND_CB_BASE + 9;
+constexpr uint32_t TRAIN_OPC_STAGE = 128u * 1024u;  // DRAM page staging (64 x 64 B)
+#endif
 constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
@@ -154,6 +160,9 @@ void kernel_main() {
     const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(21);  // blend_subchunk_meta [dir_base,num_sc]
     const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(22);
     const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(23);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+    const uint32_t train_opc_addr = get_arg_val<uint32_t>(28);  // task #717: scene_train_opc
+#endif
 
     constexpr auto a_args        = TensorAccessorArgs<BLEND_CTA_BASE>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -451,6 +460,42 @@ void kernel_main() {
                     pp = end;
                 }
             }
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+            {
+                // Task #717: rec[7] is the scene index in train mode; fetch its
+                // fp32 op/colour (64 B DRAM page = 4 entries) and pack it at g * 16.
+                DeviceZoneScopedN("rd_train_opc");
+                invalidate_l1_cache();
+                cb_reserve_back(CB_TRAIN_OPC, BULK_REC_SLOT);
+                const uint32_t side = get_write_ptr(CB_TRAIN_OPC);
+                const InterleavedAddrGen<true> opc_gen{train_opc_addr, 64u};
+                auto recs = reinterpret_cast<volatile uint32_t*>(buck);
+                auto dst = reinterpret_cast<volatile uint32_t*>(side);
+                auto stg = reinterpret_cast<volatile uint32_t*>(side + TRAIN_OPC_STAGE);
+                uint32_t g0 = 0;
+                while (g0 < L_sub) {
+                    const uint32_t g1 = (g0 + 64u < L_sub) ? g0 + 64u : L_sub;
+                    for (uint32_t g = g0; g < g1; ++g) {
+                        const uint32_t gid = recs[g * 8u + 7u];
+                        noc_async_read(get_noc_addr(gid >> 2, opc_gen),
+                                       side + TRAIN_OPC_STAGE + (g - g0) * 64u, 64u);
+                    }
+                    noc_async_read_barrier();
+                    invalidate_l1_cache();
+                    for (uint32_t g = g0; g < g1; ++g) {
+                        const uint32_t gid = recs[g * 8u + 7u];
+                        const uint32_t s = (g - g0) * 16u + (gid & 3u) * 4u;
+                        dst[g * 4u + 0u] = stg[s + 0u];
+                        dst[g * 4u + 1u] = stg[s + 1u];
+                        dst[g * 4u + 2u] = stg[s + 2u];
+                        dst[g * 4u + 3u] = stg[s + 3u];
+                    }
+                    g0 = g1;
+                }
+                mb_cb_commit_fence();
+                cb_push_back(CB_TRAIN_OPC, BULK_REC_SLOT);
+            }
+#endif
             mb_cb_commit_fence();
             cb_push_back(CB_BUCKET_BULK, BULK_REC_SLOT);
 

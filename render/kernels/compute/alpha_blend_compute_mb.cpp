@@ -76,6 +76,7 @@ constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk L1 records (
 constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
 constexpr uint32_t CB_T_RB = BLEND_CB_BASE + 2;        // iter 107: mid-accumulation T readback (bf16, 1 tile)
 constexpr uint32_t CB_TRAIN_OUT = BLEND_CB_BASE + 17;  // task #708: fp32 R/G/B/T (BLEND_TRAIN only)
+constexpr uint32_t CB_TRAIN_OPC = BLEND_CB_BASE + 9;   // task #717: fp32 op,r,g,b per bulk record
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -1706,8 +1707,14 @@ inline void process_tile_l1_blend(
     {
         BLEND_PZ_WAIT("cmp_bulk_wait");
         cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+        cb_wait_front(CB_TRAIN_OPC, BULK_REC_SLOT);
+#endif
     }
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+    const uint32_t opc_base = get_tile_address(CB_TRAIN_OPC, 0);
+#endif
     TC_BEGIN();
     TC_PART0();
     {
@@ -1788,6 +1795,16 @@ inline void process_tile_l1_blend(
 #else
             MATH((blend_stage_coeffs_q(rec[0], rec[1], rec[2], rec[4], rec[5], w6, w7)));
 #endif
+#elif defined(BLEND_TRAIN) && BLEND_TRAIN
+            // Task #717: lossless fp32 op/colour, gathered by the reader per scene
+            // index (rec[7]); rec[6] keeps only the cull's opacity code.
+            (void)w6; (void)w7;
+            const volatile uint32_t* opc =
+                reinterpret_cast<const volatile uint32_t*>(opc_base) + g * 4u;
+            const uint32_t op = opc[0], cr = opc[1], cg = opc[2], cbv = opc[3];
+#if BLEND_COEF_DEST
+            MATH((blend_stage_coeffs(rec[0], rec[1], rec[2], rec[4], rec[5], op, cr, cg, cbv)));
+#endif
 #else
             const uint32_t op = dm_fp32::unorm16_to_f(w6 & 0xffffu);
             const uint32_t cr = dm_fp32::unorm16_to_f(w6 >> 16);
@@ -1825,6 +1842,9 @@ inline void process_tile_l1_blend(
     MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, num_g + 1u)));
     UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
     cb_pop_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+    cb_pop_front(CB_TRAIN_OPC, BULK_REC_SLOT);
+#endif
     TC_PART1(tail);
 }
 
