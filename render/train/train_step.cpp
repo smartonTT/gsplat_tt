@@ -14,6 +14,8 @@
 // the cores, into the hsum buffer; program B runs the light groups, one contiguous range per core
 // balanced by planes + T2_OVH (2) per active group, heavy lanes taking hsum as plane 0.
 // T2_G2D=1 skips the projection backward + Adam, so pfwc.f32 holds the per-row slot sums (g2d).
+// #793 T2_PERVIEW=1 (with T2_SPLIT=1) adds a per-view loop: the split plan is rebuilt, uploaded
+// and its runtime args rewritten every step, serial vs overlapped with T1 (view_*_ms in timing.json).
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -245,22 +247,43 @@ int main(int argc, char** argv) {
     }
 
     // ---- #784 split plan (host, from this view's counts; nothing kept between views)
-    const auto tp0 = std::chrono::steady_clock::now();
-    constexpr uint32_t HFLAG = 0x80000000u;
-    std::vector<uint32_t> heavy, hplanes, metab, htab;
+    // #793: make_plan() is one pass over the active groups (heavy lanes and light kmax together);
+    // metab is patched in place (the previous plan's heavy count words restored first, no 14.5 MB
+    // copy per view) and goes to b_meta (T1 does not read it; base T2 does not run in split mode);
+    // the contiguous fill searches [lo, lo + wmax] over active groups only (greedy always fits at
+    // lo + wmax). Same plan as #784 bit for bit. T2_PERVIEW=1 reruns it per step (see below).
+    constexpr uint32_t HFLAG = 0x80000000u, AMAX = 64;  // AMAX: phase-A groups per core (fixed RTA size)
+    std::vector<uint32_t> heavy, metab, htab, act;
     std::vector<std::vector<uint32_t>> core_h(want);
     std::vector<uint32_t> core_g(want + 1, ng), core_n(want, 0);
+    std::vector<uint64_t> w(split ? ng : 0, 0), load(want, 0);
     uint64_t light_planes = 0, heavy_planes = 0, a_max = 0, b_max = 0;
-    if (split) {
-        auto active = [&](uint32_t g) { return (vis[(g / GPB) * 32 + 2 * (g % GPB)] | vis[(g / GPB) * 32 + 2 * (g % GPB) + 1]) != 0; };
-        for (uint32_t g = 0; g < ng; g++)
-            if (active(g))
-                for (uint32_t i = 0; i < 64; i++)
-                    if (meta[g * 128 + 64 + i] > kcap) heavy.push_back(g * 64 + i);
-        auto cnt = [&](uint32_t r) { return meta[(r / 64) * 128 + 64 + r % 64]; };
+    if (split) metab = meta;  // once (a trainer patches its fresh per-view meta in place)
+    auto cnt = [&](uint32_t r) { return meta[(r / 64) * 128 + 64 + r % 64]; };
+    auto make_plan = [&]() -> bool {
+        for (uint32_t r : heavy) metab[(r / 64) * 128 + 64 + r % 64] = cnt(r);
+        heavy.clear();
+        act.clear();
+        light_planes = heavy_planes = a_max = b_max = 0;
+        uint64_t wsum = 0, wmax = 0;
+        for (uint32_t g = 0; g < ng; g++) {
+            const uint32_t* vb = &vis[(g / GPB) * 32 + 2 * (g % GPB)];
+            w[g] = 0;
+            if ((vb[0] | vb[1]) == 0) continue;
+            const uint32_t* cg = &meta[size_t(g) * 128 + 64];
+            uint32_t k = 1;
+            for (uint32_t i = 0; i < 64; i++) {
+                if (cg[i] > kcap) heavy.push_back(g * 64 + i);
+                else k = std::max(k, cg[i]);
+            }
+            act.push_back(g);
+            light_planes += k;
+            w[g] = k + ovh;
+            wsum += w[g];
+            wmax = std::max(wmax, w[g]);
+        }
         std::stable_sort(heavy.begin(), heavy.end(), [&](uint32_t a, uint32_t b) { return cnt(a) > cnt(b); });
         const uint32_t nhg = (uint32_t(heavy.size()) + HL - 1) / HL;
-        metab = meta;
         htab.assign(size_t(std::max<uint32_t>(nhg, 1)) * 128, 0u);
         for (uint32_t h = 0; h < heavy.size(); h++) {
             const uint32_t r = heavy[h], j = h / HL, i = h % HL;
@@ -271,35 +294,22 @@ int main(int argc, char** argv) {
         }
         // Phase A: LPT, largest group first (groups are already in descending order), ties to
         // the lower core.
-        std::vector<uint64_t> load(want, 0);
+        for (auto& v : core_h) v.clear();
+        std::fill(load.begin(), load.end(), 0);
         for (uint32_t j = 0; j < nhg; j++) {
             const uint32_t c = uint32_t(std::min_element(load.begin(), load.end()) - load.begin());
             core_h[c].push_back(j);
             load[c] += htab[j * 128 + 64];
-            if (core_h[c].size() > 300) { std::fprintf(stderr, "too many heavy groups on core %u\n", c); return 2; }
+            if (core_h[c].size() > AMAX) { std::fprintf(stderr, "too many heavy groups on core %u\n", c); return false; }
         }
         a_max = *std::max_element(load.begin(), load.end());
         // Phase B: light planes per active group (a heavy lane feeds plane 0 only), one contiguous
         // range per core, smallest capacity that fits (binary search on the greedy fill).
-        std::vector<uint64_t> w(ng, 0);
-        uint64_t wsum = 0, wmax = 0;
-        for (uint32_t g = 0; g < ng; g++) {
-            if (!active(g)) continue;
-            uint32_t k = 1;
-            for (uint32_t i = 0; i < 64; i++) {
-                const uint32_t c = metab[g * 128 + 64 + i];
-                if (!(c & HFLAG)) k = std::max(k, c);
-            }
-            light_planes += k;
-            w[g] = k + ovh;
-            wsum += w[g];
-            wmax = std::max(wmax, w[g]);
-        }
         auto fill = [&](uint64_t cap, std::vector<uint32_t>* b) {
             uint32_t c = 0;
             uint64_t acc = 0;
             if (b) (*b)[0] = 0;
-            for (uint32_t g = 0; g < ng; g++) {
+            for (uint32_t g : act) {
                 if (acc + w[g] > cap) {
                     if (++c >= want) return false;
                     if (b) (*b)[c] = g;
@@ -311,7 +321,8 @@ int main(int argc, char** argv) {
                 for (uint32_t q = c + 1; q <= want; q++) (*b)[q] = ng;
             return true;
         };
-        uint64_t lo = std::max<uint64_t>(wmax, (wsum + want - 1) / want), hi = wsum;
+        uint64_t lo = std::max<uint64_t>(wmax, (wsum + want - 1) / want), hi = std::min(wsum, lo + wmax);
+        hi = std::max(hi, lo);
         while (lo < hi) {
             const uint64_t mid = (lo + hi) / 2;
             if (fill(mid, nullptr)) hi = mid; else lo = mid + 1;
@@ -319,23 +330,30 @@ int main(int argc, char** argv) {
         fill(lo, &core_g);
         for (uint32_t c = 0; c < want; c++) {
             uint64_t acc = 0;
+            core_n[c] = 0;
             for (uint32_t g = core_g[c]; g < core_g[c + 1]; g++) {
                 acc += w[g];
                 core_n[c] += w[g] != 0;
             }
             b_max = std::max(b_max, acc);
         }
-    }
+        return true;
+    };
+    const auto tp0 = std::chrono::steady_clock::now();
+    if (split && !make_plan()) return 2;
     const double plan_ms = ms_since(tp0);
-    const uint32_t nhrec = split ? std::max<uint32_t>(1, (uint32_t(heavy.size()) + HL - 1) / HL * HL) : 1;
-    auto b_metab = make_dram(dev.get(), uint64_t(split ? ng : 1) * META_PAGE, META_PAGE);
-    auto b_htab = make_dram(dev.get(), uint64_t(split ? htab.size() / 128 : 1) * META_PAGE, META_PAGE);
+    // hsum / htab sized for twice this view's heavy rows (fixed buffers for the per-view loop).
+    const uint32_t nhrec = split ? std::max<uint32_t>(64, 2 * ((uint32_t(heavy.size()) + HL - 1) / HL * HL)) : 1;
+    auto b_htab = make_dram(dev.get(), uint64_t(split ? nhrec / HL : 1) * META_PAGE, META_PAGE);
     auto b_hs = make_dram(dev.get(), uint64_t((nhrec + 63) / 64) * SLOT_PAGE, SLOT_PAGE);
+    auto upload_plan = [&](bool blocking) -> bool {
+        if (heavy.size() > nhrec) { std::fprintf(stderr, "heavy rows %zu over hsum size %u\n", heavy.size(), nhrec); return false; }
+        distributed::EnqueueWriteMeshBuffer(*cq, b_meta, metab, blocking);
+        distributed::EnqueueWriteMeshBuffer(*cq, b_htab, htab, blocking);
+        return true;
+    };
     const auto tu0 = std::chrono::steady_clock::now();
-    if (split) {
-        distributed::EnqueueWriteMeshBuffer(*cq, b_metab, metab, true);
-        distributed::EnqueueWriteMeshBuffer(*cq, b_htab, htab, true);
-    }
+    if (split && !upload_plan(true)) return 2;
     const double split_upload_ms = ms_since(tu0);
     if (split)
         std::printf("[SPLIT] kcap %u hl %u ovh %u heavy_rows %zu heavy_groups %zu heavy_planes %llu light_planes %llu "
@@ -343,6 +361,27 @@ int main(int argc, char** argv) {
                     kcap, HL, ovh, heavy.size(), htab.size() / 128, (unsigned long long)heavy_planes,
                     (unsigned long long)light_planes, (unsigned long long)a_max, (unsigned long long)b_max, plan_ms,
                     split_upload_ms);
+    // Split-mode runtime args, per core (fixed sizes, so a per-view plan only rewrites values).
+    auto split_b_reader = [&](uint32_t lin) -> std::vector<uint32_t> {
+        return {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
+                uint32_t(b_s->address()), uint32_t(b_meta->address()), uint32_t(b_vis->address()),
+                uint32_t(b_hs->address()), lin < want ? core_g[lin] : ng, lin < want ? core_g[lin + 1] : ng};
+    };
+    auto split_a_reader = [&](uint32_t lin) -> std::vector<uint32_t> {
+        const uint32_t n = lin < want ? uint32_t(core_h[lin].size()) : 0;
+        std::vector<uint32_t> ra(3 + AMAX, 0u);
+        ra[0] = uint32_t(b_s->address());
+        ra[1] = uint32_t(b_htab->address());
+        ra[2] = n;
+        for (uint32_t q = 0; q < n; q++) ra[3 + q] = core_h[lin][q];
+        return ra;
+    };
+    auto with_consts = [&](uint32_t n) {
+        std::vector<uint32_t> ca = {n};
+        for (float f : cst) { uint32_t u; std::memcpy(&u, &f, 4); ca.push_back(u); }
+        return ca;
+    };
+    KernelHandle k2r = 0, k2w = 0, k2c = 0, kar = 0, kaw = 0, kac = 0;
 
     // ---- T2 program (t697 gather reduce + SFPU fwd/bwd + sparse Adam)
     Program p2 = CreateProgram();
@@ -370,16 +409,16 @@ int main(int argc, char** argv) {
         if (split) rdef["T2_SPLIT"] = "1";
         if (g2d_only) wdef["T2_G2D_ONLY"] = "1";
         const std::string kd = TRAIN_KERNEL_DIR;
-        auto kr = CreateKernel(p2, kd + "t2g_reader.cpp", cores,
+        auto kr = k2r = CreateKernel(p2, kd + "t2g_reader.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
                                                   .noc = NOC::RISCV_1_default, .compile_args = rct, .defines = rdef});
-        auto kw = CreateKernel(p2, kd + "t2_writer.cpp", cores,
+        auto kw = k2w = CreateKernel(p2, kd + "t2_writer.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                                   .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = wdef});
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[CB_P] = UnpackToDestMode::UnpackToDestFp32;
         u2d[CB_K] = UnpackToDestMode::UnpackToDestFp32;
-        auto kc = CreateKernel(p2, kd + "t2g_compute.cpp", cores,
+        auto kc = k2c = CreateKernel(p2, kd + "t2g_compute.cpp", cores,
                                ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                              .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
                                              .math_approx_mode = false, .defines = wdef});
@@ -389,11 +428,7 @@ int main(int argc, char** argv) {
                 uint32_t n = 0;
                 if (split) {
                     n = lin < want ? core_n[lin] : 0;
-                    SetRuntimeArgs(p2, kr, CoreCoord{x, y},
-                                   {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
-                                    uint32_t(b_s->address()), uint32_t(b_metab->address()), uint32_t(b_vis->address()),
-                                    uint32_t(b_hs->address()), lin < want ? core_g[lin] : ng,
-                                    lin < want ? core_g[lin + 1] : ng});
+                    SetRuntimeArgs(p2, kr, CoreCoord{x, y}, split_b_reader(lin));
                 } else {
                 if (lin < want)
                     for (uint32_t b = lin; b < nb; b += want)
@@ -430,15 +465,15 @@ int main(int argc, char** argv) {
                                                         {"T2_HL", std::to_string(HL) + "u"},
                                                         {"T2_PHASE_A", "1"}};
         const std::string kd = TRAIN_KERNEL_DIR;
-        auto kr = CreateKernel(pa, kd + "t2g_reader.cpp", cores,
+        auto kr = kar = CreateKernel(pa, kd + "t2g_reader.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
                                                   .noc = NOC::RISCV_1_default, .compile_args = rct, .defines = def});
-        auto kw = CreateKernel(pa, kd + "t2h_writer.cpp", cores,
+        auto kw = kaw = CreateKernel(pa, kd + "t2h_writer.cpp", cores,
                                DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                                   .noc = NOC::RISCV_0_default, .compile_args = wct, .defines = def});
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[CB_K] = UnpackToDestMode::UnpackToDestFp32;
-        auto kc = CreateKernel(pa, kd + "t2g_compute.cpp", cores,
+        auto kc = kac = CreateKernel(pa, kd + "t2g_compute.cpp", cores,
                                ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                              .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
                                              .math_approx_mode = false, .defines = def});
@@ -446,13 +481,9 @@ int main(int argc, char** argv) {
             for (uint32_t x = 0; x < grid.x; x++) {
                 const uint32_t lin = y * grid.x + x;
                 const uint32_t n = lin < want ? uint32_t(core_h[lin].size()) : 0;
-                std::vector<uint32_t> ra = {uint32_t(b_s->address()), uint32_t(b_htab->address()), n};
-                for (uint32_t q = 0; q < n; q++) ra.push_back(core_h[lin][q]);
-                SetRuntimeArgs(pa, kr, CoreCoord{x, y}, ra);
+                SetRuntimeArgs(pa, kr, CoreCoord{x, y}, split_a_reader(lin));
                 SetRuntimeArgs(pa, kw, CoreCoord{x, y}, {uint32_t(b_hs->address()), n});
-                std::vector<uint32_t> ca = {n};
-                for (float f : cst) { uint32_t u; std::memcpy(&u, &f, 4); ca.push_back(u); }
-                SetRuntimeArgs(pa, kc, CoreCoord{x, y}, ca);
+                SetRuntimeArgs(pa, kc, CoreCoord{x, y}, with_consts(n));
             }
     }
 
@@ -520,17 +551,69 @@ int main(int argc, char** argv) {
         distributed::Finish(*cq);
         tbms.push_back(ms_since(t0));
     }
+    // #793 T2_PERVIEW=1: the host plan is rebuilt from this view's counts every step, uploaded and
+    // its runtime args rewritten, in two alternating orders (same programs, same plan, same data):
+    //   serial   plan -> upload metab/htab -> runtime args -> T1 -> A -> B -> Finish
+    //   overlap  T1 enqueued first; plan, upload and runtime args run on the host while T1 runs.
+    // view_*_ms is host wall clock per step; plan_stable checks each replan equals the step-0 plan.
+    const bool perview = split && envu("T2_PERVIEW", 0) != 0;
+    std::vector<double> vser, vovl, vplan;
+    bool plan_stable = true;
+    if (perview) {
+        const auto heavy0 = heavy, htab0 = htab, metab0 = metab, core_g0 = core_g;
+        const auto core_h0 = core_h;
+        Program& q2 = w2.get_programs().begin()->second;
+        Program& qa = wa.get_programs().begin()->second;
+        auto set_rtas = [&]() {
+            for (uint32_t y = 0; y < grid.y; y++)
+                for (uint32_t x = 0; x < grid.x; x++) {
+                    const uint32_t lin = y * grid.x + x, nb2 = lin < want ? core_n[lin] : 0;
+                    const uint32_t na = lin < want ? uint32_t(core_h[lin].size()) : 0;
+                    SetRuntimeArgs(q2, k2r, CoreCoord{x, y}, split_b_reader(lin));
+                    SetRuntimeArgs(q2, k2w, CoreCoord{x, y},
+                                   {uint32_t(b_p->address()), uint32_t(b_m->address()), uint32_t(b_v->address()),
+                                    uint32_t(b_f->address()), uint32_t(b_g->address()), nb2, ng});
+                    SetRuntimeArgs(q2, k2c, CoreCoord{x, y}, with_consts(nb2));
+                    SetRuntimeArgs(qa, kar, CoreCoord{x, y}, split_a_reader(lin));
+                    SetRuntimeArgs(qa, kaw, CoreCoord{x, y}, {uint32_t(b_hs->address()), na});
+                    SetRuntimeArgs(qa, kac, CoreCoord{x, y}, with_consts(na));
+                }
+        };
+        for (int i = 0; i < 2 * reps; i++) {
+            const bool ov = i % 2 == 1;
+            const auto t0 = std::chrono::steady_clock::now();
+            if (ov) distributed::EnqueueMeshWorkload(*cq, w1, false);
+            const auto tp = std::chrono::steady_clock::now();
+            if (!make_plan()) return 2;
+            vplan.push_back(ms_since(tp));
+            plan_stable = plan_stable && heavy == heavy0 && htab == htab0 && metab == metab0 && core_g == core_g0 &&
+                          core_h == core_h0;
+            if (!upload_plan(false)) return 2;
+            set_rtas();
+            if (!ov) distributed::EnqueueMeshWorkload(*cq, w1, false);
+            distributed::EnqueueMeshWorkload(*cq, wa, false);
+            distributed::EnqueueMeshWorkload(*cq, w2, false);
+            distributed::Finish(*cq);
+            (ov ? vovl : vser).push_back(ms_since(t0));
+        }
+        std::printf("[PERVIEW] plan_stable %d\n", int(plan_stable));
+    }
     const Stat s1 = stat(t1ms), s2 = stat(t2ms), sc = stat(chain), sa = stat(tams), sb = stat(tbms);
-    char sbuf[640];
+    const Stat svs = stat(vser), svo = stat(vovl), svp = stat(vplan);
+    char sbuf[1100];
     std::snprintf(sbuf, sizeof sbuf,
                   ", \"split\": %s, \"g2d_only\": %s, \"kcap\": %u, \"hl\": %u, \"ovh\": %u, \"heavy_rows\": %zu, "
                   "\"heavy_planes\": %llu, \"light_planes\": %llu, \"a_max_planes\": %llu, \"b_max_weight\": %llu, "
                   "\"plan_ms\": %.3f, \"split_upload_ms\": %.3f, \"ta_ms_min\": %.4f, \"ta_ms_med\": %.4f, "
-                  "\"tb_ms_min\": %.4f, \"tb_ms_med\": %.4f",
+                  "\"tb_ms_min\": %.4f, \"tb_ms_med\": %.4f, \"perview\": %s, \"plan_stable\": %s, "
+                  "\"view_plan_ms_min\": %.4f, \"view_plan_ms_med\": %.4f, \"view_serial_ms_min\": %.4f, "
+                  "\"view_serial_ms_med\": %.4f, \"view_overlap_ms_min\": %.4f, \"view_overlap_ms_med\": %.4f",
                   split ? "true" : "false", g2d_only ? "true" : "false", kcap, HL, ovh, heavy.size(),
                   (unsigned long long)heavy_planes, (unsigned long long)light_planes, (unsigned long long)a_max,
-                  (unsigned long long)b_max, plan_ms, split_upload_ms, sa.min, sa.med, sb.min, sb.med);
-    char buf[1700];
+                  (unsigned long long)b_max, plan_ms, split_upload_ms, sa.min, sa.med, sb.min, sb.med,
+                  perview ? "true" : "false", plan_stable ? "true" : "false", svp.min, svp.med, svs.min, svs.med,
+                  svo.min, svo.med);
+    char buf[2200];
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"n_groups\": %u, \"groups_processed\": %u, "
                   "\"cores\": %u, \"t1_cores\": %u, \"reps\": %d, \"grads_out\": %s, "
