@@ -135,3 +135,22 @@ def test_ramp_vectors_repeat_for_kernel_reads():
     for V in range(32):
         assert (xr[V] == xr[V & 9]).all() and (yr[V] == yr[V & ~9]).all(), V
     assert max(V & 9 for V in range(32)) < 16  # DR_K = x ramp vector 16 is never read as x
+
+
+def test_prestage_page_loads_the_record_bits():
+    """#767: the reader's SFPLOADI word pairs load every record float bit for bit (incl. -0,
+    denormals, inf, NaN), the mask lands in word 24, and the C++ constants match these."""
+    d, cfg = dev.load_dump(DUMPS[0])
+    p = dev.prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
+                 d["image"], d["dL_dimage"], cfg)
+    edge = np.array([0, 0x80000000, 1, 0x807FFFFF, 0x7F800000, 0xFF800000, 0x7FC00001, 0xFFFFFFFF,
+                     0x0000FFFF, 0xFFFF0000, 0x3F800000, 0x12345678], np.uint32)
+    recs = np.concatenate([p["recs"].reshape(-1, 16), np.tile(edge, (1, 2))[:, :16]])
+    pg = dev.prestage_page(recs)
+    vals = dev.sfploadi_lreg0(pg[:, :24].reshape(-1, 12, 2))
+    assert (vals == recs[:, :12]).all() and (pg[:, 24] == recs[:, 12]).all()
+    src = pathlib.Path(__file__).resolve().parents[2] / "render" / "train" / "kernels"
+    for f in ("bwd_reader.cpp", "blend_bwd_compute.cpp"):
+        t = (src / f).read_text()
+        assert f"K_LOAD_LO = {dev.SFPLOADI_LO:#010x}u" in t and f"K_LOAD_HI = {dev.SFPLOADI_HI:#010x}u" in t, f
+    assert "REC_MASK_W = 24" in (src / "blend_bwd_compute.cpp").read_text()

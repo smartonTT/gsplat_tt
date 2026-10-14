@@ -18,6 +18,9 @@
 // setup, bodies, finish, pack sync) plus counts; after the last tile they are written as
 // exact floats (0x4B000000 | 16-bit half, two vectors per counter) into ACC and packed as
 // one extra CB_OUT tile, which the writer sends to the stats buffer (bwd_writer.cpp).
+// BWD_PRESTAGE (#767): the reader hands over each record float as its two SFPLOADI instruction
+// words (bwd_reader.cpp), so pair setup is copy word, copy word, SFPSTORE per value instead of
+// building both words on the MATH RISC-V; same instructions, bit-identical results.
 #include <cstdint>
 
 #include "api/compute/common.h"
@@ -257,6 +260,58 @@ inline uint32_t bwd_read_record(uint32_t ra, uint32_t* s) {
     return mask;
 }
 
+#ifdef BWD_PRESTAGE
+// Record page from the reader: words 2k, 2k+1 load value k (Af Bf Cf mx my op r g b P0 Lx Ly)
+// into LREG0, word 24 is the vector mask.
+constexpr uint32_t K_LOAD_LO = 0x71020000u, K_LOAD_HI = 0x71080000u, REC_MASK_W = 24;
+static_assert(TT_OP_SFPLOADI(0, 2, 0) == K_LOAD_LO, "SFPLOADI USHORT word (bwd_reader.cpp)");
+static_assert(TT_OP_SFPLOADI(0, 8, 0) == K_LOAD_HI, "SFPLOADI UPPER word (bwd_reader.cpp)");
+// SFPLOAD/SFPSTORE address of dst_reg index i (fp32 Dst), as sfpi emits it.
+constexpr uint32_t dr_addr(uint32_t i) { return 2u * i; }
+#define BWD_STAGE(k, dr)                                         \
+    do {                                                         \
+        const uint32_t lo_ = w[2 * (k)], hi_ = w[2 * (k) + 1];   \
+        ib[0] = lo_;                                             \
+        ib[0] = hi_;                                             \
+        TTI_SFPSTORE(0, 0, 7, dr_addr(dr));                      \
+    } while (0)
+
+// Stage the pair scalars from the record page, free the page for UNPACK, zero the term sums.
+inline uint32_t bwd_stage_record(uint32_t ra) {
+    asm volatile("fence" ::: "memory");
+    // Plain loads: the compiler may issue them ahead of the instruction-buffer stores.
+    const uint32_t* w = reinterpret_cast<const uint32_t*>(ra);
+    volatile uint32_t* ib = ckernel::instrn_buffer;
+    BWD_STAGE(0, DR_S + 0);
+    BWD_STAGE(1, DR_S + 1);
+    BWD_STAGE(2, DR_S + 2);
+    BWD_STAGE(3, DR_S + 3);
+    BWD_STAGE(4, DR_S + 4);
+    BWD_STAGE(5, DR_S + 5);
+    BWD_STAGE(6, DR_S + 6);
+    BWD_STAGE(7, DR_S + 7);
+    BWD_STAGE(8, DR_S + 8);
+    BWD_STAGE(9, DR_P0);
+    BWD_STAGE(10, DR_LX);
+    BWD_STAGE(11, DR_LY);
+    const uint32_t mask = w[REC_MASK_W];
+    asm volatile("" ::: "memory");  // every page read before the page goes back to UNPACK
+    ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, 1u);
+    using namespace sfpi;
+    dst_reg[DR_ACC + 0] = vConst0;
+    dst_reg[DR_ACC + 1] = vConst0;
+    dst_reg[DR_ACC + 2] = vConst0;
+    dst_reg[DR_ACC + 3] = vConst0;
+    dst_reg[DR_ACC + 4] = vConst0;
+    dst_reg[DR_ACC + 5] = vConst0;
+    dst_reg[DR_ACC + 6] = vConst0;
+    dst_reg[DR_ACC + 7] = vConst0;
+    dst_reg[DR_ACC + 8] = vConst0;
+    return mask;
+}
+#undef BWD_STAGE
+#endif
+
 inline void bwd_pair_setup(const uint32_t* s) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
@@ -368,9 +423,13 @@ void kernel_main() {
             const uint32_t ra = get_tile_address(CB_REC, 0);  // all threads (mailbox sync)
 #ifdef TRISC_MATH
             ST_LAP(ST_REC, st_c);
+#ifdef BWD_PRESTAGE
+            const uint32_t mask = bwd_stage_record(ra);
+#else
             uint32_t s[12];
             const uint32_t mask = bwd_read_record(ra, s);
             bwd_pair_setup(s);
+#endif
             ST_LAP(ST_SETUP, st_c);
             ST_CNT(ST_NP, 1);
             ST_CNT(ST_NV, bwd_popcount(mask));

@@ -7,6 +7,8 @@
 // #707: reps default 6 (first = JIT/warm-up; device_ms_med is the median of the rest).
 // BWD_STATS=1 (default; 0 = off) builds the kernels with in-kernel stage counters and writes
 // stats.json (per core: MATH wall-clock cycles per stage and counts, see blend_bwd_compute.cpp).
+// BWD_PRESTAGE=1 (default; 0 = #747 staging) (#767): the reader turns each record's 12 floats into
+// their SFPLOADI instruction words (128 B CB_REC pages), see bwd_reader.cpp.
 // Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
@@ -91,6 +93,8 @@ int main(int argc, char** argv) {
     const char* st_env = std::getenv("BWD_STATS");
     const bool stats = !(st_env && std::string(st_env) == "0");
     constexpr uint32_t ST_PAGE = 128, ST_N = 11;
+    const char* ps_env = std::getenv("BWD_PRESTAGE");
+    const bool prestage = !(ps_env && std::string(ps_env) == "0");
 
     // Contiguous tile blocks balanced by pair count (+1 per tile for the plane load).
     std::vector<uint32_t> t_beg(want + 1, n_tiles);
@@ -123,7 +127,7 @@ int main(int argc, char** argv) {
     add_cb(prog, cores, CB_HDR, SMALL, 2);
     add_cb(prog, cores, CB_PLANE, TILE_B, N_PLANES);
     add_cb(prog, cores, CB_RAMP, TILE_B, 2);
-    add_cb(prog, cores, CB_REC, SMALL, 4);
+    add_cb(prog, cores, CB_REC, prestage ? 2 * SMALL : SMALL, 4);
     add_cb(prog, cores, CB_OUT, TILE_B, 2);
     add_cb(prog, cores, CB_WS, TILE_B, 1);  // writer scratch: header, 16 recs, 16 staging pages
 
@@ -132,10 +136,13 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(wct);
     std::map<std::string, std::string> sdef;
     if (stats) sdef["BWD_STATS"] = "1";
+    std::map<std::string, std::string> rdef;
+    if (prestage) rdef["BWD_PRESTAGE"] = "1";
     const std::string kd = BWD_KERNEL_DIR;
     auto kr = CreateKernel(prog, kd + "bwd_reader.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
-                                              .noc = NOC::RISCV_1_default, .compile_args = rct});
+                                              .noc = NOC::RISCV_1_default, .compile_args = rct,
+                                              .defines = rdef});
     auto kw = CreateKernel(prog, kd + "bwd_writer.cpp", cores,
                            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                               .noc = NOC::RISCV_0_default, .compile_args = wct,
@@ -149,6 +156,7 @@ int main(int argc, char** argv) {
         {"BWD_TMIN_BITS", std::to_string(meta_int(js, "t_min_bits")) + "u"},
     };
     if (stats) cdef["BWD_STATS"] = "1";
+    if (prestage) cdef["BWD_PRESTAGE"] = "1";
     auto kc = CreateKernel(prog, kd + "blend_bwd_compute.cpp", cores,
                            ComputeConfig{.math_fidelity = MathFidelity::HiFi3, .fp32_dest_acc_en = true,
                                          .dst_full_sync_en = true, .unpack_to_dest_mode = u2d,
@@ -202,8 +210,9 @@ int main(int argc, char** argv) {
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"cores\": %u, \"max_core_recs\": %u, "
                   "\"device_ms_first\": %.4f, \"device_ms_min\": %.4f, \"device_ms_med\": %.4f, "
-                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"version\": \"v2\"}",
-                  n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], med, host_ms, ms.size(), int(stats));
+                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"prestage\": %d, \"version\": \"v2\"}",
+                  n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], med, host_ms, ms.size(), int(stats),
+                  int(prestage));
     std::ofstream(odir + "/timing.json") << buf << "\n";
     {
         std::string all = "[";

@@ -21,6 +21,8 @@ File layout (little endian):
   planes.f32 5 tilized fp32 tiles per listed tile: T0, BH0, g0, g1, g2
   ramps.f32  2 tilized fp32 tiles: x = c + 0.5, y = r + 0.5
   meta.json  counts and the blend cfg bits
+On device with BWD_PRESTAGE (#767) the reader rewrites each record into its CB page as
+prestage_page() does: the 12 floats as SFPLOADI instruction word pairs, then the mask.
 """
 from __future__ import annotations
 
@@ -238,6 +240,28 @@ def prep_loop(means2d, conic, opacity, colors, order, valid, image, dL_dimage, c
             "planes": np.asarray(planes, f32).reshape(-1, N_PLANES, 1024),
             "ramps": np.stack([xr, yr]), "n_slots": int(counts.sum()), "P": P, "counts": counts,
             "cfg": cfg, "H": H, "W": W}
+
+
+# SFPLOADI to LREG0: USHORT (value = imm16 zero-extended), UPPER (high half = imm16, low kept).
+SFPLOADI_LO, SFPLOADI_HI, PRESTAGE_VALS, PRESTAGE_MASK_W = 0x71020000, 0x71080000, 12, 24
+
+
+def prestage_page(recs: np.ndarray) -> np.ndarray:
+    """bwd_reader.cpp (BWD_PRESTAGE): records (n, 16) u32 -> the first 25 words of each 128 B
+    CB_REC page: value k as (SFPLOADI_LO + low half, SFPLOADI_HI + high half), then the mask."""
+    v = recs[:, :PRESTAGE_VALS].astype(np.uint32)
+    out = np.empty((len(recs), 2 * PRESTAGE_VALS + 1), np.uint32)
+    out[:, 0:2 * PRESTAGE_VALS:2] = SFPLOADI_LO + (v & 0xFFFF)
+    out[:, 1:2 * PRESTAGE_VALS:2] = SFPLOADI_HI + (v >> 16)
+    out[:, PRESTAGE_MASK_W] = recs[:, 12]
+    return out
+
+
+def sfploadi_lreg0(words: np.ndarray) -> np.ndarray:
+    """LREG0 after the two SFPLOADI words of each value (decoder for prestage_page)."""
+    lo, hi = words[..., 0], words[..., 1]
+    assert ((lo & 0xFFFF0000) == SFPLOADI_LO).all() and ((hi & 0xFFFF0000) == SFPLOADI_HI).all()
+    return ((hi & 0xFFFF) << 16) | (lo & 0xFFFF)
 
 
 def write(p: dict, out: str) -> None:
