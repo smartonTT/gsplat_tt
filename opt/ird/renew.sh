@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Renew one role's IRD reservation through the jump host and print one JSON line.
-#   opt/ird/renew.sh <viewer|measure> [--dry-run] [--host H] [--fingerprint SHA256:...] [--stay] [--no-deploy] [--rev REF]
+#   opt/ird/renew.sh <viewer|measure> [--dry-run] [--host H] [--fingerprint SHA256:...] [--stay] [--keep-old] [--no-deploy] [--rev REF]
 # viewer : resource key 'viewer'. Keeps bh-30 (else a free p150, else a free p100), then
 #          deploys --rev REF (default origin/smarton/tt-project-opt) into /localdev/$USER/viewer
 #          (opt/viewer/viewer.sh) when its tree differs from the deployed commit's tree.
 # measure: moves to a free p150 that is not the viewer box (never bh-30) if one is free, else
-#          extends the p100. Sync, build and release run under `ttp lock p100`.
+#          extends the p100. Sync, build and release run under `ttp lock p100`. --keep-old: on a
+#          move, the old box is another task's to release: it is neither extended nor released.
 # Only the role's designated reserver runs this without --dry-run. See opt/ird/README.md.
 # Exit: 0 ok; 2 usage; 3 extend refused while the job is alive; 4 pending (queued request, box
 # setup still running, or viewer waiting for bh-30 to expire: rerun later); 5 no free box;
@@ -40,7 +41,7 @@ BOX_SSH=(timeout "$SSH_T" ssh "${SSH_OPTS[@]}")
 JUMP_SSH=(timeout "$SSH_T" ssh "${SSH_OPTS[@]}")
 # opt/viewer/viewer.sh and opt/sync_remote.sh add the same mux-free options themselves.
 
-ROLE=; DRY=0; HOST_ARG=; FP_ARG=; STAY=0; DEPLOY=1; REV=origin/smarton/tt-project-opt
+ROLE=; DRY=0; HOST_ARG=; FP_ARG=; STAY=0; KEEP_OLD=0; DEPLOY=1; REV=origin/smarton/tt-project-opt
 while [ $# -gt 0 ]; do
   case $1 in
     viewer|measure) ROLE=$1 ;;
@@ -48,13 +49,14 @@ while [ $# -gt 0 ]; do
     --host) HOST_ARG=${2:?--host needs a value}; shift ;;
     --fingerprint) FP_ARG=${2:?--fingerprint needs a value}; shift ;;
     --stay) STAY=1 ;;
+    --keep-old) KEEP_OLD=1 ;;
     --no-deploy) DEPLOY=0 ;;
     --rev) REV=${2:?--rev needs a value}; shift ;;
-    *) sed -n 2,14p "$0" >&2; exit 2 ;;
+    *) sed -n 2,16p "$0" >&2; exit 2 ;;
   esac
   shift
 done
-[ -n "$ROLE" ] || { sed -n 2,14p "$0" >&2; exit 2; }
+[ -n "$ROLE" ] || { sed -n 2,16p "$0" >&2; exit 2; }
 OTHER_ROLE=measure; [ "$ROLE" = measure ] && OTHER_ROLE=viewer
 cd "$(git rev-parse --show-toplevel)" || exit 2
 # Per-role state lives in the repository's common git dir, which every worktree shares.
@@ -320,6 +322,11 @@ BOX_TYPE=$(type_of "$HOST")
 [ "$ROLE" = viewer ] && [ "$HOST" != "$VIEWER_BOX" ] && NOTE="${NOTE}viewer is on $HOST, not bh-30: tell the user to change the Mac forward to 8091 -> $HOST:8080; "
 [ "$HOST" = "$VIEWER_BOX" ] && [ "$ROLE" = measure ] && { STATUS=role_conflict; NOTE="measure picked $VIEWER_BOX"; emit 2; }
 
+# --keep-old: the old box's reservation belongs to another task (#687: bh-33 is #653's to release).
+if [ "$KEEP_OLD" = 1 ] && [ -n "$OLD_JOB" ]; then
+  NOTE="${NOTE}old job $OLD_JOB on $OLD_HOST left as is for its owner (--keep-old): not extended, not released; "
+  OLD_JOB=; OLD_HOST=
+fi
 # An unfinished move keeps the old box until the new one is built: extend it too.
 if [ -n "$OLD_JOB" ]; then
   osel=$(awk '{print $1}' <<<"$(row_j "$OLD_JOB")")
