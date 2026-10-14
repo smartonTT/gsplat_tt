@@ -43,7 +43,7 @@ if [ $brc = 0 ]; then
     timeout 900 "${SSH[@]}" "$ENV && rm -rf tmp/t713/in-$n tmp/t713/out-$n && mkdir -p tmp/t713/out-$n && $mk \
       && timeout ${RUN_TIMEOUT:-300} render/train/build/t2_bench tmp/t713/in-$n tmp/t713/out-$n $ex > tmp/t713/out-$n/run.log 2>&1; rc=\$?; tail -20 tmp/t713/out-$n/run.log; \
       if [ \$rc != 0 ]; then echo \"run rc=\$rc: tt-smi -r\"; tt-smi -r > tmp/t713/out-$n/reset.log 2>&1; echo \"reset rc=\$?\"; fi; \
-      [ -n "$k" ] && rm -f tmp/t713/in-$n/*.f32 tmp/t713/in-$n/*.u16 tmp/t713/in-$n/*.u32 tmp/t713/out-$n/*.f32 tmp/t713/out-$n/*.u16; exit \$rc"
+      [ -n '$k' ] && rm -f tmp/t713/in-$n/*.f32 tmp/t713/in-$n/*.u16 tmp/t713/in-$n/*.u32 tmp/t713/out-$n/*.f32 tmp/t713/out-$n/*.u16; exit \$rc"
     echo "run $n rc=$?"
   done
 fi
