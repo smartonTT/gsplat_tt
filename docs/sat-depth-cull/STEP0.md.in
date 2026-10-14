@@ -1,0 +1,73 @@
+# Saturation-depth cull, step 0: CPU sizing (task #675, throughput PLAN D3)
+
+Date: 2026-10-13 (PDT). CPU only, no device. Code: `docs/sat-depth-cull/{step0.py,satcull.c,aggregate.py}`.
+
+## Verdict: **@VERDICT@**
+
+- Perfect-knowledge bound (oracle: every tile cut exactly at its own saturation depth, no
+  fallback): **@ORACLE_ORBIT@ ms/view** on the 30-view orbit, @ORACLE_TRAIN@ ms/view on the
+  training tour. @ORACLE_LINE@
+- Real predictor (previous view reprojected): best arm nets **@BEST_NET@ ms/view**
+  (@BEST_SET@, @BEST_ARM@). @ARM_LINE@
+- Why it is small: only @TSAT_ORBIT@ of tiles ever reach T < eps on every pixel
+  (@PIXU_ORBIT@ of pixels never do: sky, thin foliage, tile edges against background), and
+  in the tiles that do, few pairs lie past the saturating one (@OSHARE_ORBIT@ of all pairs).
+  The blend's per-microblock live mask (blend-waste-t148) already skips most dispatch work for
+  those pairs, so the true per-pair saving is below the cost model used here.
+
+## Method
+
+- Model: `scenes/bicycle.ply` (6.1 M Gaussians, SH0), projected with the same math as
+  `gsplat.rasterization.project_gaussians` (eps2d 0.3, near 0.2, opacity >= 1/255, 3-sigma
+  capped by the contribution floor). Pairs = bbox tiles kept by the per-pair peak-contribution
+  test at floor 1/255 (`get_tile_assignments`), i.e. the K2 pair set; sorted by (tile, depth).
+- Saturation: each tile is blended front to back on the CPU (alpha clamp 0.99, alpha < 1/255
+  skipped) until every pixel has T < 1/256 (device BLEND_T_EPS). The saturating pair's depth is
+  the tile's saturation depth; pairs behind it are the oracle share.
+- Prediction for view i from view i-1: every saturated pixel of view i-1 is lifted to 3D
+  (pixel ray at the depth of the Gaussian that saturated it), warped into view i, and carries
+  that Gaussian's view-i depth. Per tile the cut is the maximum key over its 4x4 cells; a tile
+  with any empty cell (disocclusion) or any warped unsaturated pixel gets no cut. Margin m
+  multiplies the cut depth by (1+m) (0, 2, 5%); slack s=1 takes the max over the 3x3 tile
+  neighbourhood (1 tile of screen slack).
+- Scoring per tile with a cut: success if the true saturation depth <= cut (saves the pairs
+  behind the cut); fallback if not (the predicted cut was too early). A fallback reruns the tile
+  with its full list, so it wastes the pairs blended before the cut. Net = (captured - wasted)
+  pairs x cost per pair. The first view of a pass has no prediction and renders in full.
+- Cost per pair (generous upper bound): at best-iter-229 (1-chip b2b 8.063 ms/view) the
+  pair-proportional stages are K2/sort 1.33 + mat 1.33 + blend 3.79 = 6.45 ms/view
+  (docs/training-view/ANALYSIS.md, ttp/t668-training-view-analysis), divided by the orbit's mean
+  CPU pair count: **@NSPP@ ns/pair**. A culled pair is credited with all three stages.
+- Camera sets: `benchmarks/cameras_v2.json` (30-view orbit, 1024x1024, the headline set; hero
+  then orb_00..orb_28, steps ~2 deg after the first 18 deg jump) and
+  `benchmarks/cameras_train_nn.json` (ttp/t667-training-bench: the dataset's 169 training views
+  in greedy nearest-neighbour order, 1237x822, dataset intrinsics), first @TRAIN_N@ views.
+  The orbit is the ~2 deg tour; the NN tour's median step is @TRAIN_STEP@ deg.
+
+## Results
+
+Raw output of `python3 docs/sat-depth-cull/aggregate.py <out>` (per-view JSON in `evidence/`):
+
+```
+@AGG@
+```
+
+Columns: tiles cut/view = tiles given a predicted cut; fallback rate = share of those whose
+true saturation came after the cut; captured = pairs dropped correctly (share of all pairs, and
+of the oracle's pairs); wasted = pairs blended before a failed cut; net = (captured - wasted) x
+cost per pair. "512-period lag" = oracle pairs that fall inside the device's live-mask refresh
+window after saturation (modelled, period 512 per tile); these already cost the device only
+the record overhead.
+
+## What would change the verdict
+
+- Nothing in the predictor can exceed the oracle line. Even a perfect predictor with free
+  fallbacks is about half the kill line, at a cost model that overstates the saving.
+- A per-pixel or per-microblock cut (not per tile) is a different lever: the device already does
+  it in the blend (live mask), and blend-waste-t148 sized the remaining waste at 0.19 ms of
+  dispatches on an older build.
+- Scenes with a solid background (no sky) saturate more tiles; bicycle is the reference scene.
+
+## Kill line
+
+PLAN D3: net below 0.15 ms/view b2b -> shelve. Step 1 (device A/B) is not queued.

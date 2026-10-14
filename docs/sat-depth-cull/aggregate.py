@@ -22,6 +22,7 @@ def load(outdir, s):
 
 def main():
     outdir = sys.argv[1]
+    summ = {}
     orbit, train = load(outdir, "orbit"), load(outdir, "train")
     ref = orbit if orbit else train
     mean_pairs_orbit = sum(r["pairs"] for r in ref) / len(ref)
@@ -43,6 +44,8 @@ def main():
         print(f"tiles fully saturated: {ts / tn:.3%}; pixels never below eps: {pu:.3%}")
         print(f"oracle: pairs behind tile saturation {beh / P:.3%} = {beh / n * c:.4f} ms/view "
               f"(of which inside the 512-period live-mask lag {lag / P:.3%})")
+        summ[name] = dict(views=n, mean_pairs=P / n, median_step_deg=sorted(steps)[len(steps) // 2] if steps else 0,
+                          tiles_sat=ts / tn, pix_unsat=pu, oracle_share=beh / P, oracle_ms=beh / n * c, arms={})
         agg = defaultdict(lambda: defaultdict(int))
         k = 0
         for r in rs:
@@ -60,9 +63,21 @@ def main():
             fr = a["fail_tiles"] / a["cut_tiles"] if a["cut_tiles"] else 0
             net = (a["saved_pairs"] - a["wasted_pairs"]) / k * c
             first = rs[0]["pairs_behind"] * 0  # first view renders in full: no saving, no cost
+            summ[name]["arms"][key] = dict(fallback=fr, saved_share=a["saved_pairs"] / Pk,
+                                           wasted_share=a["wasted_pairs"] / Pk, net_ms=net)
             print(f"| {key} | {a['cut_tiles'] / k:.1f} | {fr:.1%} | {a['saved_pairs'] / Pk:.3%} "
                   f"(of behind {a['saved_pairs'] / max(1, sum(r['pairs_behind'] for r in rs if 'pred' in r)):.1%}) "
                   f"| {a['wasted_pairs'] / Pk:.3%} | {net + first:.4f} |")
+    summ["ns_per_pair"] = c * 1e6
+    summ["kill_ms"] = 0.15
+    best = max((v["net_ms"], s_, k_) for s_ in ("orbit", "train") if s_ in summ
+               for k_, v in summ[s_]["arms"].items())
+    summ["best_net"] = dict(ms=best[0], set=best[1], arm=best[2])
+    summ["oracle_max_ms"] = max(summ[s_]["oracle_ms"] for s_ in ("orbit", "train") if s_ in summ)
+    summ["verdict"] = "go" if best[0] >= 0.15 else "shelve"
+    json.dump(summ, open(f"{outdir}/summary.json", "w"), indent=1)
+    print(f"\nbest net {best[0]:.4f} ms/view ({best[1]} {best[2]}); oracle max {summ['oracle_max_ms']:.4f}; "
+          f"verdict {summ['verdict']}")
 
 
 if __name__ == "__main__":
