@@ -79,7 +79,7 @@ def _quat_rot(q):
 
 
 def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
-                  lowpass: float = 0.3, ft=f32) -> dict:
+                  lowpass: float = 0.3, ft=f32, jclamp: float | None = 1.3) -> dict:
     """Per-Gaussian projection forward (fp32 lanes; ft=np.float64 for the conditioning
     check), the values the backward reuses."""
     R, t, fx, fy, cx, cy = _cam(w2c, K, ft)
@@ -98,8 +98,14 @@ def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
     C3 = {(i, k): M[3 * i] * M[3 * k] + M[3 * i + 1] * M[3 * k + 1] + M[3 * i + 2] * M[3 * k + 2]
           for i in range(3) for k in range(i, 3)}
     c3 = lambda i, k: C3[(min(i, k), max(i, k))]  # noqa: E731
-    j00, j02 = fx * iz, -fx * x * iz * iz
-    j11, j12 = fy * iz, -fy * y * iz * iz
+    jx, jy = x, y
+    if jclamp:
+        # 3DGS/gsplat Jacobian clamp (#786, as train_oracle.RenderConfig.jclamp): J sees the
+        # camera-space mean clamped to +-jclamp tan(half FOV) z per axis.
+        lx, ly = ft(jclamp) * ft(W) / (ft(2) * fx) * z, ft(jclamp) * ft(H) / (ft(2) * fy) * z
+        jx, jy = np.minimum(np.maximum(x, -lx), lx), np.minimum(np.maximum(y, -ly), ly)
+    j00, j02 = fx * iz, -fx * jx * iz * iz
+    j11, j12 = fy * iz, -fy * jy * iz * iz
     T0 = [j00 * R[0, k] + j02 * R[2, k] for k in range(3)]
     T1 = [j11 * R[1, k] + j12 * R[2, k] for k in range(3)]
     CT0 = [c3(i, 0) * T0[0] + c3(i, 1) * T0[1] + c3(i, 2) * T0[2] for i in range(3)]
@@ -115,17 +121,17 @@ def forward_lanes(params: dict, w2c, K, H: int, W: int, near: float = 0.2,
     ol = np.asarray(params["opacity_logits"], ft)
     op = ft(1) / (ft(1) + np.exp(-ol))
     raw = SH_C0 * np.asarray(params["sh"], ft)[:, 0] + ft(0.5)
-    return dict(R=R, fx=fx, fy=fy, x=x, y=y, z=z, iz=iz, valid=valid, visible=visible,
+    return dict(R=R, fx=fx, fy=fy, x=x, y=y, jx=jx, jy=jy, z=z, iz=iz, valid=valid, visible=visible,
                 qn=qn, qinv=qinv, Rq=Rq, s=s, M=M, c3=c3, T0=T0, T1=T1, A=A, B=B, C=Cc,
                 op=op, raw=raw, mx=mx, my=my, j00=j00, j02=j02, j11=j11, j12=j12)
 
 
 def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: int,
                             near: float = 0.2, lowpass: float = 0.3,
-                            ft=f32) -> tuple[dict, np.ndarray]:
+                            ft=f32, jclamp: float | None = 1.3) -> tuple[dict, np.ndarray]:
     """g2d (N, 9) = (dmx, dmy, dA, dB, dC, dopacity, dr, dg, db) -> optimizer-space grads
     (fp32, same shapes as params; sh bands >= 1 get zero) and the visibility mask."""
-    F = forward_lanes(params, w2c, K, H, W, near, lowpass, ft)
+    F = forward_lanes(params, w2c, K, H, W, near, lowpass, ft, jclamp)
     g = np.asarray(g2d, ft)
     gmx, gmy, gA, gB, gC, gop = (g[:, i] for i in range(6))
     A, B, C = F["A"], F["B"], F["C"]
@@ -149,10 +155,15 @@ def projection_backward_sh0(params: dict, g2d: np.ndarray, w2c, K, H: int, W: in
     gj12 = dT1[0] * R[2, 0] + dT1[1] * R[2, 1] + dT1[2] * R[2, 2]
     fx, fy, x, y, iz = F["fx"], F["fy"], F["x"], F["y"], F["iz"]
     iz2 = iz * iz
-    gx = gmx * fx * iz - gj02 * fx * iz2
-    gy = gmy * fy * iz - gj12 * fy * iz2
+    # j02 = -fx jx / z^2: unclamped jx = x gives d/dx and 2 fx x / z^3 d/dz; clamped
+    # jx = +-lim z gives no x term and fx jx / z^3 d/dz (gsplat persp_proj_vjp).
+    jx, jy = F["jx"], F["jy"]
+    ux, uy = jx == x, jy == y
+    gx = gmx * fx * iz - np.where(ux, gj02 * fx * iz2, ft(0))
+    gy = gmy * fy * iz - np.where(uy, gj12 * fy * iz2, ft(0))
     gz = (-(gmx * fx * x + gmy * fy * y + gj00 * fx + gj11 * fy) * iz2
-          + ft(2) * (gj02 * fx * x + gj12 * fy * y) * iz2 * iz)
+          + (np.where(ux, ft(2), ft(1)) * gj02 * fx * jx
+             + np.where(uy, ft(2), ft(1)) * gj12 * fy * jy) * iz2 * iz)
     v = F["valid"]
     gx, gy, gz = (np.where(v, a, ft(0)) for a in (gx, gy, gz))
     gmeans = np.stack([R[0, k] * gx + R[1, k] * gy + R[2, k] * gz for k in range(3)], 1)

@@ -660,6 +660,38 @@ sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
 // 2 ln 2 / 2^14: t's slope in the top 23 bits of the opacity (step 1).
 constexpr float PC_K = 1.3862944f / 16384.0f;
 
+#ifdef PFWC_JCLAMP
+#ifndef PFWC_FUSE_PROJ
+#error "PFWC_JCLAMP is only implemented on the fused projection (GSPLAT_TT_PFWC_ACQ_FUSE bit 0)"
+#endif
+// 3DGS/gsplat Jacobian clamp (#786, src/gsplat_cpu/types.h jclamp): in the fused
+// projection acquire, after run_mean has read them, tx (tile 3) and ty (tile 4) are
+// clamped to +-lim tz (tz in tile 5; lim = 1.3 W / (2 fx), args 67 / 68) before they
+// are packed to CB_TMP_TX / TY, whose only readers are the Jacobian terms. means_2d
+// keep the unclamped mean. SFPSWAP min / max is exact; tz lim is one SFPMUL.
+__attribute__((noinline)) void pfwc_jclamp_tile(uint32_t limx_bits, uint32_t limy_bits) {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+#pragma GCC unroll 0
+    for (uint32_t v = 0; v < 32; v++) {
+        vFloat tz = dst_reg[5 * 32];
+        vFloat l = tz * Converter::as_float(limx_bits);
+        vFloat lo = -l;
+        vFloat t = dst_reg[3 * 32];
+        vec_min_max(lo, t);  // t = max(t, -l)
+        vec_min_max(t, l);   // t = min(t, l)
+        dst_reg[3 * 32] = t;
+        l = tz * Converter::as_float(limy_bits);
+        lo = -l;
+        t = dst_reg[4 * 32];
+        vec_min_max(lo, t);
+        vec_min_max(t, l);
+        dst_reg[4 * 32] = t;
+        dst_reg++;
+    }
+}
+#endif
+
 __attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim_bits) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
@@ -750,6 +782,10 @@ void kernel_main() {
     const uint32_t precull_c0_bits = get_arg_val<uint32_t>(65);
     const uint32_t precull_rlim_bits = get_arg_val<uint32_t>(66);
 #endif
+#ifdef PFWC_JCLAMP
+    const uint32_t jclamp_x_bits = get_arg_val<uint32_t>(67);
+    const uint32_t jclamp_y_bits = get_arg_val<uint32_t>(68);
+#endif
 
     init_sfpu(CB_MX, CB_M2X);
     add_binary_tile_init();
@@ -809,6 +845,11 @@ void kernel_main() {
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             MATH((pfwc_fuse::run_mean(fx, cx, fy, cy)));
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#ifdef PFWC_JCLAMP
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_jclamp_tile(jclamp_x_bits, jclamp_y_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#endif
             tile_regs_commit();
             tile_regs_wait();
             emit_scratch(3, CB_TMP_TX);
