@@ -118,6 +118,10 @@ int main(int argc, char** argv) {
     if (argc < 3) { std::fprintf(stderr, "usage: %s <dir> <out_dir> [n_cores] [reps] [grads]\n", argv[0]); return 2; }
     const std::string d1 = std::string(argv[1]) + "/t1", d2 = std::string(argv[1]) + "/t2", odir = argv[2];
     const std::string j1 = slurp(d1 + "/meta.json"), j2 = slurp(d2 + "/meta.json");
+    if (std::ifstream(d1 + "/dead.u32").good()) {  // #802 truncated T1 prep: its dead slots need a pre-write
+        std::fprintf(stderr, "t1/ is a GSPLAT_TT_T1_STOP prep (dead.u32): not supported by train_step yet\n");
+        return 2;
+    }
     const uint32_t n_tiles = meta_int(j1, "n_tiles"), n_recs = meta_int(j1, "n_recs"), n_slots = meta_int(j1, "n_slots");
     const uint32_t ng = meta_int(j2, "n_groups"), nsp = meta_int(j2, "n_slot_pages"), nb = ng / GPB;
     if (meta_int(j2, "n_slots") != n_slots || uint64_t(nsp) * SLOTS_PER_PAGE < n_slots) {

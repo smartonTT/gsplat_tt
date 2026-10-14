@@ -277,6 +277,9 @@ def write(p: dict, out: str) -> None:
             "H": p["H"], "W": p["W"], "alpha_max_bits": fbits(cfg.alpha_max),
             "alpha_min_bits": fbits(cfg.alpha_min), "t_min_bits": fbits(cfg.t_min),
             "n_vectors": int(sum(bin(int(m)).count("1") for m in p["recs"][:, 12]))}
+    if "dead_slots" in p:   # #802 truncated prep (gsplat.t1_stop)
+        from gsplat.t1_stop import write_dead
+        write_dead(p, out)
     with open(os.path.join(out, "meta.json"), "w") as f:
         json.dump(meta, f, indent=1)
 
@@ -554,8 +557,12 @@ def main(argv=None) -> int:
             image = np.fromfile(args.image, f32).reshape(image.shape)
         p = prep(d["means2d"], d["conic"], d["opacity"], d["colors"], d["order"], d["valid"],
                  image, d["dL_dimage"], cfg)
+        from gsplat import t1_stop
+        if t1_stop.enabled():   # #802 GSPLAT_TT_T1_STOP=1: each tile only up to its last contributor
+            p = t1_stop.truncate(p, t1_stop.tile_stops(p))
         write(p, args.out)
-        print(json.dumps({"n_tiles": len(p["tiles"]), "n_recs": len(p["recs"]), "n_slots": p["n_slots"]}))
+        print(json.dumps({"n_tiles": len(p["tiles"]), "n_recs": len(p["recs"]), "n_slots": p["n_slots"],
+                          **({"stop_kept": p["stop_kept"]} if "stop_kept" in p else {})}))
         if args.emulate:
             print(json.dumps({"emulate_vs_ref": compare_slots(emulate(p), ref_slots(d, cfg))}))
         return 0

@@ -21,6 +21,7 @@ import numpy as np
 
 from gsplat import t1_balance as bal
 from gsplat.blend_backward_dev import N_PLANES, REC_WORDS
+from gsplat.t1_stop import read_dead, write_dead
 
 
 def read_prep(d: str) -> dict:
@@ -32,11 +33,12 @@ def read_prep(d: str) -> dict:
             "tiles": np.fromfile(os.path.join(d, "tiles.u32"), np.uint32).reshape(nt, 16)[:, :4],
             "recs": np.fromfile(os.path.join(d, "recs.u32"), np.uint32).reshape(nr, REC_WORDS),
             "planes": np.fromfile(os.path.join(d, "planes.f32"), np.float32).reshape(nt, N_PLANES * 1024),
-            "ramps": np.fromfile(os.path.join(d, "ramps.f32"), np.float32)}
+            "ramps": np.fromfile(os.path.join(d, "ramps.f32"), np.float32), **read_dead(d)}
 
 
 def write_prep(q: dict, out: str) -> dict:
-    """blend_backward_dev.write() layout from the source meta, plus cores.u32 and merge.i64."""
+    """blend_backward_dev.write() layout from the source meta, plus cores.u32 and merge.i64 (a
+    plan) and dead.u32 / dead.f32 (a truncated prep, gsplat.t1_stop)."""
     os.makedirs(out, exist_ok=True)
     t = np.zeros((len(q["tiles"]), 16), np.uint32)
     t[:, :4] = q["tiles"]
@@ -44,10 +46,13 @@ def write_prep(q: dict, out: str) -> dict:
     q["recs"].astype(np.uint32).tofile(os.path.join(out, "recs.u32"))
     q["planes"].astype(np.float32).tofile(os.path.join(out, "planes.f32"))
     q["ramps"].astype(np.float32).tofile(os.path.join(out, "ramps.f32"))
-    q["core_beg"].astype(np.uint32).tofile(os.path.join(out, "cores.u32"))
-    np.stack([q["merge_dst"], q["merge_rank"]], 1).astype(np.int64).tofile(os.path.join(out, "merge.i64"))
+    if "core_beg" in q:
+        q["core_beg"].astype(np.uint32).tofile(os.path.join(out, "cores.u32"))
+        np.stack([q["merge_dst"], q["merge_rank"]], 1).astype(np.int64).tofile(os.path.join(out, "merge.i64"))
+    if "dead_slots" in q:   # #802 truncated prep: slots of the pairs past each tile's stop
+        write_dead(q, out)
     meta = dict(q["meta"], n_tiles=len(q["tiles"]), n_recs=len(q["recs"]), n_slots=int(q["n_slots"]),
-                n_slots_base=int(q["n_slots_base"]),
+                n_slots_base=int(q.get("n_slots_base", q["n_slots"])),
                 n_vectors=int(bal.popcount32(q["recs"][:, 12]).sum()))
     with open(os.path.join(out, "meta.json"), "w") as f:
         json.dump(meta, f, indent=1)

@@ -14,6 +14,10 @@
 // #785: a prep dir with cores.u32 (python3 -m gsplat.t1_balance_dev plan: LPT row order by body
 // count, optionally split rows) gives each core its rows by those boundaries in place of the
 // contiguous split; BWD_BALANCE=0 ignores it. Its cores.u32 length - 1 sets the core count.
+// #802: a truncated prep dir (GSPLAT_TT_T1_STOP=1 prep or python3 -m gsplat.t1_stop: each tile's
+// rec_count cut to its last contributor, so the kernels run each tile only up to it) carries
+// dead.u32 / dead.f32, the slots of the dropped pairs and the 16-float pages the kernel would have
+// written (finish of zero sums). They are written into the slot buffer once, before the runs.
 // Outputs (slots.f32, timing.json, stats.json) go to out_dir (default prep_dir).
 #include <algorithm>
 #include <chrono>
@@ -139,6 +143,19 @@ int main(int argc, char** argv) {
     distributed::EnqueueWriteMeshBuffer(*cq, b_recs, recs, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_planes, planes, true);
     distributed::EnqueueWriteMeshBuffer(*cq, b_ramps, ramps, true);
+    uint32_t n_dead = 0;
+    if (std::ifstream(dir + "/dead.u32").good()) {
+        const auto dead = load<uint32_t>(dir + "/dead.u32");
+        const auto dval = load<float>(dir + "/dead.f32");
+        if (dval.size() != dead.size() * 16) { std::fprintf(stderr, "dead.f32 does not match dead.u32\n"); return 2; }
+        std::vector<float> init(size_t(n_slots) * 16, 0.0f);
+        for (size_t i = 0; i < dead.size(); i++) {
+            if (dead[i] >= n_slots) { std::fprintf(stderr, "dead slot %u >= n_slots\n", dead[i]); return 2; }
+            std::memcpy(&init[size_t(dead[i]) * 16], &dval[i * 16], 64);
+        }
+        distributed::EnqueueWriteMeshBuffer(*cq, b_out, init, true);
+        n_dead = uint32_t(dead.size());
+    }
 
     Program prog = CreateProgram();
     const CoreRangeSet cores(CoreRange({0, 0}, {grid.x - 1, grid.y - 1}));
@@ -228,9 +245,9 @@ int main(int argc, char** argv) {
     std::snprintf(buf, sizeof buf,
                   "{\"n_tiles\": %u, \"n_recs\": %u, \"n_slots\": %u, \"cores\": %u, \"max_core_recs\": %u, "
                   "\"device_ms_first\": %.4f, \"device_ms_min\": %.4f, \"device_ms_med\": %.4f, "
-                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"prestage\": %d, \"balance\": %d, \"version\": \"v2\"}",
+                  "\"host_reduce_ms\": %.4f, \"reps\": %zu, \"stats\": %d, \"prestage\": %d, \"balance\": %d, \"dead\": %u, \"version\": \"v2\"}",
                   n_tiles, n_recs, n_slots, want, max_core_recs, ms[0], s[0], med, host_ms, ms.size(), int(stats),
-                  int(prestage), int(!plan_beg.empty()));
+                  int(prestage), int(!plan_beg.empty()), n_dead);
     std::ofstream(odir + "/timing.json") << buf << "\n";
     {
         std::string all = "[";
