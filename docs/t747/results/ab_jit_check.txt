@@ -1,0 +1,4 @@
+A/A blend_bwd_compute: same hashes ['11722400452286732710'] in base and cand
+A/A all 9 kernels identical between base and cand
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+rc=1
