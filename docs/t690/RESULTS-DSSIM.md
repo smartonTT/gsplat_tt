@@ -447,3 +447,12 @@ Verdict: lossless and repeatable, but 0.064 ms/view is under the task's ~0.1 ms/
 the defaults stay K=1, VF=0 (the t743 path). Both levers stay in the code as opt-in env flags.
 Of the ~0.25 ms/view bound (0.70 ms compute without reads vs 0.954 ms), these two take 0.064;
 the rest is the per-tile x / y / constant reads, not the halo and not the Dst<->CB copies.
+
+## t758: defaults flipped to K=4 + VF=1
+
+`loss_bench.cpp` now defaults to `LOSS_SSIM_K=4` and `LOSS_SSIM_VF=1`. Reason: the #753 A/B (bh-49
+p150, syn 1237x822, 50 iters, 4 alternated rounds, run 2125) measured 0.891 ms/view against 0.955
+for K=1 (-0.064 ms/view, round spread <=0.003 ms), with grad md5 identical in all 16 runs, loss
+0.149902639 in every arm, T0 oracle 6/6 (hero included) and JIT-HASH OK. Lossless, so taken although
+under the ~0.1 ms/view bar. Explicit env still overrides: `LOSS_SSIM_K=1 LOSS_SSIM_VF=0` gives the
+t743 path. The trainer path does not read these flags (only `loss_bench.cpp` does).

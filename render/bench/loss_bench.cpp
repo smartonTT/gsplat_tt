@@ -426,14 +426,14 @@ int run_ssim(distributed::MeshDevice* dev, const std::string& in, const std::str
     // #743 LOSS_SSIM_CBD: reader input CBs hold this many rows / output tiles (default 2).
     const char* cbe = std::getenv("LOSS_SSIM_CBD");
     const uint32_t cbd = cbe && cbe[0] ? uint32_t(std::max(2, std::atoi(cbe))) : 2u;
-    // #753 LOSS_SSIM_K (default 1): each core walks strips of K adjacent tile columns (shared
+    // #753 LOSS_SSIM_K (default 4, #758): each core walks strips of K adjacent tile columns (shared
     // neighbour tiles in the H pass); work is split in units of one tile row of a K-column group.
     const char* ke = std::getenv("LOSS_SSIM_K");
-    const uint32_t K = ke && ke[0] ? uint32_t(std::clamp(std::atoi(ke), 1, 8)) : 1u;
+    const uint32_t K = ke && ke[0] ? uint32_t(std::clamp(std::atoi(ke), 1, 8)) : 4u;
     defs["SSIM_K"] = std::to_string(K);
-    // #753 LOSS_SSIM_VF=1: each V pass in one dest acquire (no CB_M / CB_F / CB_PQ round trips).
+    // #753 LOSS_SSIM_VF (default 1, #758; 0 = off): each V pass in one dest acquire (no CB_M / CB_F / CB_PQ round trips).
     const char* vfe = std::getenv("LOSS_SSIM_VF");
-    const bool vf = vfe && vfe[0] && vfe[0] != '0';
+    const bool vf = !(vfe && vfe[0] == '0');
     if (vf) defs["SSIM_VF"] = "1";
     const uint32_t ng = (nw + K - 1) / K, NU = 3 * ng * nh;
     std::vector<uint32_t> ub(ncores + 1, NU);  // core c: units [ub[c], ub[c + 1]), split by tile count
