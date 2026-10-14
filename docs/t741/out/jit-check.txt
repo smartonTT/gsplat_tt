@@ -1,0 +1,21 @@
+== on vs aa
+A/A reader_alpha_blend_mb_devcull: same hashes ['15630090622801204332'] in on and aa
+A/A sort_bin_onelaunch: same hashes ['10202092990400216591', '8988695824088243788'] in on and aa
+A/A sort_ol_town_compute: same hashes ['10009157995612364993'] in on and aa
+A/A all 13 kernels identical between on and aa
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+== on vs rec32off
+A/A reader_alpha_blend_mb_devcull: same hashes ['15630090622801204332'] in on and rec32off
+OK sort_bin_onelaunch: on=['10202092990400216591', '8988695824088243788'] rec32off=['1876855183475332322', '3105946314887653521']
+OK sort_ol_town_compute: on=['10009157995612364993'] rec32off=['1316698357205039194']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+== on vs side
+OK reader_alpha_blend_mb_devcull: on=['15630090622801204332'] side=['13965003442037388138']
+OK sort_bin_onelaunch: on=['10202092990400216591', '8988695824088243788'] side=['16331367643990102127', '1687466318865629852']
+OK sort_ol_town_compute: on=['10009157995612364993'] side=['2768892842396219952']
+JIT-HASH OK
+== rec32off vs side
+OK reader_alpha_blend_mb_devcull: rec32off=['15630090622801204332'] side=['13965003442037388138']
+OK sort_bin_onelaunch: rec32off=['1876855183475332322', '3105946314887653521'] side=['16331367643990102127', '1687466318865629852']
+OK sort_ol_town_compute: rec32off=['1316698357205039194'] side=['2768892842396219952']
+JIT-HASH OK

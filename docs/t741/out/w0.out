@@ -1,0 +1,57 @@
+[ttw 2026-10-14T09:01:57-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-14T09:01:57-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-14T09:01:57-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-14T09:01:57-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-14T09:01:57-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-14T09:01:57-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-14T09:01:57-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-14T09:01:57-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-14T09:01:57-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-14T09:01:57-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-14T09:01:57-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-14T09:01:57-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=d5d30d31 bin=22c179f4f97f1693 t741 d5d30d31 opc side bucket A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t741-w0  timeout=500s  worry=600s  ts=2026-10-14T09:01:57-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t741-remote.sh 0 on aa rec32off side
+-----------------------------------------
+=== r0-on d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 --back-to-back 16:02:00 load=0.63
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-on
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.704 fps=68.01 ms_frame_median=14.708 pass_ms_frame=14.710,14.714,14.711,14.697,14.698,14.713,14.715,14.731,14.716,14.699,14.696,14.707,14.709,14.725,14.695,14.693,14.695,14.719,14.697,14.634 check_pass_ms_frame=14.746 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.704 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.704
+TTW_TIMING b2b_ms_frame_median=14.708
+=== r0-aa d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 --back-to-back 16:02:15 load=0.80
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-aa
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.696 fps=68.04 ms_frame_median=14.697 pass_ms_frame=14.697,14.696,14.683,14.688,14.690,14.702,14.693,14.701,14.702,14.698,14.690,14.711,14.721,14.697,14.707,14.697,14.691,14.713,14.691,14.660 check_pass_ms_frame=14.742 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.696 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.696
+TTW_TIMING b2b_ms_frame_median=14.697
+=== r0-rec32off d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 --back-to-back 16:02:39 load=0.94
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-rec32off
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.908 fps=67.08 ms_frame_median=14.912 pass_ms_frame=14.900,14.902,14.907,14.905,14.912,14.919,14.911,14.912,14.912,14.901,14.915,14.910,14.912,14.924,14.919,14.912,14.909,14.916,14.917,14.856 check_pass_ms_frame=14.957 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.908 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.908
+TTW_TIMING b2b_ms_frame_median=14.912
+=== r0-side d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 --back-to-back 16:02:54 load=1.03
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-side
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=698752 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=14.924 fps=67.01 ms_frame_median=14.927 pass_ms_frame=14.940,14.932,14.926,14.929,14.937,14.930,14.927,14.939,14.936,14.916,14.913,14.933,14.930,14.926,14.923,14.912,14.926,14.909,14.917,14.872 check_pass_ms_frame=14.975 raw_md5=0c8d83a1 gap_ms=0.00 render_ms_frame=14.924 xview_hits=659 xview_misses=0 identical_across_passes=yes out=
+TTW_TIMING b2b_ms_frame=14.924
+TTW_TIMING b2b_ms_frame_median=14.927
+=== done 0 16:03:10
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t745/tmp/ttw-state/logs/t741-w0-20261014-090157.log

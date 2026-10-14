@@ -49,6 +49,17 @@ step() {  # name timeout round arms...
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
+# PHASE=diag (after the first A/B): does the side read replace the gather? GSPLAT_TT_T727_DIAG=2
+# drops the per-record gather (fallback), so sided2 keeps md5 3fada021 only if every subchunk
+# took the side read; r32d2 is the control (gather dropped, no side: output wrong) and the bound.
+if [ "${PHASE:-}" = diag ]; then
+  step d0 400 0 dumpsided2 dumpr32d2
+  $SSH "$H" "cd $T/tmp/t741 && md5sum train-v0-*.bin > dump-md5.txt; cat dump-md5.txt"
+  step d1 500 1 side sided2 rec32off r32d2
+  step d2 500 2 r32d2 rec32off sided2 side
+  scp -q -o BatchMode=yes "$H:$T/tmp/t741/*.*" "$O/" || rc=4
+  echo "=== drive t741 diag done rc=$rc $(TZ=America/Los_Angeles date)"; exit $rc
+fi
 # Dumps first: they compile the side kernels; stop here if they fail.
 step u0 400 0 dump dumpr32 dumpside
 $SSH "$H" "cd $T/tmp/t741 && md5sum train-v0-on.bin train-v0-r32.bin train-v0-side.bin > dump-md5.txt; cat dump-md5.txt"

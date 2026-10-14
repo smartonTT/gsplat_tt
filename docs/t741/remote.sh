@@ -30,6 +30,10 @@ for arm in "$@"; do
     aa) env=(GSPLAT_TT_BLEND_TRAIN=1); args=(--back-to-back); c=aa ;;
     rec32off) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0); args=(--back-to-back); c=rec32off ;;
     side) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1); args=(--back-to-back); c=side ;;
+    sided2) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_T727_DIAG=2); args=(--back-to-back); c=sided2 ;;
+    r32d2) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_T727_DIAG=2); args=(--back-to-back); c=r32d2 ;;
+    dumpsided2) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_T727_DIAG=2 GSPLAT_TT_BLEND_TRAIN_DUMP=$S/train-v0-sided2.bin); args=(--dump-views t741-dumpsided2 --view-range 0:1); c=sided2 ;;
+    dumpr32d2) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_T727_DIAG=2 GSPLAT_TT_BLEND_TRAIN_DUMP=$S/train-v0-r32d2.bin); args=(--dump-views t741-dumpr32d2 --view-range 0:1); c=r32d2 ;;
     dump) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=$S/train-v0-on.bin); args=(--dump-views t741-dump --view-range 0:1); c=on ;;
     dumpr32) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_BLEND_TRAIN_DUMP=$S/train-v0-r32.bin); args=(--dump-views t741-dumpr32 --view-range 0:1); c=rec32off ;;
     dumpside) env=(GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_BLEND_TRAIN_DUMP=$S/train-v0-side.bin); args=(--dump-views t741-dumpside --view-range 0:1); c=side ;;

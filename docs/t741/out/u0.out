@@ -1,0 +1,39 @@
+================ BUILD ID ================
+  cpp : #124 sha=d5d30d31 bin=22c179f4f97f1693 t741 d5d30d31 opc side bucket A/B (bh-49)
+  data: # sha= 
+=========================================
+host=bh-49  tag=t741-u0  timeout=400s  worry=600s  ts=2026-10-14T09:00:27-0700
+cmd: T=/localdev/smarton/gstt2-sync MESH_DEVICE=P150 RUN_TIMEOUT=240 bash /localdev/smarton/gstt2-sync/tmp/t741-remote.sh 0 dump dumpr32 dumpside
+-----------------------------------------
+=== r0-dump d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t741/train-v0-on.bin --dump-views t741-dump --view-range 0:1 16:00:30 load=0.77
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-on
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.4 p50_ms=31.4 min_ms=31.4 max_ms=31.4 n_views=1 warmup_s=9.8 out=/localdev/smarton/gstt2-sync/tmp/t741-r0-dump
+TTW_TIMING ms_view=31.445
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:00 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-on.bin
+=== r0-dumpr32 d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t741/train-v0-r32.bin --dump-views t741-dumpr32 --view-range 0:1 16:00:42 load=0.83
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-rec32off
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.0 p50_ms=32.0 min_ms=32.0 max_ms=32.0 n_views=1 warmup_s=9.7 out=/localdev/smarton/gstt2-sync/tmp/t741-r0-dumpr32
+TTW_TIMING ms_view=31.960
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:00 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-on.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:00 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-r32.bin
+=== r0-dumpside d5d30d31 GSPLAT_TT_BLEND_TRAIN=1 GSPLAT_TT_PFWC_REC32=0 GSPLAT_TT_TRAIN_OPC_SIDE=1 GSPLAT_TT_BLEND_TRAIN_DUMP=/localdev/smarton/gstt2-sync/tmp/t741/train-v0-side.bin --dump-views t741-dumpside --view-range 0:1 16:00:53 load=1.00
+run rc=0
+[eth] card p150a: eth dispatch, overlay /localdev/smarton/gstt2-sync/tmp/ttm-eth12, JIT cache /localdev/smarton/gstt2-sync/tmp/ttm-eth12-cache-t741-side
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=698752 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.6 p50_ms=31.6 min_ms=31.6 max_ms=31.6 n_views=1 warmup_s=9.7 out=/localdev/smarton/gstt2-sync/tmp/t741-r0-dumpside
+TTW_TIMING ms_view=31.615
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:00 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-on.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:00 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-r32.bin
+-rw-rw-r-- 1 smarton smarton 16777216 Oct 14 16:01 /localdev/smarton/gstt2-sync/tmp/t741/train-v0-side.bin
+=== done 0 16:01:05
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t745/tmp/ttw-state/logs/t741-u0-20261014-090026.log

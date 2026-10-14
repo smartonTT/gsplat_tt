@@ -1,0 +1,5 @@
+[sync_remote] d5d30d316ba0b4743ff09abbc1ba699a2026a25c from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t745: 1156 files, 65044852 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 26 of 1158 files, 3405875 bytes (tar)
+[sync_remote] sha=d5d30d316ba0b4743ff09abbc1ba699a2026a25c so_md5=7f0908b0fd3121121c534d7cf28a2855 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
