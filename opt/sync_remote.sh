@@ -259,7 +259,7 @@ if [ "$(cd "$BASE" 2>/dev/null && pwd -P)" != "$(pwd -P)" ]; then
   done
 fi
 so_md5() { md5sum render/render_clean*.so 2>/dev/null | awk '{print $1}' | sort | tr '\n' ' '; }
-src_md5() { find render -path render/build-tt -prune -o -path '*/kernels' -prune -o \
+src_md5() { find render -path render/build-tt -prune -o -path render/bench -prune -o -path '*/kernels' -prune -o \
   -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.cc' -o -name CMakeLists.txt \) \
   -print | LC_ALL=C sort | xargs md5sum | md5sum | awk '{print $1}'; }
 SRC_NOW=$(src_md5); SRC_OLD=$(cat .host_src.md5 2>/dev/null || true); SO_OLD=$(so_md5)

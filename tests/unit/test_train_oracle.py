@@ -225,3 +225,20 @@ def test_dumps_are_current(deg):
             np.testing.assert_allclose(h, w, rtol=1e-9, atol=1e-12, err_msg=k)
         else:
             np.testing.assert_array_equal(h, w, err_msg=k)
+
+
+def test_training_colour_clamps_at_zero_only():
+    # Decision 2026-10-14 (#763): the trainer follows 3DGS/gsplat, colour = max(SH + 0.5, 0).
+    # A colour above 1 is not clamped and its SH0 gradient flows; one below 0 is clamped.
+    cfg, cam, scene, target, params = _case(0)
+    p = {k: v.clone() for k, v in params.items()}
+    p["sh"][0, 0] = torch.tensor([3.0, 0.5, -3.0], dtype=p["sh"].dtype)
+    out = o.render(p, cam, cfg)
+    raw = o.SH_C0 * p["sh"][0, 0] + 0.5
+    assert raw[0] > 1 and raw[2] < 0
+    torch.testing.assert_close(out.colors[0], torch.stack([raw[0], raw[1], raw.new_zeros(())]))
+    assert bool(out.frozen.color_hi[0, 0]) and bool(out.frozen.color_lo[0, 2])
+    _, grads, g2d, _ = o.loss_and_grads(p, target, cam, cfg)
+    if g2d["colors"][0, 0] != 0:
+        assert grads["sh"][0, 0, 0] != 0
+    assert grads["sh"][0, 0, 2] == 0

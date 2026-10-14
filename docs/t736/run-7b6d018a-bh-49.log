@@ -1,0 +1,73 @@
+SSH_PREFLIGHT=ok
+=== t736 HEAD=7b6d018a484d014de8e454f916610a42dfd67906 to bh-49:/localdev/smarton/gstt2-sync mesh=P150 Wed Oct 14 04:57:59 PDT 2026
+bike psnr=23.9 dB
+prep bike_top (256, 384, 3)
+prep bike_mid (256, 384, 3)
+prep hero (822, 1237, 3)
+sync rc=0
+[sync_remote] 7b6d018a484d014de8e454f916610a42dfd67906 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t736: 1161 files, 65094229 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 3 of 1163 files, 6047 bytes (tar)
+[sync_remote] sha=7b6d018a484d014de8e454f916610a42dfd67906 so_md5=3f19c57ec21c809ca4c673ace30abebd 
+[sync_remote] scene bicycle.ply ok (3745b7a650432cde504bd1ae7d14b130)
+prep dump64 (64, 64, 3)
+prep syncrop (256, 384, 3)
+prep syn (822, 1237, 3)
+[ORACLE] hero skipped: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t707/tmp/t707/hero.npz or /Users/smarton/dev/gsplat_tt/scenes/mipnerf360/bicycle/images_4/_DSC8679.JPG missing
+prep syn6 planes=(18, 832, 1248)
+build+prep rc=0
+upload rc=0
+check-run dump64 rc=0
+[LOSS] mode=ssim H=64 W=64 tiles=12 cores=110 loss=0.0499506441 b2b_ms=0.0683 fwd_b2b_ms=0.0349 launch_ms_med=0.0760 launch_ms_min=0.0759 iters=5
+check-run syncrop rc=0
+[LOSS] mode=ssim H=256 W=384 tiles=288 cores=110 loss=0.112963321 b2b_ms=0.2040 fwd_b2b_ms=0.1023 launch_ms_med=0.2130 launch_ms_min=0.2101 iters=5
+check-run bike_top rc=0
+[LOSS] mode=ssim H=256 W=384 tiles=288 cores=110 loss=0.0763403153 b2b_ms=0.2038 fwd_b2b_ms=0.1021 launch_ms_med=0.2111 launch_ms_min=0.2094 iters=5
+check-run bike_mid rc=0
+[LOSS] mode=ssim H=256 W=384 tiles=288 cores=110 loss=0.124650145 b2b_ms=0.2040 fwd_b2b_ms=0.1019 launch_ms_med=0.2117 launch_ms_min=0.2097 iters=5
+check-run hero rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.295792529 b2b_ms=1.3140 fwd_b2b_ms=0.6687 launch_ms_med=1.3182 launch_ms_min=1.3084 iters=5
+check-run syn rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3615 fwd_b2b_ms=0.6814 launch_ms_med=1.3395 launch_ms_min=1.3304 iters=5
+check runs rc=0
+round 1 ssim rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3110 fwd_b2b_ms=0.6636 launch_ms_med=1.3155 launch_ms_min=1.3013 iters=50
+round 1 sfilt-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9541 launch_ms_med=0.9688 launch_ms_min=0.9577 iters=50
+round 2 ssim rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3100 fwd_b2b_ms=0.6650 launch_ms_med=1.3320 launch_ms_min=1.3082 iters=50
+round 2 sfilt-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9565 launch_ms_med=0.9689 launch_ms_min=0.9585 iters=50
+round 3 ssim rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3106 fwd_b2b_ms=0.6659 launch_ms_med=1.3414 launch_ms_min=1.3188 iters=50
+round 3 sfilt-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9530 launch_ms_med=0.9703 launch_ms_min=0.9583 iters=50
+round 4 ssim rc=0
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3078 fwd_b2b_ms=0.6667 launch_ms_med=1.3418 launch_ms_min=1.3197 iters=50
+round 4 sfilt-syn6 rc=0
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9537 launch_ms_med=0.9705 launch_ms_min=0.9573 iters=50
+timing rc=0
+pull rc=0
+remote cleanup rc=0
+MISSING ssim_fwd_compute: ssim=['14767535707262322691', '17644454038269698722', '5772014027101068877'] sfilt=[]
+MISSING ssim_bwd_compute: ssim=['2102512295792033469', '8232039648161634805', '8633870030588895861'] sfilt=[]
+MISSING sfilt_compute: ssim=[] sfilt=['16813469214164508401']
+JIT-HASH FAIL: gate is A/A for the edited kernel(s)
+ab_jit_check rc=1 (1 expected: each compute kernel exists in one arm only)
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3110 fwd_b2b_ms=0.6636 launch_ms_med=1.3155 launch_ms_min=1.3013 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3100 fwd_b2b_ms=0.6650 launch_ms_med=1.3320 launch_ms_min=1.3082 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3106 fwd_b2b_ms=0.6659 launch_ms_med=1.3414 launch_ms_min=1.3188 iters=50
+[LOSS] mode=ssim H=822 W=1237 tiles=3042 cores=110 loss=0.149902639 b2b_ms=1.3078 fwd_b2b_ms=0.6667 launch_ms_med=1.3418 launch_ms_min=1.3197 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9541 launch_ms_med=0.9688 launch_ms_min=0.9577 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9565 launch_ms_med=0.9689 launch_ms_min=0.9585 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9530 launch_ms_med=0.9703 launch_ms_min=0.9583 iters=50
+[LOSS] mode=sfilt P=18 Hp=832 Wp=1248 tiles=18252 strips=702 cores=110 b2b_ms=0.9537 launch_ms_med=0.9705 launch_ms_min=0.9573 iters=50
+[ORACLE] device=ssim case=dump64 loss_err=-6.19e-09 grad_l2rel=1.97e-07 maxabs_rel=4.76e-07 finite=True PASS
+[ORACLE] device=ssim case=syncrop loss_err=-4.61e-08 grad_l2rel=8.49e-06 maxabs_rel=2.41e-05 finite=True PASS
+[ORACLE] device=ssim case=bike_top loss_err=+1.73e-08 grad_l2rel=1.15e-05 maxabs_rel=4.67e-05 finite=True PASS
+[ORACLE] device=ssim case=bike_mid loss_err=-6.29e-09 grad_l2rel=2.11e-06 maxabs_rel=1.42e-05 finite=True PASS
+[ORACLE] device=ssim case=hero loss_err=+5.47e-09 grad_l2rel=1.80e-06 maxabs_rel=8.82e-06 finite=True PASS
+[ORACLE] device=ssim case=syn loss_err=-6.02e-08 grad_l2rel=7.52e-06 maxabs_rel=2.91e-05 finite=True PASS
+[ORACLE] device overall PASS cases=6
+check rc=0
+=== done Wed Oct 14 05:02:26 PDT 2026

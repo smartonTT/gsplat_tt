@@ -1,0 +1,5 @@
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/2] Building CXX object CMakeFiles/t2_bench.dir/t2_bench.cpp.o
+[2/2] Linking CXX executable t2_bench

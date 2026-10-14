@@ -1,0 +1,7 @@
+[ORACLE] model=sfilt case=dump64 (64, 64, 3) loss_err=+9.67e-10 grad_l2rel=2.22e-07 PASS
+[ORACLE] model=sfilt case=syncrop (256, 384, 3) loss_err=-4.77e-08 grad_l2rel=8.11e-06 PASS
+bike psnr=23.9 dB
+[ORACLE] model=sfilt case=bike_top (256, 384, 3) loss_err=+1.85e-08 grad_l2rel=1.18e-05 PASS
+[ORACLE] model=sfilt case=bike_mid (256, 384, 3) loss_err=-4.96e-09 grad_l2rel=2.17e-06 PASS
+[ORACLE] model=sfilt case=hero (822, 1237, 3) loss_err=+8.32e-10 grad_l2rel=1.84e-06 PASS
+[ORACLE] model overall PASS
