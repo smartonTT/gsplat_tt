@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=33e38f1f bin=da1a9401520fb69f t664 33e38f1f BLEND_DWALK A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t664-lat  timeout=400s  worry=600s  ts=2026-10-13T19:53:45-0700
 cmd: T=/localdev/smarton/gstt2-t513 RUN_TIMEOUT=200 bash /localdev/smarton/gstt2-t513/docs/blend-dwalk-t664/remote.sh 5 lat-base lat-new
