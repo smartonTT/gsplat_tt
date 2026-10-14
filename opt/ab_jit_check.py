@@ -15,6 +15,10 @@ Also compares the md5 of each kernel's trisc/brisc/ncrisc ELFs per arm (director
 arms only). The tt-metal hash ignores source text, so an in-place source swap with
 a per-arm cache can keep the hash but change the ELFs: that passes ("OK (ELF)").
 
+--allow-kernel-swap: for arms that run different kernels (e.g. fused matblend_compute
+vs alpha_blend_compute_mb). A --kernel present in one arm only counts as swapped; the
+kernels both arms share are compared by hash and the differing ones listed.
+
 Exit 0: every --kernel differs between the arms. 1: some --kernel is identical
 or missing (the gate must fail or be flagged A/A). 2: usage error.
 """
@@ -66,6 +70,33 @@ def elf_md5s(src):
     return out
 
 
+def check_swap(arms, kernels):
+    """Kernel-swap mode: arms may run different kernels. Each --kernel must be
+    present in at least one arm and differ between them (one-sided = swapped
+    in/out). Kernels both arms share are compared by hash and the differing ones
+    listed. Return (ok, report lines)."""
+    lines, ok = [], True
+    (la, a), (lb, b) = arms
+    for k in kernels:
+        ha, hb = a.get(k, set()), b.get(k, set())
+        if not ha and not hb:
+            ok = False
+            lines.append(f"MISSING {k}: in neither {la} nor {lb}")
+        elif ha == hb:
+            ok = False
+            lines.append(f"A/A {k}: same hashes {sorted(ha)} in {la} and {lb}")
+        elif not ha or not hb:
+            side = lb if ha == set() else la
+            lines.append(f"OK (swap) {k}: only in {side}")
+        else:
+            lines.append(f"OK {k}: {la}={sorted(ha)} {lb}={sorted(hb)}")
+    shared = sorted(set(a) & set(b))
+    diff = [n for n in shared if a[n] != b[n]]
+    lines.append(f"shared kernels: {len(shared)}, identical: {len(shared) - len(diff)}, differ: {diff}")
+    lines.append(f"only in {la}: {sorted(set(a) - set(b))}; only in {lb}: {sorted(set(b) - set(a))}")
+    return ok, lines
+
+
 def check(arms, kernels, elfs=None):
     """Return (ok, report lines). arms: list of (label, {name: hashes}).
     elfs: optional [elf_md5s(arm a), elf_md5s(arm b)]."""
@@ -96,6 +127,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--arm", action="append", required=True, help="label=path")
     ap.add_argument("--kernel", action="append", required=True)
+    ap.add_argument("--allow-kernel-swap", action="store_true",
+                    help="arms may run different kernels: --kernel names must differ "
+                    "(or exist in one arm only); lists shared kernels that differ")
     args = ap.parse_args(argv)
     if len(args.arm) != 2 or any("=" not in x for x in args.arm):
         ap.error("need exactly two --arm label=path")
@@ -106,7 +140,10 @@ def main(argv=None):
             ap.error(f"{path} not found")
         arms.append((label, kernel_hashes(path)))
         elfs.append(elf_md5s(path))
-    ok, lines = check(arms, args.kernel, elfs)
+    if args.allow_kernel_swap:
+        ok, lines = check_swap(arms, args.kernel)
+    else:
+        ok, lines = check(arms, args.kernel, elfs)
     print("\n".join(lines))
     print("JIT-HASH OK" if ok else "JIT-HASH FAIL: gate is A/A for the edited kernel(s)")
     return 0 if ok else 1
