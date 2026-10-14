@@ -68,6 +68,22 @@ Two causes, both fixed in this commit (device rerun pending):
   A row with no slots now gets exactly zero grads, as the device writes
   (test_degenerate_cov2d_row_without_slots_has_zero_grads).
 
+Hero rerun after the radius fix (3de1fafc, 2026-10-14 12:06 PDT on bh-49, log runs/2167/hero_chain3.log):
+
+| stage | result |
+|---|---|
+| T1 blend backward v2 | PASS, rel 4.4e-3, 0 NaN slots (unchanged) |
+| T2 grads | opacity 3.6e-4, sh0 1.4e-6 PASS; means 2454, log_scales 52.6, quats 9.6 FAIL (relative) |
+| T2 per-Gaussian world cov (pfwc) | c00..c22 up to 5.4e-2, mx 1.6e-2 |
+| T2 Adam | m/v follow the grads (v_means 34152); opacity/sh deltas fine |
+| timing (5 reps) | T1 87.8 ms, T2 98.4 ms (first call 1819 ms), chain 186.2 ms per step |
+
+No more m = v = 0 rows, so the radius fix took. The host reference still divides by zero in
+`t2_param_backward.py:108` (idet of a degenerate cov2d) on rows that do have slots, which makes
+its means/scales/quats grads inf/NaN-adjacent; the remaining gap is either those rows or a real
+device error in the cov3d->cov2d backward. Not yet split: next step is a per-row compare on the
+box (finite-reference rows only, then the degenerate rows alone).
+
 Dump-free chain on the crops (blend_fwd_bench -> loss_bench LOSS_MODE=ssim -> train_step,
 loop_box.sh): forward image vs oracle 8.6e-6 / 7.7e-6 (sh0 / sh3, bar 1e-4), device loss equals
 oracle loss to 7e-6 relative, dL/dimage max error 3.2e-5 of its max (fp32 device vs fp64 oracle).
