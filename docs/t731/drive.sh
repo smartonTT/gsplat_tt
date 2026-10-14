@@ -30,7 +30,14 @@ export TTW_CONFIG=$PWD/tmp/ttw-state/ttw.toml TTW_STATE=$PWD/tmp/ttw-state
 [ -f tmp/ttw-state/buildid.cpp ] || cp "$HOME/dev/gstt2/.ttw/buildid.cpp" tmp/ttw-state/
 sha=$(git rev-parse --short "$rev")
 echo "=== drive t731 $sha on $H:$T $(TZ=America/Los_Angeles date)"
-opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 3; }
+# sync_remote exits 3 when the sources differ from the last sync (often another task's tree in the
+# shared $T) but render_clean*.so did not change; follow its advice once: drop the .so and rebuild.
+opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1; src=$?
+if [ $src = 3 ]; then
+  echo "=== sync rc=3 (stale-build guard): removing $T/render/render_clean*.so and re-syncing"
+  $SSH "$H" "rm -f $T/render/render_clean*.so" && opt/sync_remote.sh "$H" "$T" "$rev" >> "$O/sync.log" 2>&1; src=$?
+fi
+[ $src = 0 ] || { tail -20 "$O/sync.log"; exit 3; }
 tail -2 "$O/sync.log"
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t731 $sha profiler zones ($H)"
 $SSH "$H" "rm -rf $T/tmp/t731 /localdev/smarton/.cache/ttmc-t731-* $T/tmp/ttm-eth12-cache-t731*; mkdir -p $T/tmp/t731"
