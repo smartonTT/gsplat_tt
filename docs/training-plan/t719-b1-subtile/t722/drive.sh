@@ -59,12 +59,14 @@ step() {  # name timeout B1 PERIOD cfgs...
   [ "$s" = 124 ] && exit 124
 }
 # devrun refuses timeouts over 600 s: one config per step, 400 s each (a run is RUN_TIMEOUT=240).
-for c in 1M_s4 3M_s2 full_s1; do for b in 0 1 2; do step md5 400 $b 0 $c; done; done
-for c in 1M_s4 0p5M_s4 1p5M_s4 3M_s4 1M_s2 3M_s2 full_s2 full_s1; do
+$SSH "$H" "rm -f $T/tmp/t722/*.log $T/tmp/t722/*.png $T/tmp/t722/*.txt"  # only this run's outputs are pulled
+# MD5_CFGS / GRID_CFGS / HERO=0 select a subset (a rerun of only the failed gates).
+for c in ${MD5_CFGS-1M_s4 3M_s2 full_s1}; do for b in 0 1 2; do step md5 400 $b 0 $c; done; done
+for c in ${GRID_CFGS-1M_s4 0p5M_s4 1p5M_s4 3M_s4 1M_s2 3M_s2 full_s2 full_s1}; do
   for b in 0 1 2; do step grid 400 $b default $c; done
 done
-for b in 0 1 2; do step hero 400 $b default hero; done
-$SSH "$H" "for d in /localdev/smarton/.cache/ttmc-t722-*; do echo \$d; done > $T/tmp/t722/jit-dirs.txt"
+[ "${HERO:-1}" = 0 ] || for b in 0 1 2; do step hero 400 $b default hero; done
+$SSH "$H" "cd /localdev/smarton/.cache && for d in ttmc-t722-b*; do find \$d -maxdepth 6 -path '*/kernels/*' -type d > $T/tmp/t722/jit-\$d.txt; done"
 mkdir -p "$O/logs"; scp -q -o BatchMode=yes "$H:$T/tmp/t722/*.*" "$O/logs/" || rc=4
 $SSH "$H" "rm -f $T/tmp/d1/bicycle_*.ply $T/tmp/d1/scene.npz; df -h /localdev/smarton | tail -1" > "$O/disk.txt" 2>&1; cat "$O/disk.txt"
 echo "=== drive t722 done rc=$rc $(TZ=America/Los_Angeles date)"

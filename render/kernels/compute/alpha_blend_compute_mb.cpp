@@ -1047,6 +1047,9 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #endif
 constexpr float kBlendTEps = (BLEND_T_EPS);
 constexpr uint32_t kBlendTPeriod = (BLEND_T_PERIOD);
+// Divisor for the cadence modulo: never 0, so BLEND_T_PERIOD=0 (readback off) still builds
+// under -Werror=div-by-zero (#722); every use is also guarded by kBlendTPeriod != 0u.
+constexpr uint32_t kBlendTPeriodDiv = kBlendTPeriod != 0u ? kBlendTPeriod : 1u;
 
 // Runtime override of the saturation epsilon (driven by the viewer's
 // "Transmittance threshold" slider via compute runtime-arg 0). Defaults to the
@@ -1529,7 +1532,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
 #if defined(TRISC_UNPACK)
     mb_cb_consume_fence();  // first read of this slab on this thread
     for (uint32_t g = 0; g < num_g; g++) {
-        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriodDiv) == 0u) {
             BLEND_PZ_SUB("cmp_trb");
 #if BLEND_DECODE_AHEAD == 2
             da_put_mark(DA_MARK_RB);  // before blocking in the readback
@@ -1548,7 +1551,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
 #endif
 #elif defined(TRISC_MATH) && BLEND_DECODE_AHEAD == 1
     for (uint32_t g = 0; g < num_g; g++) {
-        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriodDiv) == 0u) {
             BLEND_PZ_SUB("cmp_trb");
             TC_PART0();
             blend_t_readback(live_mb_mask);
@@ -1593,13 +1596,13 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
 #else  // TRISC_PACK: only the readbacks, at the same record positions
     (void)buck;
     for (uint32_t g = 0; g < num_g;) {
-        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriodDiv) == 0u) {
             BLEND_PZ_SUB("cmp_trb");
             blend_t_readback(live_mb_mask);
         }
         uint32_t step = num_g - g;
         if (kBlendTPeriod != 0u) {
-            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriodDiv);
             step = to_next < step ? to_next : step;
         }
         g += step;
@@ -1656,7 +1659,7 @@ inline void process_tile_l1_blend(
 #endif
         // Periodic transmittance readback (per-tile gaussian count, across
         // subchunks). period 0 => disabled (compiles out to the baseline path).
-        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriodDiv) == 0u) {
             BLEND_PZ_SUB("cmp_trb");
             TC_PART0();
             blend_t_readback(live_mb_mask);

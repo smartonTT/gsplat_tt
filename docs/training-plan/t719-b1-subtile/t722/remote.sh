@@ -12,8 +12,12 @@ unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACH
   GSPLAT_TT_BLEND_SWAP_FILL GSPLAT_TT_AFR GSPLAT_TT_CONTRIB_FLOOR_INV BLEND_T_PERIOD
 T=${T:?T}; B1=${B1:?B1}; PERIOD=${PERIOD:-default}
 export GSPLAT_TT_B1=$B1
+C=/localdev/smarton/.cache
+# eth dispatch picks its JIT cache from GSPLAT_TT_ETH_CACHE (render/eth_default.py), not
+# TT_METAL_CACHE_RENDER: give each arm its own so opt/ab_jit_check.py can compare them.
+export GSPLAT_TT_ETH_CACHE=$C/ttmc-t722-b$B1-p$PERIOD
 [ "$PERIOD" = default ] || export BLEND_T_PERIOD=${PERIOD}u
-C=/localdev/smarton/.cache; S=$T/tmp/t722; mkdir -p $S
+S=$T/tmp/t722; mkdir -p $S
 tag0=${1:?tag}; shift
 fail=0
 cd "$T" || exit 1; source .venv/bin/activate
