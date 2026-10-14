@@ -5,9 +5,11 @@
 #            GSPLAT_TT_BLEND_PROF=1 (per-tile blend zones), TT_METAL_DEVICE_PROFILER=1.
 #            render/eth_default.py (t731) switches to the 36 KB profiler overlay $T/tmp/ttm-eth12p36
 #            and its own JIT cache by itself; nothing profiler-specific is set here.
-#            Run under `python -m tracy --dump-device-data-mid-run` (as #427/#479): gsplat never
-#            closes the device, so a plain run.py reads the zones but never writes the CSV
-#            (first t731 run: rc=0, NO_DEVICE_CSV). 1 check + 2 timed passes x 4 views = 12
+#            gsplat never closes the device, so the CSV is only written by mid-run dumps
+#            (first t731 run: rc=0, NO_DEVICE_CSV). `python -m tracy --dump-device-data-mid-run`
+#            (#427/#479) cannot run here: the bh-49 venv has no loguru/pandas. That flag only sets
+#            TT_METAL_PROFILER_MID_RUN_DUMP=1, so it is set directly on a plain run.py; the CSV goes
+#            to $TT_METAL_PROFILER_DIR/.logs/. 1 check + 2 timed passes x 4 views = 12
 #            renders, device buffers read once per pass (GSPLAT_TT_PROFILE_READ_EVERY=4).
 # The device CSV (profile_log_device.csv) is gzipped to $S/<arm>-device.csv.gz and
 # opt/profiler/analyze_zones.py's table (12 renders) goes to $S/<arm>-zones.txt.
@@ -29,16 +31,10 @@ for arm in "$@"; do
     *) echo "bad arm $arm"; exit 2 ;;
   esac
   PR=$S/prof-$arm; rm -rf $PR; mkdir -p $PR
-  cat > $PR/inner.sh <<IN
-#!/bin/bash
-cd $T; source .venv/bin/activate
-GSPLAT_TT_ETH_CACHE=$T/tmp/ttm-eth12-cache-t731 TT_METAL_CACHE_RENDER=$C/ttmc-t731-$arm GSPLAT_TT_PROFILE_READ_EVERY=4 \
-  python3 render/run.py --no-ref --cameras $cam --iter-dir t731-$arm ${args[*]}
-IN
-  chmod +x $PR/inner.sh
   echo "=== $arm $(cut -c1-8 SHA) ${env[*]} ${args[*]} $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
-  env "${env[@]}" TT_METAL_PROFILER_DIR=$PR PYTHONPATH=$TT_METAL_HOME/tools:${PYTHONPATH:-} \
-    timeout ${RUN_TIMEOUT:-400} python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $S/run-$arm.log 2>&1
+  env "${env[@]}" TT_METAL_PROFILER_DIR=$PR TT_METAL_PROFILER_MID_RUN_DUMP=1 TT_METAL_PROFILER_DISABLE_PUSH_TO_TRACY=1 \
+    GSPLAT_TT_ETH_CACHE=$T/tmp/ttm-eth12-cache-t731 TT_METAL_CACHE_RENDER=$C/ttmc-t731-$arm GSPLAT_TT_PROFILE_READ_EVERY=4 \
+    timeout ${RUN_TIMEOUT:-400} python3 render/run.py --no-ref --cameras $cam --iter-dir t731-$arm "${args[@]}" > $S/run-$arm.log 2>&1
   rc=$?
   echo "run rc=$rc"
   grep -E "^(B2B |SUMMARY)|\[eth\]|^\[DEV\] dispatch|TTW_TIMING (ms_view|b2b_ms_frame|b2b_ms_frame_median)=|Traceback|TT_THROW|TT_FATAL|overflows|error:|DRAM buffers were full" $S/run-$arm.log | cut -c1-400 | head -16
