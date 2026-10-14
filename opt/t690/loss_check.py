@@ -3,6 +3,7 @@
 
   loss_check.py prep <dir>            writes <dir>/{dump64,syn}/ {hw.txt,image.f32,target.f32}
   loss_check.py check <dir> [--mode l1]   compares <dir>/<case>/out/{grad.f32,loss.txt}
+  loss_check.py check <dir> --mode filt   compares <dir>/<case>/out/filt.f32 (G * image, #706)
 
 Cases: dump64 = the T0 oracle dump t0_sh0_64x64_n50 (image/target; the full-loss grad of the
 oracle is checked by the model in tests/unit/test_train_loss.py); syn = deterministic 1237x822
@@ -44,9 +45,44 @@ def prep(out):
         print(f"prep {name} {x.shape}")
 
 
+def check_filt(out):
+    """#706: device G * x (split3 banded matmuls) against the fp64 filter and the split3 model."""
+    import glob
+    from gsplat.train_loss import filt_tiles, pad_planes
+    ok = True
+    for name, x, _ in cases():
+        H, W = x.shape[:2]
+        xp = pad_planes(x)
+        ref = np.moveaxis(filt_tiles(xp, "fp32")[:, :H, :W], 0, -1)
+        mod = np.moveaxis(filt_tiles(xp, "split3", "trunc")[:, :H, :W], 0, -1)
+        outs = sorted(glob.glob(os.path.join(out, name, "out*")))
+        if not outs:
+            print(f"[CHECK] mode=filt case={name} no output dir FAIL")
+            ok = False
+        for o in outs:
+            f = os.path.join(o, "filt.f32")
+            if not os.path.exists(f):
+                print(f"[CHECK] mode=filt case={name} out={os.path.basename(o)} no filt.f32 FAIL")
+                ok = False
+                continue
+            g = np.fromfile(f, np.float32).reshape(x.shape)
+            rel = float(np.linalg.norm(g - ref) / np.linalg.norm(ref))
+            mx = float(np.abs(g - ref).max())
+            mrel = float(np.linalg.norm(g - mod) / np.linalg.norm(ref))
+            good = bool(np.isfinite(g).all() and rel < 2e-6 and mx < 1e-5)
+            ok &= good
+            print(f"[CHECK] mode=filt case={name} out={os.path.basename(o)} vs_fp64_l2rel={rel:.2e} "
+                  f"vs_fp64_maxabs={mx:.2e} vs_split3_model_l2rel={mrel:.2e} "
+                  f"model_vs_fp64_l2rel={float(np.linalg.norm(mod - ref) / np.linalg.norm(ref)):.2e} "
+                  f"{'PASS' if good else 'FAIL'}")
+    return ok
+
+
 def check(out, mode="l1"):
     """Checks every <out>/<case>/out*/ run dir (one per bench variant, e.g. out-u0, out-u1)."""
     import glob
+    if mode == "filt":
+        return check_filt(out)
     from gsplat.train_loss import loss_and_grad_l1, loss_and_grad_device
     ok = True
     for name, x, y in cases():

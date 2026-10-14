@@ -35,7 +35,7 @@ timeout 900 "${SSH[@]}" "cd $T && export TT_METAL_HOME=/localdev/smarton/tt-meta
     nice -n 19 cmake --build render/bench/build --target loss_bench -j 8 > tmp/t690build.log 2>&1 || { tail -n 40 tmp/t690cfg.log tmp/t690build.log; exit 5; }; } && \
   rm -rf tmp/t690 && source .venv/bin/activate && python3 opt/t690/loss_check.py prep tmp/t690 && \
   for cu in $CASES; do c=\${cu%:*}; u=\${cu#*:}; o=tmp/t690/\$c/out-u\$u; mkdir -p \$o; \
-    LOSS_U2D=\$u timeout $RUN_TO render/bench/build/loss_bench tmp/t690/\$c \$o $ITERS > \$o/run.log 2>&1; \
+    LOSS_MODE=$MODE LOSS_U2D=\$u timeout $RUN_TO render/bench/build/loss_bench tmp/t690/\$c \$o $ITERS > \$o/run.log 2>&1; \
     echo \"run \$c u2d=\$u rc=\$?\"; grep -E '^\[LOSS\]|TT_THROW|TT_FATAL|error' \$o/run.log | head -8; done && \
   rm -f tmp/t690/*/image.f32 tmp/t690/*/target.f32"
 echo "remote rc=$?"
