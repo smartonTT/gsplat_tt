@@ -3,7 +3,9 @@
     PYTHONPATH=. python3 docs/t685/hero.py tmp/t707/hero.npz [--meta docs/t685/hero_meta.json]
 
 scenes/bicycle.ply, camera _DSC8679 from benchmarks/cameras_test.json at 1237x822. Projection
-as gsplat/train_oracle.render (near 0.2, lowpass 0.3, SH degree 3 + 0.5 clamped, depth order);
+as gsplat/train_oracle.render (near 0.2, lowpass 0.3, SH degree 3 + 0.5 clamped, depth order)
+plus the 3DGS Jacobian clamp (#777: the mean seen by the Jacobian is clamped to 1.3x the half-FOV;
+without it a few near-camera off-screen Gaussians smear across the view, 13.1 dB vs the JPG);
 Gaussians with sigmoid(opacity) < 1/255 are dropped first, as the renderer does (lossless:
 they never pass alpha_min). The image is an fp32 forward with the device rules
 (blend_backward_dev.forward_fast); dL/dimage is the mean-L1 gradient against
@@ -69,7 +71,7 @@ def sh_eval(sh, d):
             + SH_C3[6] * x * (xx - 3 * yy) * sh[:, 15])
 
 
-def project(rows, col, c2w, intr, H, W, near=0.2, lowpass=0.3):
+def project(rows, col, c2w, intr, H, W, near=0.2, lowpass=0.3, jclamp=1.3):
     """float64 projection of the ply rows (column map col); returns the dump arrays."""
     def v(name):
         return rows[:, col[name]]
@@ -92,6 +94,9 @@ def project(rows, col, c2w, intr, H, W, near=0.2, lowpass=0.3):
     s = np.exp(np.stack([v(f"scale_{i}") for i in range(3)], 1).astype(np.float64))
     M = R @ (Rq * s[:, None, :])                       # camera-frame R Rq S
     z0 = np.zeros_like(tz)
+    if jclamp:   # 3DGS/gsplat: the Jacobian sees the mean clamped to 1.3x the half-FOV (#777)
+        lx, ly = jclamp * W / (2 * fx), jclamp * H / (2 * fy)
+        tx, ty = np.clip(tx / tzs, -lx, lx) * tzs, np.clip(ty / tzs, -ly, ly) * tzs
     J = np.stack([np.stack([fx / tzs, z0, -fx * tx / tzs ** 2], -1),
                   np.stack([z0, fy / tzs, -fy * ty / tzs ** 2], -1)], 1)
     JM = J @ M
@@ -140,6 +145,7 @@ def main(argv=None) -> int:
     ap.add_argument("out")
     ap.add_argument("--view", default="_DSC8679")
     ap.add_argument("--meta", default=None, help="write derived metadata JSON here")
+    ap.add_argument("--no-jclamp", action="store_true", help="old (pre-#777) projection, no Jacobian clamp")
     a = ap.parse_args(argv)
     t0 = time.time()
     cams = json.load(open(os.path.join(ROOT, "benchmarks/cameras_test.json")))["bicycle"]
@@ -148,7 +154,8 @@ def main(argv=None) -> int:
     ply, cm = load_ply(os.path.join(sc, "bicycle.ply"))
     op_all = 1.0 / (1.0 + np.exp(-ply[:, cm["opacity"]].astype(np.float64)))
     keep = np.flatnonzero(op_all >= 1.0 / 255.0)
-    m2, conic, col, tz, vis = project(ply[keep], cm, cams["views"][a.view]["c2w"], cams["intrinsics"], H, W)
+    m2, conic, col, tz, vis = project(ply[keep], cm, cams["views"][a.view]["c2w"], cams["intrinsics"], H, W,
+                                 jclamp=None if a.no_jclamp else 1.3)
     sel = np.flatnonzero(vis)                              # in front, 3-sigma box overlaps the image
     m2, conic, col, tz = m2[sel], conic[sel], col[sel], tz[sel]
     op = op_all[keep][sel]
@@ -178,6 +185,7 @@ def main(argv=None) -> int:
     meta = {"task": 707, "scene": "scenes/bicycle.ply", "view": a.view, "H": H, "W": W,
             "n_ply": int(len(ply)), "n_opacity_ge_1_255": int(len(keep)), "n_visible": int(len(sel)),
             **st, "l1_loss": float(np.mean(np.abs(img - gt))), "psnr_vs_jpg_db": round(psnr, 3),
+            "jacobian_clamp": None if a.no_jclamp else 1.3,
             "target": f"scenes/mipnerf360/bicycle/images_4/{a.view}.JPG",
             "target_md5": hashlib.md5(open(jpg, "rb").read()).hexdigest(),
             "image_md5_f32": hashlib.md5(img.tobytes()).hexdigest(),
