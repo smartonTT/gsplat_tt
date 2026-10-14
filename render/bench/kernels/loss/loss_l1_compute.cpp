@@ -9,6 +9,11 @@
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 
+#ifdef TRISC_MATH
+#include "sfpi.h"
+#include "llk_math_eltwise_unary_sfpu.h"
+#endif
+
 constexpr uint32_t CB_X = 0, CB_Y = 1, CB_ACC = 3, CB_G = 16, CB_PART = 17;
 
 #ifdef TRISC_MATH
@@ -18,13 +23,16 @@ inline void l1_tile(uint32_t w_bits) {
     const vFloat w = __builtin_bit_cast(float, w_bits);
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {
-        vFloat d = dst_reg[0] - dst_reg[32];
+        const vFloat x = dst_reg[0];
+        const vFloat y = dst_reg[32];
+        const vFloat d = x - y;
         vFloat g = 0.0f;
         v_if (d > 0.0f) { g = w; }
         v_elseif (d < 0.0f) { g = -w; }
         v_endif;
         dst_reg[0] = g;
-        dst_reg[64] = dst_reg[64] + sfpi::abs(d);
+        const vFloat acc = dst_reg[64];
+        dst_reg[64] = acc + sfpi::abs(d);
         dst_reg++;
     }
 }
