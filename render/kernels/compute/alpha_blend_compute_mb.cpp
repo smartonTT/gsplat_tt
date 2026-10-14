@@ -1138,6 +1138,9 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #endif
 constexpr float kBlendTEps = (BLEND_T_EPS);
 constexpr uint32_t kBlendTPeriod = (BLEND_T_PERIOD);
+// Task #708: never 0, so `% kBlendTPeriodDiv` compiles (-Werror=div-by-zero) when
+// BLEND_T_PERIOD is 0 (training mode); only used behind kBlendTPeriod != 0.
+constexpr uint32_t kBlendTPeriodDiv = kBlendTPeriod != 0u ? kBlendTPeriod : 1u;
 
 // Runtime override of the saturation epsilon (driven by the viewer's
 // "Transmittance threshold" slider via compute runtime-arg 0). Defaults to the
@@ -1682,7 +1685,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         }
         uint32_t step = num_g - g;
         if (kBlendTPeriod != 0u) {
-            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriodDiv);
             step = to_next < step ? to_next : step;
         }
         g += step;
