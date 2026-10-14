@@ -25,6 +25,8 @@
 
 #include <tt-metalium/host_api.hpp>
 
+#include "blend_train.h"
+
 namespace gsplat_tt {
 bool b4a_shadow_enabled();  // tile_assign_device.cpp (task #542)
 bool b4a_k2_in_blend();     // tile_assign_device.cpp (task #552)
@@ -35,7 +37,8 @@ namespace gsplat_tt::matblend_fuse {
 inline bool enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_MATBLEND_FUSE");
-        return e == nullptr || e[0] != '0';
+        // Task #708: the training forward runs the unfused blend program.
+        return (e == nullptr || e[0] != '0') && !blend_train::enabled();
     }();
     return on;
 }

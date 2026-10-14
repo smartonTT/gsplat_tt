@@ -42,6 +42,9 @@
 #include "api/compute/cb_api.h"
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+#include "api/compute/reconfig_data_format.h"  // task #708
+#endif
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/fill.h"
 #include "../dataflow/dm_fp32.h"
@@ -72,6 +75,7 @@ constexpr uint32_t CB_CORE_TILES = BLEND_CB_BASE + 7;  // MB_RESIDENT: tile coun
 constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk L1 records (slab carries mask in word3)
 constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
 constexpr uint32_t CB_T_RB = BLEND_CB_BASE + 2;        // iter 107: mid-accumulation T readback (bf16, 1 tile)
+constexpr uint32_t CB_TRAIN_OUT = BLEND_CB_BASE + 17;  // task #708: fp32 R/G/B/T (BLEND_TRAIN only)
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -227,6 +231,80 @@ inline void blend_stage_hoist() {
 #define BLEND_FPU_QF_ABL 0
 #endif
 
+// Task #708 (host env GSPLAT_TT_BLEND_TRAIN, default 0 = compiled out): the
+// forward for training (T1 device blend backward consumes it). Every body runs
+// this instead of the render math: fp32-accurate exp (the T1 kernel's bwd_exp,
+// Juffa; exp_21f's ~1.7e-3 error fails the T0 gradient oracle) and gsplat's
+// exact blend rules: power clamped to [-80, 0], alpha = min(op w, 0.99), skip
+// alpha < 1/255, accept only if T (1 - alpha) >= 1e-4. A pixel that fails the
+// T test is done: its T keeps the last accepted value with the sign bit set,
+// so later gaussians (T' < 0 < 1e-4) never touch it. |T| is gsplat's final T.
+// The host forces BLEND_SCHED 0 (the raw-TTI bodies inline exp_21f) and
+// BLEND_T_PERIOD 0 (the 1/256 early-out is lossy against the 1e-4 rule).
+#ifndef BLEND_TRAIN
+#define BLEND_TRAIN 0
+#endif
+#if BLEND_TRAIN
+#if BLEND_FPU_QF_ABL
+#error "BLEND_TRAIN needs the real conic (no BLEND_FPU_QF_ABL)"
+#endif
+#ifdef TRISC_MATH
+sfpi_inline sfpi::vFloat blend_train_exp(sfpi::vFloat a) {
+    using namespace sfpi;
+    vFloat j = 1.442695f * a;
+    vInt i = float_to_int16(j, RoundMode::NearestEven);
+    j = int32_to_float(i, RoundMode::NearestEven);
+    vFloat f = j * -6.93145752e-1f + a;
+    f = j * -1.42860677e-6f + f;
+    vFloat r = 1.37805939e-3f;
+    r = r * f + 8.37312452e-3f;
+    r = r * f + 4.16695364e-2f;
+    r = r * f + 1.66664720e-1f;
+    r = r * f + 4.99999851e-1f;
+    i = abs(i);
+    vFloat y = r * f + 1.0f;
+    i = reinterpret<vInt>(copysgn(reinterpret<vFloat>(i), j));
+    r = y * f + 1.0f;
+    vInt e = exexp(r, ExponentMode::NoDebias);
+    e += i;
+    return setexp(r, e);
+}
+
+template <uint32_t IX>
+inline void blend_train_gaussian_math(
+    uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, uint32_t d_bits, uint32_t e_bits,
+    uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
+    using namespace sfpi;
+    vFloat dx = vFloat(dst_reg[DR_X + IX]) - BLEND_COEF(S_MX, d_bits);
+    vFloat dy = vFloat(dst_reg[DR_Y + IX]) - BLEND_COEF(S_MY, e_bits);
+    vFloat power = BLEND_COEF(S_A, a_bits) * (dx * dx);
+    power = power + BLEND_COEF(S_B, b_bits) * (dx * dy);
+    power = power + BLEND_COEF(S_C, c_bits) * (dy * dy);
+    v_if(power > 0.0f) { power = 0.0f; }
+    v_endif;
+    v_if(power < -80.0f) { power = -80.0f; }
+    v_endif;
+    vFloat alpha = BLEND_COEF(S_OP, op_bits) * blend_train_exp(power);
+    v_if(alpha > 0.99f) { alpha = 0.99f; }                        // 0x3F7D70A4
+    v_endif;
+    v_if(alpha >= 0.003921569f) {                                  // 1/255, 0x3B808081
+        vFloat t = dst_reg[DR_T + IX];
+        vFloat tn = t * (vFloat(1.0f) - alpha);
+        v_if(tn >= 0.0001f) {                                      // 1e-4, 0x38D1B717
+            vFloat at = alpha * t;
+            dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * BLEND_COEF(S_CR, cr_bits);
+            dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * BLEND_COEF(S_CG, cg_bits);
+            dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * BLEND_COEF(S_CB, cb_bits);
+            dst_reg[DR_T + IX] = tn;
+        }
+        v_else { dst_reg[DR_T + IX] = setsgn(t, 1); }
+        v_endif;
+    }
+    v_endif;
+}
+#endif  // TRISC_MATH
+#endif  // BLEND_TRAIN
+
 #ifdef TRISC_MATH
 // One gaussian's contribution to a single microblock's 32-lane vector.
 // IX is the dst_reg vector index (compile-time so SFPLOAD/SFPSTORE addresses
@@ -237,6 +315,11 @@ inline void blend_one_gaussian_math(
     uint32_t d_bits, uint32_t e_bits, uint32_t f_bits,
     uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
     using namespace sfpi;
+#if BLEND_TRAIN
+    (void)f_bits;
+    blend_train_gaussian_math<IX>(a_bits, b_bits, c_bits, d_bits, e_bits, op_bits, cr_bits, cg_bits, cb_bits);
+    return;
+#endif
 #if BLEND_FPU_QF_ABL
     // Task #111 timing-only ablation: power arrives precomputed in DEST (what an
     // FPU quadratic form would leave the SFPU: one SFPLOAD). Output is wrong.
@@ -307,6 +390,11 @@ inline void blend_pair_gaussian_math(
     uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
     using namespace sfpi;
     (void)f_bits;
+#if BLEND_TRAIN
+    blend_train_gaussian_math<IXA>(a_bits, b_bits, c_bits, d_bits, e_bits, op_bits, cr_bits, cg_bits, cb_bits);
+    blend_train_gaussian_math<IXB>(a_bits, b_bits, c_bits, d_bits, e_bits, op_bits, cr_bits, cg_bits, cb_bits);
+    return;
+#endif
 
 #if BLEND_FPU_QF_ABL
     (void)a_bits; (void)b_bits; (void)c_bits; (void)d_bits; (void)e_bits;
@@ -613,6 +701,9 @@ inline void dispatch_blend_pairs(
 // 1.0, 11 is -1.0, 12-14 are the exp constants of blend_stage_hoist.
 #ifndef BLEND_SCHED
 #define BLEND_SCHED 0
+#endif
+#if BLEND_TRAIN && BLEND_SCHED
+#error "BLEND_TRAIN needs BLEND_SCHED 0 (the raw-TTI bodies inline the render exp)"
 #endif
 #ifndef BLEND_SWAP_FILL
 #define BLEND_SWAP_FILL 0
@@ -1047,6 +1138,9 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #endif
 constexpr float kBlendTEps = (BLEND_T_EPS);
 constexpr uint32_t kBlendTPeriod = (BLEND_T_PERIOD);
+// Task #708: never 0, so `% kBlendTPeriodDiv` compiles (-Werror=div-by-zero) when
+// BLEND_T_PERIOD is 0 (training mode); only used behind kBlendTPeriod != 0.
+constexpr uint32_t kBlendTPeriodDiv = kBlendTPeriod != 0u ? kBlendTPeriod : 1u;
 
 // Runtime override of the saturation epsilon (driven by the viewer's
 // "Transmittance threshold" slider via compute runtime-arg 0). Defaults to the
@@ -1591,7 +1685,7 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         }
         uint32_t step = num_g - g;
         if (kBlendTPeriod != 0u) {
-            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriodDiv);
             step = to_next < step ? to_next : step;
         }
         g += step;
@@ -1840,6 +1934,18 @@ void kernel_main() {
                 pack_tile(1, CB_COLOR_OUT);
                 pack_tile(2, CB_COLOR_OUT);
                 cb_push_back(CB_COLOR_OUT, 3);
+#if BLEND_TRAIN
+                // Task #708: the same accumulators again as fp32 R, G, B, T
+                // (microblock layout) for the training buffer.
+                pack_reconfig_data_format(CB_TRAIN_OUT);
+                cb_reserve_back(CB_TRAIN_OUT, 4);
+                pack_tile(0, CB_TRAIN_OUT);
+                pack_tile(1, CB_TRAIN_OUT);
+                pack_tile(2, CB_TRAIN_OUT);
+                pack_tile(3, CB_TRAIN_OUT);
+                cb_push_back(CB_TRAIN_OUT, 4);
+                pack_reconfig_data_format(CB_COLOR_OUT);
+#endif
                 tile_regs_release();
                 tile_regs_held = false;
                 tile_done = true;
