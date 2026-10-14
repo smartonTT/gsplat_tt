@@ -46,6 +46,7 @@
 
 #include "alpha_blend_host.h"
 #include "blend.h"
+#include "blend_train.h"
 #include "config.h"
 #include "device_state.h"
 #include "matblend_fuse.h"
@@ -133,6 +134,9 @@ struct DeviceContext {
     std::shared_ptr<distributed::MeshBuffer> res_out;
     std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
     size_t res_out_bytes = 0;
+    // Task #708 (GSPLAT_TT_BLEND_TRAIN): fp32 R/G/B/T per screen tile (blend_train.h).
+    std::shared_ptr<distributed::MeshBuffer> res_train;
+    size_t res_train_bytes = 0;
     // Host bounce buffer, only used when the device row pitch != W*3.
     std::vector<uint8_t> res_out_host;
     // Task #367 (GSPLAT_TT_OUT_PINNED): page-aligned host image buffers with the
@@ -250,6 +254,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     // mid-accumulation transmittance readback (bf16, same fmt as CB_OUT so the
     // packer needs no reconfig). Never pushed/popped — pure read-back scratch.
     cb_cfg(CB_T_RB, TILE_BYTES_BF16, 2, DataFormat::Float16_b);
+    if (gsplat_tt::blend_train::enabled()) {
+        cb_cfg(gsplat_tt::blend_train::kCb, gsplat_tt::blend_train::kTileBytes, 4, DataFormat::Float32);
+    }
 
     // Resident devcull reader scratch CBs.
     constexpr uint32_t CB_SCR_IDS = 4;
@@ -322,6 +329,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     std::map<std::string, std::string> writer_defines;
     if (gsplat_tt::env_config::out_pinned()) {
         writer_defines["OUT_PINNED"] = "1";
+    }
+    if (gsplat_tt::blend_train::enabled()) {
+        writer_defines["BLEND_TRAIN"] = "1";
     }
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";
@@ -458,6 +468,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         compute_defines["BLEND_SWAP_FILL"] = env_or("GSPLAT_TT_BLEND_SWAP_FILL", "1");
         compute_defines["BLEND_DWALK"] = env_or("GSPLAT_TT_BLEND_DWALK", "1");  // #664, default on since iter 230
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
+        // Task #708: the training forward (blend_train.h) needs the compiled
+        // bodies (SCHED 0) and no lossy T early-out.
+        if (gsplat_tt::blend_train::enabled()) {
+            compute_defines["BLEND_TRAIN"] = "1";
+            compute_defines["BLEND_SCHED"] = "0";
+            compute_defines["BLEND_T_PERIOD"] = "0u";
+        }
     }
     if (fused) {
         compute_defines["BLEND_CB_BASE"] = std::to_string(mbf::kBlendCbBase);
@@ -481,6 +498,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    if (gsplat_tt::blend_train::enabled()) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);  // task #708: train
+    }
     if (fused) {
         std::vector<uint32_t> ct = mat.ct;
         ct.insert(ct.end(), writer_ct.begin(), writer_ct.end());
@@ -797,6 +817,16 @@ static double process_frame_mb_devcull_resident(
         ctx.res_out = make_dram(out_bytes, pitch);
         ctx.res_out_bytes = out_bytes;
     }
+    const uint32_t image_tiles_x = gsplat_tt::split_window::image_tiles_x(tiles_x);
+    if (gsplat_tt::blend_train::enabled()) {
+        const size_t train_bytes =
+            static_cast<size_t>(out_bytes / (static_cast<size_t>(TILE_H) * pitch)) * image_tiles_x *
+            gsplat_tt::blend_train::kPageBytes;
+        if (!ctx.res_train || ctx.res_train_bytes != train_bytes) {
+            ctx.res_train = make_dram(train_bytes, gsplat_tt::blend_train::kPageBytes);
+            ctx.res_train_bytes = train_bytes;
+        }
+    }
     const bool out_pinned = gsplat_tt::env_config::out_pinned();
     uint32_t out_pin_xy = 0;
     uint64_t out_pin_addr = 0;
@@ -962,6 +992,11 @@ static double process_frame_mb_devcull_resident(
                         writer_args.insert(writer_args.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
                                                                static_cast<uint32_t>(out_pin_addr >> 32)});
                     }
+                    if (gsplat_tt::blend_train::enabled()) {
+                        writer_args.resize(9, 0u);
+                        writer_args.push_back(static_cast<uint32_t>(ctx.res_train->address()));
+                        writer_args.push_back(image_tiles_x);
+                    }
                     SetRuntimeArgs(program, ctx.writer, core, writer_args);
                     core_index++;
                 }
@@ -1123,6 +1158,13 @@ static double process_frame_mb_devcull_resident(
     const auto t_end = std::chrono::steady_clock::now();
     d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
+    if (const char* tp = gsplat_tt::blend_train::dump_path(); tp != nullptr && ctx.res_train) {
+        // Task #708: debug/oracle dump of the train buffer (outside the timed span).
+        std::vector<uint8_t> tb(ctx.res_train_bytes);
+        ctx.cq->enqueue_read_mesh_buffer(tb.data(), ctx.res_train, /*blocking=*/true);
+        std::ofstream(tp, std::ios::binary).write(reinterpret_cast<const char*>(tb.data()),
+                                                  static_cast<std::streamsize>(tb.size()));
+    }
 
     if (!direct && !pinned) {
         gsplat_tt::stagetimers::Span assemble_span(

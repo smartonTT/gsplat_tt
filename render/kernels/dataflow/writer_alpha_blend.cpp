@@ -51,7 +51,13 @@
 //        NoC-mapped host image buffer with the same (rows, pitch) layout; the
 //        rows go straight to host memory over PCIe instead of to out_addr.
 //
-// COMPILE-TIME ARGS: 3 TensorAccessorArgs in order: out, tile_ids, lpt_meta.
+//   9-10 (BLEND_TRAIN only, task #708): train_addr, image_tiles_x. Per screen
+//        tile compute also pushes 4 fp32 tiles (R, G, B, T; microblock layout)
+//        to CB_TRAIN_OUT; they go as one 16 KB page to page ty * image_tiles_x + tx
+//        of the train buffer.
+//
+// COMPILE-TIME ARGS: 3 TensorAccessorArgs in order: out, tile_ids, lpt_meta
+// (+ train with BLEND_TRAIN).
 
 // Task #83: fine per-tile zones for floor attribution (host env
 // GSPLAT_TT_BLEND_PROF=1; compiled out by default).
@@ -82,6 +88,13 @@ void kernel_main() {
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 
     const auto out          = TensorAccessor(out_args,      out_addr,      pitch);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+    constexpr uint32_t CB_TRAIN_OUT = BLEND_CB_BASE + 17;
+    constexpr uint32_t TRAIN_PAGE_BYTES = 4u * 32u * 32u * 4u;
+    constexpr auto train_args = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
+    const auto train = TensorAccessor(train_args, get_arg_val<uint32_t>(9), TRAIN_PAGE_BYTES);
+    const uint32_t image_tiles_x = get_arg_val<uint32_t>(10);
+#endif
 #if defined(OUT_PINNED) && OUT_PINNED
     const uint32_t pin_xy = get_arg_val<uint32_t>(6);
     const uint64_t pin_base = (static_cast<uint64_t>(get_arg_val<uint32_t>(8)) << 32) |
@@ -122,6 +135,13 @@ void kernel_main() {
             read_ptr += tile_bytes;
         }
         cb_pop_front(CB_COLOR_OUT, 3);
+#if defined(BLEND_TRAIN) && BLEND_TRAIN
+        cb_wait_front(CB_TRAIN_OUT, 4);
+        noc_async_write(get_read_ptr(CB_TRAIN_OUT), train.get_noc_addr(ty * image_tiles_x + tx),
+                        TRAIN_PAGE_BYTES);
+        noc_async_writes_flushed();
+        cb_pop_front(CB_TRAIN_OUT, 4);
+#endif
 
         const uint32_t row0 = ty * 32u;
         const uint32_t col_off = tx * ROW_BYTES;
