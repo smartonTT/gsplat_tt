@@ -1,0 +1,1 @@
+{"npz": "t0_sh3_64x64_n50.npz", "max_abs_image": 7.706785047356668e-06, "max_abs_image_rgb": [6.5169887634164425e-06, 7.350800117766898e-06, 7.706785047356668e-06], "max_abs_final_T": 7.0484244875101965e-06, "bar": 0.0001, "pass": true, "max_abs_image_vs_model": 5.960464477539063e-08, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px": 0, "stopped_px_model": 0}

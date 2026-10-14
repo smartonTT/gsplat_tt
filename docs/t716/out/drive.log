@@ -1,0 +1,75 @@
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 2 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #707 (run 2009) since 01:57 PDT; 3 ahead in queue)
+ttp lock: waiting for p100 (held by task #713 (run 2010) since 02:26 PDT; 2 ahead in queue)
+ttp lock: got p100 after 18.0 min
+SSH_PREFLIGHT=ok
+=== t716 53615db1=53615db15f7cf37db9e17d51e3267cdb454bf032 to bh-49:/localdev/smarton/gstt2-sync Wed Oct 14 02:29:13 PDT 2026
+sync rc=0
+[sync_remote] 53615db15f7cf37db9e17d51e3267cdb454bf032 from /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t716: 1107 files, 64863210 bytes listed
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] synced bh-49:/localdev/smarton/gstt2-sync: sent 16 of 1109 files, 234918 bytes (tar)
+STAMP remote=53615db15f7cf37db9e17d51e3267cdb454bf032 local=53615db15f7cf37db9e17d51e3267cdb454bf032 MATCH
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+│ 0          │ 0000:01:0… │ /dev/tens… │ Blackhole  │ p150a       │ 000004033… │
+=== build 02:29:35
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2-sync/render/train/build
+[1/4] Building CXX object CMakeFiles/blend_fwd_bench.dir/blend_fwd_bench.cpp.o
+[2/4] Building CXX object CMakeFiles/blend_bwd_bench.dir/blend_bwd_bench.cpp.o
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp: In function ‘int main(int, char**)’:
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:84:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+   84 |     want = std::max<uint32_t>(1, std::min<uint32_t>({want, grid.x * grid.y, std::max<uint32_t>(n_tiles, 1)}));
+      |                                                            ~~~~~~~^~~~~~~~
+/localdev/smarton/gstt2-sync/render/train/blend_bwd_bench.cpp:84:67: warning: narrowing conversion of ‘(((long unsigned int)grid.tt::xy_pair::x) * ((long unsigned int)grid.tt::xy_pair::y))’ from ‘long unsigned int’ to ‘unsigned int’ [-Wnarrowing]
+[3/4] Linking CXX executable blend_fwd_bench
+[4/4] Linking CXX executable blend_bwd_bench
+build rc=0
+=== run sh0 02:29:42
+{"n_tiles": 4, "n_recs": 192}
+2026-10-14 09:29:49.641 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 09:29:49.641 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 09:29:49.770 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 09:29:49.770 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 09:29:49.770 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"npz": "t0_sh0_64x64_n50.npz", "max_abs_image": 8.639504307128565e-06, "max_abs_image_rgb": [8.639504307128565e-06, 7.032131124407037e-06, 8.064950941633064e-06], "max_abs_final_T": 7.0484244875101965e-06, "bar": 0.0001, "pass": true, "max_abs_image_vs_model": 1.1920928955078125e-07, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px": 0, "stopped_px_model": 0}
+fwd check rc=0
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74}
+2026-10-14 09:29:54.242 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 09:29:54.242 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 09:29:54.370 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 09:29:54.370 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 09:29:54.370 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run sh0 rc=0
+=== run sh3 02:29:54
+{"n_tiles": 4, "n_recs": 192}
+2026-10-14 09:29:58.821 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 09:29:58.821 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 09:29:58.971 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 09:29:58.971 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 09:29:58.971 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+{"npz": "t0_sh3_64x64_n50.npz", "max_abs_image": 7.706785047356668e-06, "max_abs_image_rgb": [6.5169887634164425e-06, 7.350800117766898e-06, 7.706785047356668e-06], "max_abs_final_T": 7.0484244875101965e-06, "bar": 0.0001, "pass": true, "max_abs_image_vs_model": 1.1920928955078125e-07, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px": 0, "stopped_px_model": 0}
+fwd check rc=0
+{"n_tiles": 4, "n_recs": 74, "n_slots": 74}
+2026-10-14 09:30:01.327 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-14 09:30:01.327 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-14 09:30:01.471 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-14 09:30:01.471 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-14 09:30:01.471 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+run sh3 rc=0
+[sync_remote] bh-49 has no rsync: copying changed files with ssh+tar
+[sync_remote] pulled bh-49:/localdev/smarton/gstt2-sync/tmp/t716 -> /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t716/docs/t716/out/remote: 33 entries (tar)
+pull rc=0
+{"npz": "t0_sh0_64x64_n50.npz", "max_abs_image": 8.639504307128565e-06, "max_abs_image_rgb": [8.639504307128565e-06, 7.032131124407037e-06, 8.064950941633064e-06], "max_abs_final_T": 7.0484244875101965e-06, "bar": 0.0001, "pass": true, "max_abs_image_vs_model": 8.940696716308594e-08, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px": 0, "stopped_px_model": 0}
+image.f32 sh0: box == local
+{"npz": "t0_sh0_64x64_n50.npz", "rel_err": 0.000918338474741831, "per_term": {"dmx": 0.00041962147597257934, "dmy": 0.0018744722359723962, "dA": 3.228527653937637e-05, "dB": 0.0006401053193529494, "dC": 0.000918338474741831, "dop": 0.0003550054616464708, "dr": 1.5479676127485767e-06, "dg": 5.788362792455422e-07, "db": 6.350523928466879e-06}, "pass": true}
+{"npz": "t0_sh3_64x64_n50.npz", "max_abs_image": 7.706785047356668e-06, "max_abs_image_rgb": [6.5169887634164425e-06, 7.350800117766898e-06, 7.706785047356668e-06], "max_abs_final_T": 7.0484244875101965e-06, "bar": 0.0001, "pass": true, "max_abs_image_vs_model": 5.960464477539063e-08, "max_abs_final_T_vs_model": 1.1920928955078125e-07, "stopped_px": 0, "stopped_px_model": 0}
+image.f32 sh3: box == local
+{"npz": "t0_sh3_64x64_n50.npz", "rel_err": 0.0003123426098159779, "per_term": {"dmx": 0.00012317469524007762, "dmy": 0.0001037849234323812, "dA": 0.0003123426098159779, "dB": 6.700941445091487e-05, "dC": 6.890910854469534e-05, "dop": 0.00022926917231252738, "dr": 9.732314265846013e-06, "dg": 2.87484131902648e-06, "db": 1.1352322741994626e-06}, "pass": true}
+=== done fail=0 Wed Oct 14 02:30:09 PDT 2026
