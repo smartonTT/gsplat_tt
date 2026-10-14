@@ -130,6 +130,8 @@ def main(argv=None):
         arms.append((label, kernel_hashes(path)))
     if args.runtime_arg_only:
         labels = {lab for lab, _ in arms}
+        if len(labels) != 2:
+            ap.error("--runtime-arg-only needs two distinct --arm labels")
         markers = dict(_kv(ap, args.marker, "marker"))
         logs = {}
         for lab, path in _kv(ap, args.log, "log"):
@@ -139,6 +141,11 @@ def main(argv=None):
                 logs.setdefault(lab, []).append(f.read())
         if set(markers) != labels or set(logs) != labels:
             ap.error("--runtime-arg-only needs --marker and --log for each arm label")
+        ma, mb = (markers[lab] for lab, _ in arms)
+        if not ma or not mb:
+            ap.error("--marker must not be empty")
+        if ma in mb or mb in ma:
+            ap.error("--marker strings must differ and neither may contain the other")
         ok, lines = check_runtime_arg_only(arms, args.kernel, markers, logs)
         print("\n".join(lines))
         print("JIT-HASH OK (runtime-arg-only)" if ok

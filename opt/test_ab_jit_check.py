@@ -63,12 +63,37 @@ def test_rao_fails_on_missing_kernel(tmp_path):
     assert _rao(tmp_path, {"sort": "1"}, {"sort": "1"}, "cap=0", "cap=64") == 1
 
 
-def test_rao_requires_marker_and_log_per_arm(tmp_path):
+def test_rao_requires_marker_and_log_per_arm(tmp_path, capsys):
     import pytest
     a = _cache(tmp_path, "a", {"blend": "1"})
+    log = tmp_path / "a.log"
+    log.write_text("x")
     with pytest.raises(SystemExit) as e:
         j.main(["--runtime-arg-only", "--arm", f"base={a}", "--arm", f"cand={a}",
-                "--kernel", "blend", "--marker", "base=x"])
+                "--kernel", "blend", "--marker", "base=x", "--marker", "cand=y",
+                "--log", f"base={log}"])
+    assert e.value.code == 2
+    assert "needs --marker and --log for each arm" in capsys.readouterr().err
+
+
+import pytest
+
+
+@pytest.mark.parametrize("ma,mb", [("", ""), ("", "cap=64"), ("cap=64", "cap=64"),
+                                   ("cap=6", "cap=64"), ("cap=64", "cap=6")])
+def test_rao_rejects_bad_markers(tmp_path, ma, mb):
+    with pytest.raises(SystemExit) as e:
+        _rao(tmp_path, {"blend": "1"}, {"blend": "1"}, "cap=64", "cap=64", ma, mb)
+    assert e.value.code == 2
+
+
+def test_rao_rejects_duplicate_arm_labels(tmp_path):
+    a = _cache(tmp_path, "a", {"blend": "1"})
+    (tmp_path / "a.log").write_text("cap=0")
+    with pytest.raises(SystemExit) as e:
+        j.main(["--runtime-arg-only", "--arm", f"base={a}", "--arm", f"base={a}",
+                "--kernel", "blend", "--marker", "base=cap=0",
+                "--log", f"base={tmp_path / 'a.log'}"])
     assert e.value.code == 2
 
 
